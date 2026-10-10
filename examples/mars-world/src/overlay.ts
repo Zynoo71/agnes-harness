@@ -45,6 +45,7 @@ const TEXT = {
     alertWarn: 'warning',
     alertBad: 'alarm',
     cleared: 'back to normal',
+    over: 'over',
     kinds: {
       dust_storm: 'Dust storm',
       suit_leak: 'Suit leak',
@@ -120,6 +121,7 @@ const TEXT = {
     alertWarn: '告警',
     alertBad: '严重告警',
     cleared: '恢复正常',
+    over: '结束',
     kinds: {
       dust_storm: '沙尘暴',
       suit_leak: '宇航服漏气',
@@ -359,13 +361,15 @@ export function buildOverlay(options: {
     })
     live.world.events?.listeners.push((h: Happening, phase) => {
       const kind = t().kinds[h.kind]
-      push(
-        row(
-          `event ${phase}`,
-          el('b', 'dev', kind),
-          el('span', '', phase === 'start' ? h.headline[lang] : t().cleared),
-        ),
-      )
+      // Short events (a meteorite's fall, a dust devil) just happen; storms and leaks also end.
+      if (phase === 'start' || CATALOG[h.kind].severe)
+        push(
+          row(
+            `event ${phase}`,
+            el('b', 'dev', kind),
+            el('span', '', phase === 'start' ? h.headline[lang] : t().over),
+          ),
+        )
       if (phase === 'start') {
         const severe = CATALOG[h.kind].severe
         banner(

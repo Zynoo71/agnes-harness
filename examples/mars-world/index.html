@@ -17,20 +17,98 @@
                 color: #1d1712; font-size: 12.5px; line-height: 1.35; box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4); }
       .speech::after { content: ""; position: absolute; left: 50%; bottom: -7px; margin-left: -7px; border: 7px solid transparent; border-bottom: 0;
                        border-top-color: rgba(246, 240, 230, 0.94); }
-      #reset { position: fixed; right: 16px; bottom: 16px; padding: 6px 14px; border-radius: 6px; border: 1px solid rgba(255, 196, 120, 0.45);
-               background: rgba(16, 13, 11, 0.72); color: #f6e7d2; font: 600 12px ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
-      #reset:hover { background: rgba(60, 40, 26, 0.85); }
-      #reset:disabled { opacity: 0.5; cursor: default; }
-      #brand { position: fixed; left: 18px; bottom: 16px; color: #f6e7d2; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6); pointer-events: none; }
-      #brand h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.02em; }
-      #brand p { margin: 2px 0 0; font-size: 12px; color: #c9a77c; }
+      :root { --panel: rgba(16, 13, 11, 0.74); --line: rgba(255, 196, 120, 0.3); --text: #f6e7d2; --dim: #c9a77c;
+              --mono: ui-monospace, "SF Mono", Menlo, monospace; --amber: #ffb45c; --red: #ff6b57; --ok: #93d58e; }
+      button { font: 600 11px var(--mono); color: var(--text); background: transparent; border: 1px solid var(--line);
+               border-radius: 4px; padding: 2px 9px; cursor: pointer; }
+      button:hover { background: rgba(255, 196, 120, 0.14); }
+      button:disabled { opacity: 0.5; cursor: default; }
+      button.on { background: rgba(255, 196, 120, 0.22); }
+      #brand { position: fixed; left: 14px; top: 12px; padding: 6px 12px 7px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line);
+               color: var(--text); pointer-events: none; backdrop-filter: blur(6px); }
+      #brand h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: 0.02em; }
+      #brand p { margin: 2px 0 0; font-size: 11.5px; color: var(--dim); }
+      #bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 5px 12px;
+             background: var(--panel); border-top: 1px solid var(--line); color: var(--text); font: 11.5px var(--mono);
+             backdrop-filter: blur(6px); white-space: nowrap; overflow: hidden; }
+      #bar > span:empty { display: none; }
+      #bar > span + span { border-left: 1px solid var(--line); padding-left: 12px; }
+      #bar #clock { font-weight: 700; }
+      #bar .spacer { flex: 1; border: 0 !important; }
+      #bar #status { color: var(--dim); border: 0; }
+      #bar .warn { color: var(--amber); }
+      #bar .bad { color: var(--red); font-weight: 700; }
+      #bar .ok { color: var(--ok); }
+      #feed { position: fixed; left: 14px; bottom: 40px; width: min(560px, 48vw); display: flex; flex-direction: column; gap: 3px;
+              font: 11.5px var(--mono); color: var(--text); pointer-events: none; }
+      #feed .line { display: flex; gap: 8px; padding: 3px 8px; background: var(--panel); border-radius: 5px; border-left: 2px solid var(--line);
+                    overflow: hidden; white-space: nowrap; transition: opacity 0.4s; }
+      #feed .when { color: var(--dim); }
+      #feed .dev { font-weight: 700; }
+      #feed .state { margin-left: auto; color: var(--dim); overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+      #feed .done { border-left-color: var(--ok); } #feed .done .state { color: var(--ok); }
+      #feed .error, #feed .rejected { border-left-color: var(--red); } #feed .error .state, #feed .rejected .state { color: var(--red); }
+      #feed .interrupted { border-left-color: var(--amber); } #feed .interrupted .state { color: var(--amber); }
+      #feed .running { border-left-color: #f6e7d2; }
+      #feed .alert.warn { border-left-color: var(--amber); } #feed .alert.warn .state { color: var(--amber); }
+      #feed .alert.bad { border-left-color: var(--red); } #feed .alert.bad .state { color: var(--red); }
+      #feed .alert.ok .state { color: var(--ok); }
+      #feed .event { border-left-color: #b9a2ff; } #feed .event .dev { color: #d6c8ff; }
+      #banners { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px;
+                 align-items: center; pointer-events: none; max-width: 56vw; }
+      .banner { padding: 7px 14px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); border-left-width: 3px;
+                color: var(--text); font-size: 13px; box-shadow: 0 3px 14px rgba(0, 0, 0, 0.35); backdrop-filter: blur(6px); }
+      .banner.info { border-left-color: #b9a2ff; }
+      .banner.warn { border-left-color: var(--amber); }
+      .banner.bad { border-left-color: var(--red); border-color: rgba(255, 107, 87, 0.5); }
+      #events-panel { position: fixed; right: 14px; top: 246px; width: 330px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line);
+                      border-radius: 8px; color: var(--text); font-size: 12px; backdrop-filter: blur(6px); }
+      #events-panel .head { font: 700 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+      #events-panel .director, #events-panel .active { margin-top: 6px; font-family: var(--mono); font-size: 11px; }
+      #events-panel .next { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-family: var(--mono); font-size: 11px; }
+      #events-panel .reason { margin-top: 4px; color: var(--dim); font-style: italic; font-size: 11.5px; }
+      #events-panel .reason:empty { display: none; }
+      #events-panel .list { margin-top: 8px; border-top: 1px solid var(--line); }
+      #events-panel .item { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255, 196, 120, 0.12); }
+      #events-panel .item b { display: block; font-size: 12px; }
+      #events-panel .item span { color: var(--dim); font-size: 11px; }
+      #help { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(640px, 88vw); max-height: 78vh; overflow: auto;
+              padding: 20px 26px 16px; background: rgba(22, 16, 12, 0.95); border: 1px solid var(--line); border-radius: 10px; color: var(--text);
+              font-size: 13.5px; line-height: 1.55; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+      #help h2 { margin: 0 0 8px; font-size: 20px; } #help h3 { margin: 14px 0 4px; font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+      #help ul { margin: 4px 0; padding-left: 20px; } #help p { margin: 6px 0; }
+      #help kbd, #help code { font: 11.5px var(--mono); padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; background: rgba(255, 196, 120, 0.08); }
+      #help .close { position: sticky; float: right; bottom: 0; margin-top: 8px; }
+      .tag.busy { border-color: rgba(255, 220, 170, 0.9); }
+      .tag.warn { border-color: var(--amber); }
+      .tag.bad { border-color: var(--red); background: rgba(60, 16, 12, 0.8); }
+      .tag .act { margin-top: 2px; font: 10px var(--mono); color: var(--text); }
+      .tag .act i { font-style: normal; font-weight: 700; }
+      .tag .act em { font-style: normal; color: var(--dim); margin-left: 5px; }
+      .tag .meter { height: 3px; margin-top: 3px; border-radius: 2px; background: rgba(255, 196, 120, 0.18); overflow: hidden; }
+      .tag .meter div { height: 100%; background: var(--amber); transition: width 0.25s; }
+      .tag .meter div.busy { background: linear-gradient(90deg, transparent, var(--amber), transparent); background-size: 50% 100%;
+                             background-repeat: no-repeat; animation: sweep 1.2s linear infinite; }
+      @keyframes sweep { from { background-position: -50% 0; } to { background-position: 150% 0; } }
     </style>
   </head>
   <body>
     <div id="app"></div>
     <div id="tags"></div>
-    <button id="reset" type="button" title="Put every device back to how it started (R)" hidden>Reset</button>
-    <div id="brand"><h1>Agnes Base · Jezero Crater, Mars</h1><p id="status">Landing…</p></div>
+    <div id="brand"><h1>Agnes Base</h1><p>Jezero Crater, Mars</p></div>
+    <div id="banners"></div>
+    <div id="feed"></div>
+    <aside id="events-panel" hidden></aside>
+    <div id="help" hidden></div>
+    <div id="bar">
+      <span id="clock"></span><span id="daylight"></span><span id="earth"></span><span id="weather"></span><span id="happening"></span>
+      <span class="spacer"></span>
+      <span id="status">Landing…</span>
+      <button id="events-toggle" type="button" title="Events (E)" hidden>Events</button>
+      <button id="lang" type="button">中文</button>
+      <button id="help-toggle" type="button">?</button>
+      <button id="reset" type="button" title="Put every device back to how it started (R)" hidden>Reset</button>
+    </div>
     <script type="module" src="dist/main.js"></script>
   </body>
 </html>

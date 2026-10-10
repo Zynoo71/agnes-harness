@@ -84,6 +84,13 @@ export class Director {
     }
   }
 
+  /** Starts `kind` now for a person on the page, with parameters from the seed; or says why not. */
+  start(kind: EventKind): string | undefined {
+    const params = this.clamp(kind)
+    const started = this.world.events?.start(kind, params, HEADLINES[kind](params), 'person')
+    return typeof started === 'string' ? started : undefined
+  }
+
   private schedule([lo, hi]: readonly [number, number]): void {
     this.nextAt = performance.now() + (lo + this.random() * (hi - lo)) * 60_000
   }

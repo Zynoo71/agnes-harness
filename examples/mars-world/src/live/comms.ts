@@ -24,6 +24,7 @@ export function comms(world: World, log: (line: string) => void): WorldDevice {
       : { open: false, changes: Math.round(cycle + PERIOD) }
   }
   const linkUp = () => target === 'earth' && windowNow().open
+  world.earthWindow = windowNow
   const dev = new WorldDevice({
     id: 'comms-01',
     kind: 'antenna',

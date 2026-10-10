@@ -14,6 +14,7 @@ import { buildDust } from './dust.js'
 import { buildEffects } from './effects.js'
 import { connectDevices } from './live/index.js'
 import { buildMinimap } from './minimap.js'
+import { buildOverlay, type Lang } from './overlay.js'
 import { applyShot, SHOTS } from './shots.js'
 import { buildSky, type Light, lightAt, updateSky } from './sky.js'
 import { buildRocks, buildTerrain, PAD_RADIUS } from './terrain.js'
@@ -283,8 +284,7 @@ let last = 0
 let lastT = 0
 let fpsFrames = 0
 let fpsSince = performance.now()
-const hint = () =>
-  `${shotLabel()} · keys 1–9, 0 views · L tags · M map${params.has('hub') ? ' · R reset' : ''} · ${clock.label()}`
+const hint = () => shotLabel()
 status.textContent = hint()
 // ?stats adds the draw calls, triangles and JavaScript time of an average frame to the status line
 // (averaged, since every tenth frame also redraws the shadow map).
@@ -364,6 +364,35 @@ if (live) {
   // Scripts (an evaluation, a test) reach the events and the director here: mars.director.next().
   Object.assign(window, { mars: { events: live.world.events, director: live.director } })
 }
+// What is drawn over the scene: the bar along the bottom, the activity list, banners, the events
+// panel and the About card, in English or Chinese (?lang=zh, or the button; the page remembers).
+const stored = (key: string) => {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+const eventsMode = (params.get('events') ?? (params.has('shot') ? 'manual' : 'auto')) as
+  | 'auto'
+  | 'manual'
+  | 'off'
+const overlay = buildOverlay({
+  clock,
+  live,
+  tags: tagEls.map(({ el }, i) => ({ el, ...(DEVICES[i] as { id: string; name: string }) })),
+  eventsMode,
+  lang: (params.get('lang') ?? stored('mars-lang') ?? 'en') === 'zh' ? 'zh' : ('en' as Lang),
+  // The About card opens by itself the first time the page is visited.
+  showHelp: !params.has('shot') && !stored('mars-seen'),
+})
+try {
+  localStorage.setItem('mars-seen', '1')
+} catch {}
+addEventListener('keydown', (e) => {
+  if (e.key === 'e') overlay.toggleEvents()
+  if (e.key === '?' || e.key === 'h') overlay.toggleHelp()
+})
 // Reset (the button, or R): every device back to how the page started it, without reloading, so
 // the devices stay connected to the hub. A demo control of the page, not part of any device.
 const resetButton = document.getElementById('reset') as HTMLButtonElement

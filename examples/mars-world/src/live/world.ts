@@ -1,4 +1,14 @@
-import { type Call, Device, type ToolHandler, type ToolOptions } from '@agnes/mhs/device'
+import {
+  type Call,
+  CallError,
+  Device,
+  type DeviceOptions,
+  type ToolHandler,
+  type ToolOptions,
+} from '@agnes/mhs/device'
+
+type Values = Parameters<Device['update']>[0]
+
 import * as THREE from 'three'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js'
@@ -127,22 +137,160 @@ export async function wait(call: Call, ms: number): Promise<void> {
   if (call.signal.aborted) await call.checkpoint()
 }
 
+/** A call as the page shows it: what runs where, for whom, how far it got and how it ended. */
+export interface Activity {
+  device: string
+  tool: string
+  args: Values
+  /** Who called: the caller name from the hub's meta (an agent, a person's console), if any. */
+  caller: string | undefined
+  started: number
+  progress: { done?: number; total?: number; text?: string } | undefined
+  ended: number | undefined
+  /** done, error, interrupted, rejected; and the reason and sentence it ended with. */
+  status: string | undefined
+  reason: string | undefined
+  detail: string | undefined
+}
+
+/** A state value past its alert line: warn or bad. */
+export interface Alert {
+  device: string
+  field: string
+  level: 'warn' | 'bad'
+  value: number
+}
+
+/** Hears every call as it starts, makes progress and ends, and every alert as it is raised or cleared. */
+export const watchers: {
+  activity: ((a: Activity) => void)[]
+  alert: ((a: Alert, raised: boolean) => void)[]
+} = { activity: [], alert: [] }
+
+interface AlertLine {
+  warn?: number
+  bad?: number
+  below?: boolean
+}
+
 /**
  * A device of the world: a Device that knows its running calls, so that Reset can end them the way
- * mhs/stop does, reported to the hub as interrupted.
+ * mhs/stop does, reported to the hub as interrupted; and that tells the page what it does (each
+ * call, its progress and how it ended) and which of its state values are past their alert lines.
  */
 export class WorldDevice extends Device {
   private readonly running = new Set<Call>()
+  /** The latest call still running, and the last one that ended. */
+  current: Activity | undefined
+  last: Activity | undefined
+  /** State values past their alert lines, by field. */
+  readonly alerts = new Map<string, Alert>()
+  private readonly lines: Record<string, AlertLine>
+
+  constructor(options: DeviceOptions) {
+    super(options)
+    // A call refused as unsafe never reaches its tool: the page hears of it here.
+    let unsafe: Device['unsafe']
+    Object.defineProperty(this, 'unsafe', {
+      get: () =>
+        unsafe &&
+        ((tool: string) => {
+          const why = unsafe?.(tool)
+          if (why) {
+            const now = performance.now()
+            const a: Activity = {
+              device: this.id,
+              tool,
+              args: {},
+              caller: undefined,
+              started: now,
+              progress: undefined,
+              ended: now,
+              status: 'rejected',
+              reason: 'unsafe',
+              detail: why,
+            }
+            this.last = a
+            for (const w of watchers.activity) w(a)
+          }
+          return why
+        }),
+      set: (hook: Device['unsafe']) => {
+        unsafe = hook
+      },
+    })
+    this.lines = Object.fromEntries(
+      Object.entries(options.state ?? {})
+        .filter(([, f]) => (f as { alert?: unknown }).alert)
+        .map(([k, f]) => [k, (f as { alert: AlertLine }).alert]),
+    )
+  }
 
   override tool(options: ToolOptions, handler: ToolHandler): void {
     super.tool(options, async (call, args) => {
       this.running.add(call)
+      const meta = call.meta as { caller?: string } | undefined
+      const a: Activity = {
+        device: this.id,
+        tool: call.name,
+        args,
+        caller: meta?.caller,
+        started: performance.now(),
+        progress: undefined,
+        ended: undefined,
+        status: undefined,
+        reason: undefined,
+        detail: undefined,
+      }
+      const send = call.progress.bind(call)
+      call.progress = (update) => {
+        a.progress = update
+        for (const w of watchers.activity) w(a)
+        send(update)
+      }
+      this.current = a
+      for (const w of watchers.activity) w(a)
       try {
-        return await handler(call, args)
+        const value = await handler(call, args)
+        a.status = 'done'
+        a.detail =
+          typeof value === 'string' ? value : ((value as { detail?: string } | undefined)?.detail ?? '')
+        return value
+      } catch (e) {
+        const interrupted = call.signal.aborted
+        a.status = interrupted ? 'interrupted' : 'error'
+        a.reason = interrupted ? (call.endReason ?? 'cancel') : e instanceof CallError ? e.reason : 'failed'
+        a.detail = e instanceof CallError ? e.detail : String(e)
+        throw e
       } finally {
         this.running.delete(call)
+        a.ended = performance.now()
+        if (this.current === a) this.current = undefined
+        this.last = a
+        for (const w of watchers.activity) w(a)
       }
     })
+  }
+
+  override update(values: Values): void {
+    super.update(values)
+    for (const [field, line] of Object.entries(this.lines)) {
+      const value = values[field]
+      if (typeof value !== 'number') continue
+      const past = (limit: number | undefined) =>
+        limit !== undefined && (line.below ? value <= limit : value >= limit)
+      const level = past(line.bad) ? 'bad' : past(line.warn) ? 'warn' : undefined
+      const was = this.alerts.get(field)
+      if (level === was?.level) continue
+      if (level) {
+        const alert: Alert = { device: this.id, field, level, value }
+        this.alerts.set(field, alert)
+        for (const w of watchers.alert) w(alert, true)
+      } else if (was) {
+        this.alerts.delete(field)
+        for (const w of watchers.alert) w(was, false)
+      }
+    }
   }
 
   /** Zeroes motion and ends every running call as interrupted (stop). */
@@ -173,6 +321,8 @@ export class World {
   events: Events | undefined
   /** What the scene draws for events; set by the page. */
   effects: Effects | undefined
+  /** Set by the comms dish: whether Earth is in view, and when (Unix seconds) that changes. */
+  earthWindow: (() => { open: boolean; changes: number }) | undefined
   /** Set by the power system: dust settles on the panels, in percent of their light. */
   dustPanels: ((percent: number) => void) | undefined
   /** Set by the lab: takes a sample handed to it and queues it for analysis. */

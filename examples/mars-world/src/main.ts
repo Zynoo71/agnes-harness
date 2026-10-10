@@ -19,7 +19,7 @@ import { buildMinimap } from './minimap.js'
 import { buildOverlay, type Lang } from './overlay.js'
 import { applyShot, SHOTS } from './shots.js'
 import { buildSky, type Light, lightAt, updateSky } from './sky.js'
-import { buildRocks, buildTerrain, PAD_RADIUS } from './terrain.js'
+import { buildRocks, buildTerrain, FROST, PAD_RADIUS } from './terrain.js'
 
 const params = new URLSearchParams(location.search)
 const app = document.getElementById('app') as HTMLElement
@@ -34,14 +34,17 @@ const PIXEL_RATIO =
     : QUALITY === 'low'
       ? 1
       : Math.min(devicePixelRatio, 1.25)
+// ?time= is morning, noon, sunset or night, or a local hour such as 19.5.
 const asked = params.get('time') ?? 'morning'
-const TIME: TimeOfDay = asked in START_HOURS ? (asked as TimeOfDay) : 'morning'
+const START =
+  asked in START_HOURS
+    ? START_HOURS[asked as TimeOfDay]
+    : Number.isFinite(Number(asked))
+      ? Number(asked) % 24
+      : START_HOURS.morning
 // The local time runs a sol in ?sol= minutes (40 by default) from the hour ?time= picks; screenshots
 // hold it still, so a view looks the same every time.
-const clock = new MarsClock(
-  START_HOURS[TIME],
-  Number(params.get('sol') ?? (params.has('shot') ? 0 : SOL_MINUTES)),
-)
+const clock = new MarsClock(START, Number(params.get('sol') ?? (params.has('shot') ? 0 : SOL_MINUTES)))
 
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
@@ -113,6 +116,9 @@ function applyLight(hour: number, light: Light, storm = 0) {
   scene.environmentIntensity = 0.35 + 0.25 * light.day - 0.2 * light.night
   renderer.toneMappingExposure = 1 + 0.5 * light.night
   dustColor.copy(light.horizon).multiply(DUST_TINT)
+  // Frost settles on the ground in the small hours and is gone soon after sunrise.
+  FROST.value =
+    0.85 * THREE.MathUtils.smoothstep(hour, 1, 6) * (1 - THREE.MathUtils.smoothstep(hour, 6.5, 7.8))
   if (!(Math.abs(hour - envHour) < 0.25) || Math.abs(storm - envStorm) > 0.1) {
     envHour = hour
     envStorm = storm

@@ -195,6 +195,9 @@ function contactShade(f: Footprint, x: number, z: number): number {
  * The ground: three Poly Haven textures blended by slope (rock) and dune sand, tinted to Mars. The
  * ground darkens where `contacts` and the field's boulders stand on it, baked in, so it costs nothing.
  */
+/** Frost on the ground, 0 (none) to 1: it settles in the cold before dawn and goes once the sun is up. */
+export const FROST = { value: 0 }
+
 export function buildTerrain(contacts: Footprint[] = []): THREE.Mesh {
   const standing = [...contacts, ...BOULDERS.map(([x, z, s]) => ({ x, z, r: 0.8 * s }))]
   const geometry = new THREE.PlaneGeometry(HALF * 2, HALF * 2, SEGMENTS, SEGMENTS)
@@ -254,13 +257,14 @@ export function buildTerrain(contacts: Footprint[] = []): THREE.Mesh {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.tRock = { value: rock.map }
     shader.uniforms.tSand = { value: sand.map }
+    shader.uniforms.frost = FROST
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec2 aMix;\nvarying vec2 vMix;')
       .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMix = aMix;')
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
-        '#include <common>\nuniform sampler2D tRock;\nuniform sampler2D tSand;\nvarying vec2 vMix;',
+        '#include <common>\nuniform sampler2D tRock;\nuniform sampler2D tSand;\nuniform float frost;\nvarying vec2 vMix;',
       )
       .replace(
         '#include <map_fragment>',
@@ -270,6 +274,9 @@ export function buildTerrain(contacts: Footprint[] = []): THREE.Mesh {
           vec4 r = texture2D(tRock, vMapUv * 0.45);
           vec4 s = texture2D(tSand, vMapUv * 0.6);
           diffuseColor *= mix(mix(g, s, vMix.y), r, vMix.x);
+          // Frost: a thin, patchy rime in the darker patches of ground, none on rock faces.
+          float rime = frost * smoothstep(0.97, 0.85, vColor.g) * (0.4 + 0.6 * g.g) * (1.0 - vMix.x);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.7, 0.71, 0.75), clamp(rime, 0.0, 0.6));
         #endif`,
       )
   }

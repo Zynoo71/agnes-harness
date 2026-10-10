@@ -3,7 +3,7 @@ import { MONOLITH } from './devices.js'
 
 /**
  * Fixed viewpoints: an overview with every device in frame, one close view per area, and views
- * that follow the hopper and Monolith. Keys 1–9 and 0 switch between them; ?shot=<name> picks one in the URL. Each
+ * that follow the hopper and Monolith (and, for the auto camera, the rover and the astronaut). Keys 1–9 and 0 switch between them; ?shot=<name> picks one in the URL. Each
  * area view leaves the left third of the screen calm for the overlay that will show what Agnes is
  * doing with each device.
  */
@@ -89,6 +89,27 @@ export const SHOTS: {
     devices: [MONOLITH.id],
     follow: MONOLITH.id,
     behind: [6, 2.2, 1.25],
+  },
+  // Only the auto camera (A) picks these two.
+  {
+    name: 'rover',
+    label: 'Following the rover',
+    from: [-15.5, 4, 22],
+    to: [-15.5, 0.5, 15.5],
+    fov: 50,
+    devices: ['rover-01'],
+    follow: 'rover-01',
+    behind: [9, 4],
+  },
+  {
+    name: 'suit',
+    label: 'Following the astronaut',
+    from: [-26, 3, 31],
+    to: [-31, 1, 27],
+    fov: 50,
+    devices: ['suit-01', MONOLITH.id],
+    follow: 'suit-01',
+    behind: [6, 2.6],
   },
 ]
 

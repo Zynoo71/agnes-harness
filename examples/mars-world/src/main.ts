@@ -9,10 +9,12 @@ import { coveredTextures } from './assets.js'
 import { buildBase, GROUND_CONTACTS, LAYOUT } from './base.js'
 import { MarsClock, SOL_MINUTES, START_HOURS, type TimeOfDay } from './clock.js'
 import { DETAIL_AREAS } from './details.js'
-import { buildDevices, DEVICES } from './devices.js'
+import { buildDevices, DEVICES, MONOLITH } from './devices.js'
 import { buildDust } from './dust.js'
 import { buildEffects } from './effects.js'
+import type { EventKind } from './live/events.js'
 import { connectDevices } from './live/index.js'
+import { watchers } from './live/world.js'
 import { buildMinimap } from './minimap.js'
 import { buildOverlay, type Lang } from './overlay.js'
 import { applyShot, SHOTS } from './shots.js'
@@ -178,7 +180,13 @@ composer.addPass(new OutputPass())
 
 // Fixed viewpoints: keys 1–9 and 0, or ?shot=<name>.
 let shot = applyShot(camera, params.get('shot') ?? 'overview')
-const shotLabel = () => SHOTS.find((s) => s.name === shot)?.label ?? ''
+/** A view the auto camera set up for an event in one place (a meteorite), not one of SHOTS. */
+let eventView = ''
+const shotLabel = () =>
+  `${auto ? 'Auto · ' : ''}${shot === 'event' ? eventView : (SHOTS.find((s) => s.name === shot)?.label ?? '')}`
+/** Whether the view follows what happens (A); a view picked by hand holds it off for a while. */
+let auto = false
+let autoHeldUntil = 0
 
 // Name tags over the devices.
 const tags = document.getElementById('tags') as HTMLElement
@@ -204,7 +212,10 @@ addEventListener('keydown', (e) => {
   if (e.key === 'l') tags.hidden = !tags.hidden
   const n = e.key === '0' ? 10 : Number(e.key)
   const next = SHOTS[n - 1]
-  if (n >= 1 && next) shot = applyShot(camera, next.name)
+  if (n >= 1 && next) {
+    shot = applyShot(camera, next.name)
+    autoHeldUntil = performance.now() + 30_000
+  }
 })
 const v = new THREE.Vector3()
 const box = new THREE.Box3()
@@ -392,6 +403,64 @@ try {
 addEventListener('keydown', (e) => {
   if (e.key === 'e') overlay.toggleEvents()
   if (e.key === '?' || e.key === 'h') overlay.toggleHelp()
+})
+// The auto camera (A, on by default with a hub): it goes where a call starts or an event happens,
+// and stays at least a few seconds on each view; an event goes before a call.
+const VIEW_OF: Record<string, string> = {
+  'hopper-01': 'hopper',
+  'rover-01': 'rover',
+  'suit-01': 'suit',
+  [MONOLITH.id]: 'monolith',
+  'airlock-01': 'airlock',
+  'habitat-01': 'airlock',
+  'lab-01': 'dock',
+  'power-01': 'power',
+  'weather-01': 'comms',
+  'comms-01': 'comms',
+  'cam-base': 'overview',
+}
+const EVENT_VIEW: Record<EventKind, string> = {
+  dust_storm: 'overview',
+  suit_leak: 'suit',
+  dust_devil: 'power',
+  meteorite: 'event',
+}
+auto = Boolean(live) && !params.has('shot') && params.get('auto') !== '0'
+let autoSince = 0
+const autoTo = (name: string, urgent = false) => {
+  const now = performance.now()
+  if (!auto || now < autoHeldUntil || name === shot || (!urgent && now - autoSince < 8000)) return
+  shot = applyShot(camera, name)
+  autoSince = now
+}
+if (live) {
+  watchers.activity.push((a) => {
+    const view = VIEW_OF[a.device]
+    if (view && a.progress === undefined && !a.status) autoTo(view)
+  })
+  live.world.events?.listeners.push((h, phase) => {
+    if (phase !== 'start') return
+    if (h.kind === 'meteorite' && h.place) {
+      // From the base side of the fall, a little above it, so the streak, the flash and the dust show.
+      const { x, z } = h.place
+      const now = performance.now()
+      if (!auto || now < autoHeldUntil) return
+      camera.position.set(x + 16, 7, z + 12)
+      camera.lookAt(x, 2, z)
+      camera.fov = 50
+      camera.updateProjectionMatrix()
+      shot = 'event'
+      eventView = h.headline.en
+      autoSince = now
+      return
+    }
+    autoTo(EVENT_VIEW[h.kind], true)
+  })
+}
+addEventListener('keydown', (e) => {
+  if (e.key !== 'a' || !live) return
+  auto = !auto
+  autoHeldUntil = 0
 })
 // Reset (the button, or R): every device back to how the page started it, without reloading, so
 // the devices stay connected to the hub. A demo control of the page, not part of any device.

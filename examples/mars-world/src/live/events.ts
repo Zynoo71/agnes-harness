@@ -73,6 +73,8 @@ export interface Happening {
   end: number | undefined
   /** The Mars time it started, `Sol 1 · 09:12 LMST`. */
   at: string
+  /** Where on the ground it happens, when it happens in one place. */
+  place?: Point
 }
 
 /** What the scene draws for events; main.ts fills it in. */
@@ -130,11 +132,13 @@ export class Events {
     if (kind === 'suit_leak') world.suitLeak = true
     if (kind === 'dust_devil') {
       h.end = now + DEVIL_S * 1000
+      h.place = DEVIL_FROM
       world.effects?.devil(DEVIL_FROM, DEVIL_TO, DEVIL_S)
     }
     if (kind === 'meteorite') {
       h.end = now + METEOR_S * 1000
       const at = this.landing(String(params.area))
+      h.place = at
       world.effects?.meteor(at)
       // The rock lies there once the flash has gone.
       setTimeout(() => void this.addRock(at, h), 900)

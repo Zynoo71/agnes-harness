@@ -110,7 +110,8 @@ export class World {
   private readonly resets: (() => void)[] = []
   /** The rocks as the page drew them, before any sample was taken. */
   private readonly rockScales = new Map(OBSTACLES.map((o) => [o, o.object.scale.clone()]))
-  private readonly snapshots = new Map<THREE.Camera, Targets>()
+  /** Render targets by camera and size: a camera's stills and its video are not the same size. */
+  private readonly snapshots = new Map<string, Targets>()
   private readonly output = new OutputPass()
   private readonly skyAt = new THREE.Vector3()
 
@@ -208,17 +209,19 @@ export class World {
 
   /** Renders what `camera` sees into its own targets, tone-mapped like the main view. */
   private draw(camera: THREE.PerspectiveCamera, w: number, h: number): Targets {
-    let targets = this.snapshots.get(camera)
+    const key = `${camera.uuid} ${w}x${h}`
+    let targets = this.snapshots.get(key)
     if (!targets) {
       targets = {
-        linear: new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType }),
+        // Multisampled, so edges stay smooth instead of turning into stairs the encoder makes worse.
+        linear: new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 }),
         out: new THREE.WebGLRenderTarget(w, h),
         raw: new Uint8Array(w * h * 4),
         rows: new Uint8Array(w * h * 4),
         w,
         h,
       }
-      this.snapshots.set(camera, targets)
+      this.snapshots.set(key, targets)
     }
     const { renderer, scene } = this
     const previous = renderer.getRenderTarget()
@@ -273,11 +276,11 @@ export class World {
   }
 
   /**
-   * The picture the last `capture` of `camera` started, as RGBA rows from the top, once the GPU
+   * The picture the last `capture` of `camera` at this size started, as RGBA rows from the top, once the GPU
    * has it; undefined while it is not there yet. The buffer is reused by the next picture.
    */
-  collect(camera: THREE.PerspectiveCamera): Uint8Array | undefined {
-    const targets = this.snapshots.get(camera)
+  collect(camera: THREE.PerspectiveCamera, w: number, h: number): Uint8Array | undefined {
+    const targets = this.snapshots.get(`${camera.uuid} ${w}x${h}`)
     if (!targets?.fence || !targets.pbo) return undefined
     const gl = this.renderer.getContext() as WebGL2RenderingContext
     if (gl.clientWaitSync(targets.fence, 0, 0) === gl.TIMEOUT_EXPIRED) return undefined

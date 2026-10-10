@@ -4,10 +4,13 @@ import { every, type World } from './world.js'
 
 /** Highest video rate; the hub's mhs/configure may ask for less. */
 const VIDEO_HZ = 20
+/** Stills for a model to read, and video for people to watch, in pixels. */
+const STILL_SIZE = [640, 360] as const
+const VIDEO_SIZE = [1280, 720] as const
 /** Longest time between keyframes, in seconds (VID-5: at most 2). */
 const GOP_S = 1
 /** Video bitrate range in kbit/s; before mhs/configure the lowest applies (MOS 8). */
-const BITRATE_KBPS = [600, 2000]
+const BITRATE_KBPS = [2000, 4000]
 /** An encoder nobody has wanted for this long is closed, to free it. */
 const IDLE_MS = 5000
 /** A picture still waiting this long after its turn to go out is stale and dropped (MOS 9). */
@@ -20,7 +23,6 @@ export interface CameraOptions {
   description: string
   /** Mount in the body frame (MHS 3.4): x forward, y left, z up in metres; roll, pitch, yaw in degrees. */
   mount: { xyz: [number, number, number]; rpy: [number, number, number] }
-  size?: [number, number]
   /** The video is part of the device's default view. */
   default?: boolean
   /** Also stream live video (default true); false for a camera that only takes stills. */
@@ -43,7 +45,7 @@ export function addCamera(
   options: CameraOptions,
   log: (line: string) => void,
 ): void {
-  const [w, h] = options.size ?? [640, 360]
+  const [w, h] = STILL_SIZE
   camera.aspect = w / h
   // Far enough for the sky dome, which follows the camera.
   camera.far = 4000
@@ -74,14 +76,14 @@ export function addCamera(
     codec: 'h264',
     profile: 'baseline',
     encoding: 'rgb',
-    size: [w, h],
+    size: [...VIDEO_SIZE],
     fov_deg,
     bitrate_kbps: BITRATE_KBPS,
     gop_s: GOP_S,
     mount: options.mount,
     ...(options.default ? { default: true } : {}),
   })
-  feeds.push(new VideoFeed(world, camera, video, w, h, log))
+  feeds.push(new VideoFeed(world, camera, video, ...VIDEO_SIZE, log))
   if (!ticking) {
     ticking = true
     // One timer for every feed, fine enough that each keeps its own pace within a few ms.
@@ -150,7 +152,7 @@ class VideoFeed {
       this.open(kbps, hz)
     const encoder = this.encoder as VideoEncoder
     if (this.reading) {
-      const rows = this.world.collect(this.camera)
+      const rows = this.world.collect(this.camera, this.w, this.h)
       if (!rows) return
       this.reading = false
       const key =
@@ -196,6 +198,10 @@ class VideoFeed {
       bitrate: kbps * 1000,
       framerate: hz,
       latencyMode: 'realtime',
+      // Software: the hardware encoder queues up with more than a few 720p streams at once (seven
+      // fell to 2-3 frames a second, a quarter-second late), while software keeps all of them at
+      // the full rate for about a tenth of a core each.
+      hardwareAcceleration: 'prefer-software',
       // Annex B with start codes; keyframes carry SPS and PPS (VID-2, VID-3).
       avc: { format: 'annexb' },
     })

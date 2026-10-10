@@ -804,9 +804,19 @@ export class North extends EventEmitter {
           sub.awaitingKey.delete(msg.source)
         }
         const at = Date.now()
-        if (sub.gap > 0 && at - (sub.sent.get(msg.source) ?? 0) < sub.gap) continue
-        // Newest only: while the client lags, items are dropped instead of queued.
-        if (client.ws.bufferedAmount > LAG_BYTES) continue
+        // A video picture is decoded from the ones before it, so hz never thins video; its rate is
+        // the device's, set by demand (mhs/configure).
+        const video = source.kind === 'video'
+        if (!video && sub.gap > 0 && at - (sub.sent.get(msg.source) ?? 0) < sub.gap) continue
+        // Newest only: while the client lags, items are dropped instead of queued. Video picks up
+        // again at the next keyframe, asked of the device at once.
+        if (client.ws.bufferedAmount > LAG_BYTES) {
+          if (video && !sub.awaitingKey.has(msg.source)) {
+            sub.awaitingKey.add(msg.source)
+            this.south.keyframe(device, [msg.source]).catch(() => undefined)
+          }
+          continue
+        }
         sub.sent.set(msg.source, at)
         const frame = sub.binary && binary !== undefined
         send(client.ws, {

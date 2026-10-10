@@ -277,8 +277,8 @@ With sources, it adds their newest items:
 → {"jsonrpc": "2.0", "id": "10", "method": "hub/unsubscribe", "params": {"sub": "s3"}}
 ```
 
-- `hz`: at most this many items per second per source; without it, every item.
-- **Newest only.** When the connection lags, older items are dropped, never queued.
+- `hz`: at most this many items per second per source; without it, every item. Video is not thinned, since each picture is decoded from the ones before it: `hz` sets the rate the device is asked for (section 14), and every picture it sends comes through.
+- **Newest only.** When the connection lags, older items are dropped, never queued. A video stream that loses a picture this way skips to the next keyframe, which AgnesHub asks the device for at once.
 - **A subscription is demand**: AgnesHub turns the source on and raises its rate (section 14).
 - **Binary.** With `binary: true`, binary kinds come as an item with `bin: true` followed at once by one binary frame (a JPEG, PNG, H.264 access unit or PCM block) instead of `b64`. Video arrives as the device sent it; a new subscription starts at a keyframe.
 - A subscription ends with `hub/unsubscribe` or when the connection closes.

@@ -300,6 +300,24 @@ describe('hub/subscribe', () => {
     expect(client.notifications('hub/data')[0]?.params.item).toMatchObject({ seq: 1, b64: 'AAAAAWU=' })
   })
 
+  it('never thins video by hz, since each picture needs the one before it', async () => {
+    const client = await Client.open(base)
+    const { device, nerve } = await robot()
+    await client.request('hub/subscribe', { device: 'robot-01', sources: ['front_video'], hz: 5 })
+    let ask = await device.next()
+    while (ask.method === 'mhs/configure') {
+      device.reply(ask.id, { sources: {} })
+      ask = await device.next()
+    }
+    device.reply(ask.id, { sources: ['front_video'] })
+    for (let i = 0; i < 3; i++) {
+      nerve.send(data('front_video', i, { key: i === 0, w: 2, h: 2 }, true))
+      nerve.send(Buffer.from([0, 0, 0, 1, i === 0 ? 0x65 : 0x41]))
+    }
+    await until(() => client.notifications('hub/data').length === 3)
+    expect(client.notifications('hub/data').map((n) => n.params.item.seq)).toEqual([0, 1, 2])
+  })
+
   it('refuses unknown sources', async () => {
     const client = await Client.open(base)
     await robot()

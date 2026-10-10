@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js'
 import { FOOTPRINTS } from '../base.js'
+import type { MarsClock } from '../clock.js'
 import { MONOLITH, type Parts } from '../devices.js'
 import { heightAt, OBSTACLES } from '../terrain.js'
 import { type Footprint, type GridMap, occupancy } from './map.js'
@@ -185,8 +186,8 @@ export class World {
     readonly parts: Parts,
     /** The sky dome, which follows whichever camera renders. */
     readonly sky: THREE.Object3D,
-    /** Elevation of the sun in degrees: the time of day the page shows. */
-    readonly sun: number,
+    /** The local time, which the light, the solar array and the air temperature follow. */
+    readonly clock: MarsClock,
   ) {}
 
   onReset(reset: () => void): void {

@@ -7,13 +7,14 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { coveredTextures } from './assets.js'
 import { buildBase, GROUND_CONTACTS, LAYOUT } from './base.js'
+import { MarsClock, SOL_MINUTES, START_HOURS, type TimeOfDay } from './clock.js'
 import { DETAIL_AREAS } from './details.js'
 import { buildDevices, DEVICES } from './devices.js'
 import { buildDust } from './dust.js'
 import { connectDevices } from './live/index.js'
 import { buildMinimap } from './minimap.js'
 import { applyShot, SHOTS } from './shots.js'
-import { buildSky, lightAt, sunElevation, type TimeOfDay } from './sky.js'
+import { buildSky, type Light, lightAt, updateSky } from './sky.js'
 import { buildRocks, buildTerrain, PAD_RADIUS } from './terrain.js'
 
 const params = new URLSearchParams(location.search)
@@ -29,9 +30,14 @@ const PIXEL_RATIO =
     : QUALITY === 'low'
       ? 1
       : Math.min(devicePixelRatio, 1.25)
-const TIME = (
-  ['morning', 'noon', 'sunset'].includes(params.get('time') ?? '') ? params.get('time') : 'morning'
-) as TimeOfDay
+const asked = params.get('time') ?? 'morning'
+const TIME: TimeOfDay = asked in START_HOURS ? (asked as TimeOfDay) : 'morning'
+// The local time runs a sol in ?sol= minutes (40 by default) from the hour ?time= picks; screenshots
+// hold it still, so a view looks the same every time.
+const clock = new MarsClock(
+  START_HOURS[TIME],
+  Number(params.get('sol') ?? (params.has('shot') ? 0 : SOL_MINUTES)),
+)
 
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
@@ -51,28 +57,56 @@ app.appendChild(renderer.domElement)
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 4000)
 
-// Sky, sunlight, and the dusty air that softens everything in the distance.
-const light = lightAt(TIME)
+// Sky, sunlight, and the dusty air that softens everything in the distance, all following the clock.
+let light = lightAt(clock.hour())
 const sky = buildSky(light)
 scene.add(sky)
 const skyScene = new THREE.Scene()
-skyScene.add(buildSky(light))
+const envSky = buildSky(light)
+skyScene.add(envSky)
 const pmrem = new THREE.PMREMGenerator(renderer)
-scene.environment = pmrem.fromScene(skyScene, 0.02).texture
-scene.environmentIntensity = 0.35 + 0.25 * light.day
-scene.fog = new THREE.FogExp2(light.horizon.clone().multiplyScalar(0.95), 0.0032 - 0.0012 * light.day)
-const sun = new THREE.DirectionalLight(
-  new THREE.Color(1, 0.9, 0.8).lerp(new THREE.Color(1, 0.62, 0.42), 1 - light.day),
-  1.4 + 3.4 * light.day,
-)
-sun.position.copy(light.sun).multiplyScalar(120)
+scene.fog = new THREE.FogExp2(0, 0)
+const sun = new THREE.DirectionalLight()
 sun.castShadow = true
 sun.shadow.mapSize.setScalar(QUALITY === 'high' ? 4096 : 2048)
 Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 10, far: 320 })
 sun.shadow.bias = -0.0004
 sun.shadow.normalBias = 0.04
 scene.add(sun, sun.target)
-scene.add(new THREE.HemisphereLight(light.horizon, new THREE.Color(0.22, 0.1, 0.06), 0.25 + 0.15 * light.day))
+const hemi = new THREE.HemisphereLight(0, new THREE.Color(0.22, 0.1, 0.06))
+// Starlight and the moons at night: a faint blue light from above, so the base still reads.
+const nightFill = new THREE.DirectionalLight(new THREE.Color(0.55, 0.65, 1), 0)
+nightFill.position.set(-30, 100, 40)
+scene.add(hemi, nightFill)
+const dustColor = new THREE.Color()
+const LOW_SUN = new THREE.Color(1, 0.62, 0.42)
+const DUST_TINT = new THREE.Color(1.05, 0.78, 0.6)
+let envHour = Number.NaN
+/** Moves the sky and every light to `light`; the environment map, which takes a few ms, every quarter hour. */
+function applyLight(hour: number, light: Light) {
+  updateSky(sky, light)
+  const fog = scene.fog as THREE.FogExp2
+  fog.color.copy(light.horizon).multiplyScalar(0.95)
+  fog.density = 0.0032 - 0.0012 * light.day - 0.0008 * light.night
+  const up = THREE.MathUtils.smoothstep(light.elevation, -3, 3)
+  sun.color.setRGB(1, 0.9, 0.8).lerp(LOW_SUN, 1 - light.day)
+  sun.intensity = (1.4 + 3.4 * light.day) * up
+  sun.position.copy(light.sun).multiplyScalar(120)
+  hemi.color.copy(light.horizon)
+  hemi.intensity = 0.25 + 0.15 * light.day
+  nightFill.intensity = 0.35 * light.night
+  scene.environmentIntensity = 0.35 + 0.25 * light.day - 0.2 * light.night
+  renderer.toneMappingExposure = 1 + 0.5 * light.night
+  dustColor.copy(light.horizon).multiply(DUST_TINT)
+  if (!(Math.abs(hour - envHour) < 0.25)) {
+    envHour = hour
+    updateSky(envSky, light)
+    const old = scene.environment
+    scene.environment = pmrem.fromScene(skyScene, 0.02).texture
+    old?.dispose()
+  }
+}
+applyLight(clock.hour(), light)
 
 const status = document.getElementById('status') as HTMLElement
 scene.add(buildTerrain(GROUND_CONTACTS))
@@ -97,7 +131,7 @@ const keepClear = (x: number, z: number) =>
 const rocks = await buildRocks(keepClear)
 scene.add(rocks.group)
 // Dust drifting in the air, ochre in the sunlight; ?dust=0 leaves it out.
-const dust = buildDust(light.horizon.clone().multiply(new THREE.Color(1.05, 0.78, 0.6)))
+const dust = buildDust(dustColor)
 if (params.get('dust') !== '0') scene.add(dust.points)
 // Every render, the main view's and each device camera's, picks the rocks that camera needs.
 scene.onBeforeRender = (_renderer, _scene, view) => rocks.pick(view)
@@ -228,14 +262,14 @@ addEventListener('resize', () => {
 
 // Nothing here moves fast, so frames are capped at 30 a second by default; ?fps=60 lifts the cap.
 const FPS = Number(params.get('fps')) || 30
-const clock = new THREE.Clock()
+const frameClock = new THREE.Clock()
 let frames = 0
 let last = 0
 let lastT = 0
 let fpsFrames = 0
 let fpsSince = performance.now()
 const hint = () =>
-  `${shotLabel()} · keys 1–9, 0 views · L tags · M map${params.has('hub') ? ' · R reset' : ''} · ${TIME}`
+  `${shotLabel()} · keys 1–9, 0 views · L tags · M map${params.has('hub') ? ' · R reset' : ''} · ${clock.label()}`
 status.textContent = hint()
 // ?stats adds the draw calls, triangles and JavaScript time of an average frame to the status line
 // (averaged, since every tenth frame also redraws the shadow map).
@@ -249,10 +283,13 @@ renderer.setAnimationLoop(() => {
   if (start - last < 1000 / FPS - 4) return
   last = start
   renderer.info.reset()
-  const t = clock.getElapsedTime()
+  const t = frameClock.getElapsedTime()
   const dt = t - lastT
   lastT = t
   if (frames % 10 === 0) renderer.shadowMap.needsUpdate = true
+  const hour = clock.hour()
+  light = lightAt(hour)
+  applyLight(hour, light)
   base.update(t)
   devices.update(t)
   dust.update(t)
@@ -292,7 +329,7 @@ const live = hub
       scene,
       devices.parts,
       sky,
-      sunElevation(TIME),
+      clock,
       (line) => console.log(line),
       params.get('devices')?.split(','),
     )
@@ -307,6 +344,7 @@ const reset = async () => {
   resetting = true
   resetButton.disabled = true
   await live.reset()
+  clock.reset()
   resetButton.disabled = false
   resetting = false
 }

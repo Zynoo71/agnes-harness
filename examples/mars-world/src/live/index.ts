@@ -1,4 +1,5 @@
 import type * as THREE from 'three'
+import type { MarsClock } from '../clock.js'
 import type { Parts } from '../devices.js'
 import { airlock } from './airlock.js'
 import { baseCamera } from './basecam.js'
@@ -23,11 +24,11 @@ export function connectDevices(
   scene: THREE.Scene,
   parts: Parts,
   sky: THREE.Object3D,
-  sun: number,
+  clock: MarsClock,
   log: (line: string) => void,
   only?: string[],
 ): { devices: WorldDevice[]; reset: () => Promise<void> } {
-  const world = new World(renderer, scene, parts, sky, sun)
+  const world = new World(renderer, scene, parts, sky, clock)
   const all = [
     habitat(world, log),
     airlock(world, log),

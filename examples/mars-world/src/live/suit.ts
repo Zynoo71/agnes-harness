@@ -118,6 +118,8 @@ export function suit(
   dev.log = log
   /** Set while radio walks them somewhere. */
   let walking = false
+  /** Pressure inside the suit, kPa. */
+  let pressure = 29.6
   const activity = () => {
     if (walking) return 'walking'
     const a = world.astronaut
@@ -201,15 +203,18 @@ export function suit(
       const t = performance.now() / 1000
       const effort = walking || world.astronaut === 'working' ? 1 : 0
       if (reported !== activity()) report()
+      // A leak lets the suit's pressure down towards its bad line; mended, it comes back up.
+      pressure = world.suitLeak ? Math.max(24, pressure - 0.12) : Math.min(29.6, pressure + 0.5)
+      const stress = world.suitLeak ? 1 : 0
       if (vitals.wants())
         vitals.send({
-          heart_rate: Math.round(78 + effort * 22 + Math.sin(t / 17) * 5 + Math.random() * 3),
+          heart_rate: Math.round(78 + effort * 22 + stress * 28 + Math.sin(t / 17) * 5 + Math.random() * 3),
           body_temperature: reading(36.8 + effort * 0.3, 0.05),
-          spo2: Math.round(97 + Math.random() * 1.5),
+          spo2: Math.round(97 - stress * (29.6 - pressure) * 1.2 + Math.random() * 1.5),
         })
       if (life.wants())
         life.send({
-          pressure: reading(29.6, 0.05),
+          pressure: reading(pressure, 0.05),
           co2: Math.round(1800 + effort * 900 + Math.random() * 100),
           temperature: reading(21 + effort * 1.5, 0.2),
         })
@@ -222,6 +227,8 @@ export function suit(
     10000,
     () => {
       if (world.astronaut === 'inside') {
+        if (world.suitLeak) log('suit-01: the leak is mended in the habitat')
+        world.suitLeak = false
         o2 = Math.min(100, o2 + 4)
         battery = Math.min(100, battery + 4)
       } else {
@@ -415,6 +422,7 @@ export function suit(
     o2 = options.o2
     battery = options.battery
     walking = false
+    pressure = 29.6
     body.reset()
     options.model.visible = true
     report()

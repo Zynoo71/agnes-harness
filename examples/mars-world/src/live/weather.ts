@@ -48,11 +48,14 @@ export function weatherStation(world: World, log: (line: string) => void): World
       const hour = world.clock.hour()
       // Afternoons are gustier than nights; the air is warmest at about 14:00 and coldest before dawn.
       const afternoon = Math.max(0, Math.cos(((hour - 15) / 24) * 2 * Math.PI))
-      const wind = Math.round((4 + afternoon * 4 + Math.sin(t / 30) * 1.5 + Math.random()) * 10) / 10
-      const dust = Math.round((0.6 + Math.sin(t / 200) * 0.05) * 100) / 100
-      const storm = wind > 25 || dust > 2.5 ? 'warning' : wind > 15 || dust > 1.2 ? 'watch' : 'none'
-      world.weather = { wind, dust, storm }
-      dev.update({ storm_warning: storm })
+      // A dust storm (an event) blows on top: up to about 30 m/s more wind and tau 4 at full strength.
+      const storm = world.events?.storm ?? 0
+      const gust = storm * (28 + Math.sin(t / 7) * 4 + Math.random() * 3)
+      const wind = Math.round((4 + afternoon * 4 + Math.sin(t / 30) * 1.5 + Math.random() + gust) * 10) / 10
+      const dust = Math.round((0.6 + Math.sin(t / 200) * 0.05 + storm * 3.4) * 100) / 100
+      const warning = wind > 25 || dust > 2.5 ? 'warning' : wind > 15 || dust > 1.2 ? 'watch' : 'none'
+      world.weather = { wind, dust, storm: warning }
+      dev.update({ storm_warning: warning })
       if (!air.wants()) return
       air.send({
         wind,

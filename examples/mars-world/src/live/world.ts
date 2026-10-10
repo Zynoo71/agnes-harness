@@ -6,6 +6,7 @@ import { FOOTPRINTS } from '../base.js'
 import type { MarsClock } from '../clock.js'
 import { MONOLITH, type Parts } from '../devices.js'
 import { heightAt, OBSTACLES } from '../terrain.js'
+import type { Effects, Events } from './events.js'
 import { type Footprint, type GridMap, occupancy } from './map.js'
 import { grayPng } from './png.js'
 import { type Circle, headingTo, type Point, round, toMap, yawOf } from './route.js'
@@ -168,6 +169,12 @@ export class World {
   airlockChanged: (() => void) | undefined
   /** The suit leaks (an event): oxygen goes fast and the wearer cannot walk. */
   suitLeak = false
+  /** What happens on its own: storms, leaks, dust devils, meteorites (set up by connectDevices). */
+  events: Events | undefined
+  /** What the scene draws for events; set by the page. */
+  effects: Effects | undefined
+  /** Set by the power system: dust settles on the panels, in percent of their light. */
+  dustPanels: ((percent: number) => void) | undefined
   /** Set by the lab: takes a sample handed to it and queues it for analysis. */
   labReceive: ((sample: string) => void) | undefined
   /** The weather station reports these; the hopper reads them before it flies. */
@@ -202,6 +209,7 @@ export class World {
     this.astronaut = 'working'
     this.airlock = { inner: 'open', outer: 'closed' }
     this.suitLeak = false
+    this.events?.reset()
     for (const [rock, scale] of this.rockScales) rock.object.scale.copy(scale)
     for (const reset of this.resets) reset()
   }

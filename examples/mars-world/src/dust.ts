@@ -13,7 +13,11 @@ const WIND = new THREE.Vector3(-0.8, 0, 0.6).multiplyScalar(2.5)
  * points moved entirely on the GPU; each camera, the main view's or a device's, sees them in a box
  * around itself, so they wrap round as it moves and never run out.
  */
-export function buildDust(color: THREE.Color): { points: THREE.Points; update(t: number): void } {
+export function buildDust(color: THREE.Color): {
+  points: THREE.Points
+  /** `storm` (0–1) blows the motes faster and thicker. */
+  update(t: number, storm?: number): void
+} {
   const random = seeded(23)
   const seeds = new Float32Array(COUNT * 4)
   for (let i = 0; i < seeds.length; i++) seeds[i] = random()
@@ -21,12 +25,19 @@ export function buildDust(color: THREE.Color): { points: THREE.Points; update(t:
   // Placeholder positions; the shader places each mote from its seed.
   geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(COUNT * 3), 3))
   geometry.setAttribute('seed', new THREE.BufferAttribute(seeds, 4))
-  const uniforms = { time: { value: 0 }, wind: { value: WIND }, color: { value: color }, scale: { value: 1 } }
+  const uniforms = {
+    time: { value: 0 },
+    drift: { value: 0 },
+    opacity: { value: 0.45 },
+    wind: { value: WIND },
+    color: { value: color },
+    scale: { value: 1 },
+  }
   const material = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
     uniforms,
-    vertexShader: `uniform float time; uniform vec3 wind; uniform float scale;
+    vertexShader: `uniform float time; uniform float drift; uniform vec3 wind; uniform float scale;
       attribute vec4 seed;
       varying float vAlpha;
       void main() {
@@ -34,7 +45,7 @@ export function buildDust(color: THREE.Color): { points: THREE.Points; update(t:
         const float height = ${HEIGHT.toFixed(1)};
         // Drift with the wind, some faster than others, and sway a little.
         vec3 p = vec3(seed.x * box, seed.y * height, seed.z * box);
-        p += wind * time * (0.7 + 0.6 * seed.w);
+        p += wind * drift * (0.7 + 0.6 * seed.w);
         p += 0.6 * vec3(sin(time * 0.7 + seed.w * 40.0), 0.5 * sin(time * 0.9 + seed.x * 30.0), cos(time * 0.6 + seed.z * 50.0));
         // Wrap into the box around the camera, across; up from the ground, which is level at the base.
         vec3 origin = vec3(cameraPosition.x - box * 0.5, 0.0, cameraPosition.z - box * 0.5);
@@ -49,11 +60,11 @@ export function buildDust(color: THREE.Color): { points: THREE.Points; update(t:
           * (1.0 - smoothstep(height * 0.6, height, p.y));
         gl_PointSize = clamp(scale * (0.03 + 0.05 * seed.w) / d, 1.5, 7.0);
       }`,
-    fragmentShader: `uniform vec3 color;
+    fragmentShader: `uniform vec3 color; uniform float opacity;
       varying float vAlpha;
       void main() {
         float r = length(gl_PointCoord - 0.5) * 2.0;
-        float a = vAlpha * 0.45 * (1.0 - smoothstep(0.2, 1.0, r));
+        float a = vAlpha * opacity * (1.0 - smoothstep(0.2, 1.0, r));
         if (a < 0.005) discard;
         gl_FragColor = vec4(color, a);
         #include <tonemapping_fragment>
@@ -68,10 +79,15 @@ export function buildDust(color: THREE.Color): { points: THREE.Points; update(t:
     const target = renderer.getRenderTarget()
     uniforms.scale.value = (target ? target.height : renderer.domElement.height) * 0.9
   }
+  let last = 0
   return {
     points,
-    update(t) {
+    update(t, storm = 0) {
+      // The wind carries the motes by how far it has blown so far, so a storm speeds them up smoothly.
+      uniforms.drift.value += (t - last) * (1 + storm * 6)
+      last = t
       uniforms.time.value = t
+      uniforms.opacity.value = 0.45 * (1 + storm * 2.5)
     },
   }
 }

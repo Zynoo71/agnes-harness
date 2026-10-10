@@ -4,6 +4,7 @@ import type { Parts } from '../devices.js'
 import { airlock } from './airlock.js'
 import { baseCamera } from './basecam.js'
 import { comms } from './comms.js'
+import { Events } from './events.js'
 import { habitat } from './habitat.js'
 import { hopper } from './hopper.js'
 import { lab } from './lab.js'
@@ -27,8 +28,9 @@ export function connectDevices(
   clock: MarsClock,
   log: (line: string) => void,
   only?: string[],
-): { devices: WorldDevice[]; reset: () => Promise<void> } {
+): { devices: WorldDevice[]; world: World; reset: () => Promise<void> } {
   const world = new World(renderer, scene, parts, sky, clock)
+  world.events = new Events(world, log)
   const all = [
     habitat(world, log),
     airlock(world, log),
@@ -55,5 +57,5 @@ export function connectDevices(
     await new Promise((resolve) => setTimeout(resolve, 300))
     world.reset()
   }
-  return { devices, reset }
+  return { devices, world, reset }
 }

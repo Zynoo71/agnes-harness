@@ -6,8 +6,8 @@ import { addCamera } from './camera.js'
 import { reading } from './place.js'
 import { every, turnTo, type World, WorldDevice, wait } from './world.js'
 
-/** What the lab finds in each sample the base knows about. */
-const FINDINGS: Record<string, { minerals: Record<string, number>; verdict: string }> = {
+/** What the lab finds in each sample the base knows about; a fallen meteorite adds its own. */
+export const FINDINGS: Record<string, { minerals: Record<string, number>; verdict: string }> = {
   'rock-1': {
     minerals: { olivine: 41, pyroxene: 22, carbonate: 9, plagioclase: 18, other: 10 },
     verdict:

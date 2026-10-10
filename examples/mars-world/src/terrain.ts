@@ -552,7 +552,8 @@ export async function buildRocks(avoid: (x: number, z: number) => boolean): Prom
     (await meshOf('moon_rock_05')).geometry,
     new THREE.MeshStandardMaterial({ color: 0x3d4a3a, roughness: 0.55, metalness: 0.15 }),
   )
-  unusual.scale.set(0.9, 0.7, 0.9)
+  // The scan is a pebble 7 cm across: scaled up to a stone about 0.9 m across.
+  unusual.scale.set(12, 9, 12)
   const { x, z } = UNUSUAL_ROCK
   unusual.position.set(x, heightAt(x, z) - 0.05, z)
   unusual.castShadow = true

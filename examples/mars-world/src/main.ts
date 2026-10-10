@@ -11,6 +11,7 @@ import { MarsClock, SOL_MINUTES, START_HOURS, type TimeOfDay } from './clock.js'
 import { DETAIL_AREAS } from './details.js'
 import { buildDevices, DEVICES } from './devices.js'
 import { buildDust } from './dust.js'
+import { buildEffects } from './effects.js'
 import { connectDevices } from './live/index.js'
 import { buildMinimap } from './minimap.js'
 import { applyShot, SHOTS } from './shots.js'
@@ -81,25 +82,37 @@ scene.add(hemi, nightFill)
 const dustColor = new THREE.Color()
 const LOW_SUN = new THREE.Color(1, 0.62, 0.42)
 const DUST_TINT = new THREE.Color(1.05, 0.78, 0.6)
+const STORM_SKY = new THREE.Color(0.5, 0.3, 0.17)
 let envHour = Number.NaN
-/** Moves the sky and every light to `light`; the environment map, which takes a few ms, every quarter hour. */
-function applyLight(hour: number, light: Light) {
+let envStorm = 0
+/**
+ * Moves the sky and every light to `light`, thickened by a dust storm of strength `storm` (0–1): the
+ * sky goes a flat dusty brown, the distance fades, the sun dims. The environment map, which takes a
+ * few ms, follows every quarter hour and every tenth of a storm.
+ */
+function applyLight(hour: number, light: Light, storm = 0) {
+  if (storm > 0) {
+    const brown = STORM_SKY.clone().multiplyScalar(0.25 + 0.75 * light.day)
+    light.horizon.lerp(brown, storm * 0.85)
+    light.zenith.lerp(brown.multiplyScalar(0.8), storm * 0.9)
+  }
   updateSky(sky, light)
   const fog = scene.fog as THREE.FogExp2
   fog.color.copy(light.horizon).multiplyScalar(0.95)
-  fog.density = 0.0032 - 0.0012 * light.day - 0.0008 * light.night
+  fog.density = 0.0032 - 0.0012 * light.day - 0.0008 * light.night + storm * 0.012
   const up = THREE.MathUtils.smoothstep(light.elevation, -3, 3)
   sun.color.setRGB(1, 0.9, 0.8).lerp(LOW_SUN, 1 - light.day)
-  sun.intensity = (1.4 + 3.4 * light.day) * up
+  sun.intensity = (1.4 + 3.4 * light.day) * up * (1 - 0.75 * storm)
   sun.position.copy(light.sun).multiplyScalar(120)
   hemi.color.copy(light.horizon)
-  hemi.intensity = 0.25 + 0.15 * light.day
+  hemi.intensity = (0.25 + 0.15 * light.day) * (1 + 0.4 * storm)
   nightFill.intensity = 0.35 * light.night
   scene.environmentIntensity = 0.35 + 0.25 * light.day - 0.2 * light.night
   renderer.toneMappingExposure = 1 + 0.5 * light.night
   dustColor.copy(light.horizon).multiply(DUST_TINT)
-  if (!(Math.abs(hour - envHour) < 0.25)) {
+  if (!(Math.abs(hour - envHour) < 0.25) || Math.abs(storm - envStorm) > 0.1) {
     envHour = hour
+    envStorm = storm
     updateSky(envSky, light)
     const old = scene.environment
     scene.environment = pmrem.fromScene(skyScene, 0.02).texture
@@ -133,6 +146,8 @@ scene.add(rocks.group)
 // Dust drifting in the air, ochre in the sunlight; ?dust=0 leaves it out.
 const dust = buildDust(dustColor)
 if (params.get('dust') !== '0') scene.add(dust.points)
+// Meteorites and dust devils, drawn only while one happens.
+const effects = buildEffects(scene, dustColor)
 // Every render, the main view's and each device camera's, picks the rocks that camera needs.
 scene.onBeforeRender = (_renderer, _scene, view) => rocks.pick(view)
 
@@ -288,11 +303,13 @@ renderer.setAnimationLoop(() => {
   lastT = t
   if (frames % 10 === 0) renderer.shadowMap.needsUpdate = true
   const hour = clock.hour()
+  const storm = live?.world.events?.storm ?? 0
   light = lightAt(hour)
-  applyLight(hour, light)
+  applyLight(hour, light, storm)
   base.update(t)
   devices.update(t)
-  dust.update(t)
+  dust.update(t, storm)
+  effects.update(t)
   follow(dt)
   sky.position.copy(camera.position)
   composer.render()
@@ -334,6 +351,11 @@ const live = hub
       params.get('devices')?.split(','),
     )
   : undefined
+if (live) {
+  live.world.effects = effects
+  // Scripts (an evaluation, a test) reach the events here: mars.events.start('dust_storm', …).
+  Object.assign(window, { mars: { events: live.world.events } })
+}
 // Reset (the button, or R): every device back to how the page started it, without reloading, so
 // the devices stay connected to the hub. A demo control of the page, not part of any device.
 const resetButton = document.getElementById('reset') as HTMLButtonElement

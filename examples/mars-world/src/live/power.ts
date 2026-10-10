@@ -90,7 +90,9 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
   /** Solar output: how high the sun stands, a slow haze drift, dust, and how far the panels face it. */
   const production = () => {
     const sun = Math.max(0, Math.sin((sunAt(world.clock.hour()).elevation * Math.PI) / 180)) / SIN_NOON
-    const day = sun * (0.9 + 0.08 * Math.sin(performance.now() / 300000))
+    // Dust in the air (tau, from weather-01) dims the sunlight too.
+    const haze = Math.exp(-Math.max(0, world.weather.dust - 0.6) * 0.45)
+    const day = sun * haze * (0.9 + 0.08 * Math.sin(performance.now() / 300000))
     const facing = Math.cos(((tilt - PANEL_TILT.deployed) * Math.PI) / 180)
     return PEAK_W * day * (1 - dust / 100) * Math.max(0.08, facing ** 4)
   }
@@ -135,8 +137,9 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
       // The bank's clock runs 15 times faster than the scene's, so a change shows within a demo: a
       // night with every load on takes about half the bank, with only life support about a fifth.
       storage = Math.max(0, Math.min(100, storage + (net / CAPACITY_WH) * (100 / 3600) * 15))
-      // Dust settles on deployed panels, about a third of their light an hour; stowed, they stay clean.
-      if (panels === 'deployed') dust = Math.min(100, dust + 0.01)
+      // Dust settles on deployed panels, about a third of their light an hour, and fast in a dust
+      // storm; stowed, they stay clean.
+      if (panels === 'deployed') dust = Math.min(100, dust + 0.01 + (world.events?.storm ?? 0) * 0.2)
       if (!flow.wants()) return
       flow.send({
         production: Math.round(production()),
@@ -250,6 +253,11 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
       return `${which} ${on ? 'back on' : 'switched off'}; the base draws ${load()} W`
     },
   )
+  world.dustPanels = (percent) => {
+    // Stowed on edge, the panels catch a little of it.
+    dust = Math.min(100, dust + percent * (panels === 'deployed' ? 1 : 0.2))
+    report()
+  }
   world.onReset(() => {
     storage = 74
     dust = 12

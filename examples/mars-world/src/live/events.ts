@@ -41,10 +41,30 @@ export const CATALOG = {
 export type EventKind = keyof typeof CATALOG
 export type Params = Record<string, number | string>
 
+/** A banner line in each language the page speaks. */
+export interface Headline {
+  en: string
+  zh: string
+}
+
+/** The banner line for an event when nobody wrote one. */
+export const HEADLINES: Record<EventKind, (p: Params) => Headline> = {
+  dust_storm: (p) =>
+    Number(p.intensity) > 0.8
+      ? { en: 'A strong dust storm is rolling in', zh: '强沙尘暴正在逼近' }
+      : { en: 'A dust storm is building', zh: '沙尘暴正在形成' },
+  suit_leak: () => ({ en: "The astronaut's suit is leaking", zh: '宇航服漏气' }),
+  dust_devil: () => ({ en: 'A dust devil is crossing the solar array', zh: '尘卷风正扫过太阳能板' }),
+  meteorite: (p) => ({
+    en: `A meteorite fell in the ${p.area}`,
+    zh: `一颗陨石落在${p.area === 'east dunes' ? '东边沙丘' : '西边野外'}`,
+  }),
+}
+
 export interface Happening {
   id: number
   kind: EventKind
-  headline: string
+  headline: Headline
   params: Params
   /** Who started it: the director (seeded or a model) or a person on the page. */
   by: string
@@ -78,6 +98,8 @@ export class Events {
   /** Hears every event as it starts and ends. */
   readonly listeners: ((h: Happening, phase: 'start' | 'end') => void)[] = []
   private count = 0
+  /** Dust devils that have reached the panels. */
+  private readonly dusted = new WeakSet<Happening>()
   private rocks: Obstacle[] = []
 
   constructor(
@@ -88,7 +110,7 @@ export class Events {
   }
 
   /** Starts an event, or says why it cannot happen now. */
-  start(kind: EventKind, params: Params, headline: string, by: string): Happening | string {
+  start(kind: EventKind, params: Params, headline: Headline, by: string): Happening | string {
     const world = this.world
     if (this.active.some((h) => h.kind === kind)) return `a ${kind.replace('_', ' ')} is already happening`
     if (kind === 'suit_leak' && !['working', 'standing'].includes(world.astronaut))
@@ -118,7 +140,7 @@ export class Events {
       setTimeout(() => void this.addRock(at, h), 900)
     }
     this.active.push(h)
-    this.log(`event ${kind} by ${by}: ${headline} ${JSON.stringify(params)}`)
+    this.log(`event ${kind} by ${by}: ${headline.en} ${JSON.stringify(params)}`)
     for (const listen of this.listeners) listen(h, 'start')
     return h
   }
@@ -153,8 +175,8 @@ export class Events {
     } else this.storm = 0
     // Halfway across, the dust devil reaches the panels.
     const devil = this.active.find((h) => h.kind === 'dust_devil')
-    if (devil && !devil.params.hit && now - devil.start > (DEVIL_S * 1000) / 2) {
-      devil.params.hit = 1
+    if (devil && !this.dusted.has(devil) && now - devil.start > (DEVIL_S * 1000) / 2) {
+      this.dusted.add(devil)
       world.dustPanels?.(Number(devil.params.strength))
     }
     for (const h of [...this.active]) {

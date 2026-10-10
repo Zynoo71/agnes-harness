@@ -549,13 +549,16 @@ export interface Base {
  * What blocks the way at the base, in world coordinates (x east, z south), for the base map:
  * buildings, masts, the oxygen plant, cargo. Pads and the dock are open ground.
  */
+/** The solar field: open ground under panels on posts, so it blocks the way but casts no contact shade. */
+const SOLAR_FIELD: Footprint = { x: 21, z: 20.1, w: 18.6, d: 12 }
+
 export const FOOTPRINTS: Footprint[] = [
   { x: 0, z: 0, r: 9.6 },
   { x: 0, z: 9.6, w: 3.6, d: 6 },
   { x: 9, z: -2, w: 4.6, d: 2.4 },
   { x: 18.5, z: -2, w: 16.4, d: 7.2 },
   { x: -17, z: 1, w: 8.8, d: 10.2 },
-  { x: 21, z: 20.1, w: 18.6, d: 12 },
+  SOLAR_FIELD,
   { x: 11.5, z: 20, w: 5.6, d: 2.6 },
   { x: -24, z: 15.5, w: 4.4, d: 7 },
   { x: -19.2, z: 15.5, w: 0.6, d: 4.5 },
@@ -569,6 +572,11 @@ export const FOOTPRINTS: Footprint[] = [
   ...DETAIL_FOOTPRINTS.map((f) => ({ x: f.x, z: f.z, w: f.w, d: f.d })),
   ...DETAIL_POSTS.map(([x, z]) => ({ x, z, r: 0.4 })),
 ]
+
+/** What stands on the ground and darkens it where it meets it: the footprints but the solar field and posts. */
+export const GROUND_CONTACTS = FOOTPRINTS.filter(
+  (f) => f !== SOLAR_FIELD && ('r' in f ? f.r >= 1 : f.w * f.d >= 2),
+)
 
 export function buildBase(): Base {
   const group = new THREE.Group()

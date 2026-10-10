@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { meshOf, model, pbrMaps, seeded } from './assets.js'
+import type { Footprint } from './live/map.js'
 
 /** Half the side of the terrain square, in metres. Beyond it, fog and sky. */
 const HALF = 700
@@ -175,8 +176,27 @@ export function heightAt(x: number, z: number): number {
   return h * away + 0.08 * fbm(x / 6, z / 6, 2) * (1 - away)
 }
 
-/** The ground: three Poly Haven textures blended by slope (rock) and dune sand, tinted to Mars. */
-export function buildTerrain(): THREE.Mesh {
+/**
+ * How much `f` shades the ground at (x, z) where it stands on it: 1 under it, fading out within about
+ * two metres of its edge, as less and less of the sky is blocked.
+ */
+function contactShade(f: Footprint, x: number, z: number): number {
+  let d: number
+  if ('r' in f) d = Math.hypot(x - f.x, z - f.z) - f.r
+  else {
+    const dx = Math.abs(x - f.x) - f.w / 2
+    const dz = Math.abs(z - f.z) - f.d / 2
+    d = dx > 0 || dz > 0 ? Math.hypot(Math.max(dx, 0), Math.max(dz, 0)) : Math.max(dx, dz)
+  }
+  return d <= 0 ? 1 : Math.exp(-d / 0.9)
+}
+
+/**
+ * The ground: three Poly Haven textures blended by slope (rock) and dune sand, tinted to Mars. The
+ * ground darkens where `contacts` and the field's boulders stand on it, baked in, so it costs nothing.
+ */
+export function buildTerrain(contacts: Footprint[] = []): THREE.Mesh {
+  const standing = [...contacts, ...BOULDERS.map(([x, z, s]) => ({ x, z, r: 0.8 * s }))]
   const geometry = new THREE.PlaneGeometry(HALF * 2, HALF * 2, SEGMENTS, SEGMENTS)
   geometry.rotateX(-Math.PI / 2)
   const pos = geometry.attributes.position as THREE.BufferAttribute
@@ -210,9 +230,12 @@ export function buildTerrain(): THREE.Mesh {
       const k = Math.hypot(x - c.x, z - c.z) / c.r
       if (k < 2.2) crater += k < 0.85 ? -0.12 * smooth(0.85, 0.5, k) : 0.08 * smooth(2.2, 1.1, k)
     }
-    const r = shade * (1 - 0.24 * bedrock + 0.14 * streak + crater)
-    const g = shade * (0.97 - 0.18 * bedrock + 0.13 * streak + crater)
-    const b = shade * (0.94 - 0.08 * bedrock + 0.08 * streak + crater)
+    let contact = 0
+    if (Math.hypot(x, z) < 90) for (const f of standing) contact = Math.max(contact, contactShade(f, x, z))
+    const k = shade * (1 - 0.5 * contact)
+    const r = k * (1 - 0.24 * bedrock + 0.14 * streak + crater)
+    const g = k * (0.97 - 0.18 * bedrock + 0.13 * streak + crater)
+    const b = k * (0.94 - 0.08 * bedrock + 0.08 * streak + crater)
     colors.set([r, g, b], i * 3)
   }
   geometry.setAttribute('aMix', new THREE.BufferAttribute(mix, 2))

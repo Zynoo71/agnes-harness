@@ -6,7 +6,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { coveredTextures } from './assets.js'
-import { buildBase, LAYOUT } from './base.js'
+import { buildBase, GROUND_CONTACTS, LAYOUT } from './base.js'
 import { DETAIL_AREAS } from './details.js'
 import { buildDevices, DEVICES } from './devices.js'
 import { connectDevices } from './live/index.js'
@@ -74,7 +74,7 @@ scene.add(sun, sun.target)
 scene.add(new THREE.HemisphereLight(light.horizon, new THREE.Color(0.22, 0.1, 0.06), 0.25 + 0.15 * light.day))
 
 const status = document.getElementById('status') as HTMLElement
-scene.add(buildTerrain())
+scene.add(buildTerrain(GROUND_CONTACTS))
 const base = buildBase()
 scene.add(base.group)
 const devices = await buildDevices(base)

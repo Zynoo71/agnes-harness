@@ -54,6 +54,24 @@ English | [简体中文](mars-world.zh-CN.md)
 
 The habitat declares the base map with named places (airlock, rover dock, hopper pad, lab, rock outcrop, west field and more), so you can name places in a task instead of giving coordinates. The [example reference](../../examples/mars-world/README.md) lists every tool, state field and data source.
 
+<a id="世界自己会变"></a>
+
+## The world changes on its own
+
+Left alone, the base does not stay as it is, so the brain has something to notice:
+
+- **Mars time.** A sol takes 40 real minutes. The sun, the light and the solar output follow it; at night the battery bank carries the base, and the air gets much colder.
+- **Drift.** Dust settles on the solar panels, the astronaut's oxygen runs down while they work, and a hopper left away from its pad boils off propellant.
+- **Events.** Every few minutes something happens: a dust storm, a leak in the astronaut's suit, a dust devil over the solar array, or a meteorite that falls and lies in the field as a new unusual rock. The world page shows each as a banner and in the activity list; the brain learns of it only from the devices, as it would on a real base.
+
+With a model behind the world's event director, the model picks what happens and when, from a summary of the base; the world keeps its picks to the rules. Set it up when you serve the world, with any OpenAI-compatible API:
+
+```sh
+MARS_DIRECTOR_URL=http://127.0.0.1:8488/v1 MARS_DIRECTOR_MODEL=<model> pnpm --filter @agnes/mars-world dev
+```
+
+`MARS_DIRECTOR_KEY` carries an API key if the service needs one; it stays on the server. Without these, the world picks events from a seed. Add `&events=manual` to the world page's address to start events only from its events panel (`E`), or `&events=off` for none.
+
 <a id="试试这些任务"></a>
 
 ## Tasks to try
@@ -86,19 +104,29 @@ The rover cannot drive straight to the rock, because the outcrop is in the way; 
 
 There is no single right answer: the weather station, the solar array, the hopper, the rover and the airlock all have a part.
 
+**Let the world happen**
+
+> Keep an eye on the base for the next half hour and handle whatever comes up.
+
+The brain sets watches on the devices and waits; when an event shows up in their state, it acts. A leaking suit stops the astronaut where they stand, so Monolith has to carry them in; after a storm the panels need cleaning; a meteorite is worth a survey and a sample.
+
+> Call the astronaut back in before their oxygen gets low.
+
+The suit's `radio` asks them to walk back to the airlock; the brain still has to cycle the airlock and open its door for them.
+
 <a id="观察过程"></a>
 
 ## Watch it happen
 
 - **In the conversation**, every device call shows as a card with its arguments, progress and result. A finished turn folds its cards under its summary line, Completed · took …; click that line to unfold them.
 - **In the Devices panel**: Activity lists the brain's device calls in this conversation, newest first; World shows the devices moving on the base map; a device's own page shows its state, data and cameras. Stop on a device page, or `stop_device`, stops it at once.
-- **In the world page**, keys `1`–`9` switch between fixed views (overview, rover dock and lab, hopper pad, airlock, field worksite, power, flag, comms, and one that follows the hopper), `0` follows Monolith, `M` toggles the minimap and `L` the device tags.
+- **In the world page**, each device's tag shows the tool it is running, its progress and who called it; the list at the bottom left keeps the latest calls, alerts and events; banners at the top flag events and alarms; the bar along the bottom shows the Mars time, the window to Earth and the weather. The camera follows what happens; `A` turns that off. Keys `1`–`9` switch between fixed views (overview, rover dock and lab, hopper pad, airlock, field worksite, power, flag, comms, and one that follows the hopper), `0` follows Monolith, `M` toggles the minimap, `L` the device tags, `E` the events panel, and `?` opens the page's own guide. The button beside it switches the page to Chinese.
 
 <a id="重来一次"></a>
 
 ## Start over
 
-Press **Reset** at the bottom right of the world page, or `R`. Every running call ends as if stopped, and the devices go back to where they started, with the battery, propellant and oxygen levels they started with, the rock whole again and the airlock closed. The devices stay connected, so you can give the next task right away. Open a new conversation too, so the brain does not plan from the last run.
+Press **Reset** at the bottom right of the world page, or `R`. Every running call ends as if stopped, and the devices go back to where they started, with the battery, propellant and oxygen levels they started with, the rock whole again and the airlock closed; the Mars clock goes back to morning, events end and fallen meteorites are gone. The devices stay connected, so you can give the next task right away. Open a new conversation too, so the brain does not plan from the last run.
 
 <a id="遇到问题"></a>
 

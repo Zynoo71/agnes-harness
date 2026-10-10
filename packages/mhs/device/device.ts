@@ -107,6 +107,8 @@ export class Call {
   readonly pausable: boolean
   readonly uses: string[]
   notes: string[] = []
+  /** The hub's bookkeeping for the call (job, level, caller; 7.1): for display, never for behavior (CALL-1). */
+  meta: Json | undefined
   endReason: string | undefined
   readonly generation: number
   private readonly abort = new AbortController()
@@ -648,6 +650,7 @@ export class Device {
     }
     const call = new Call(this, String(id), name as string, prepared.args, tool.decl)
     call.notes = prepared.notes
+    if (params.meta && typeof params.meta === 'object') call.meta = params.meta as Json
     this.calls.set(call.id, call)
     this.reply(id, { accepted: true })
     void this.runCall(call, tool)

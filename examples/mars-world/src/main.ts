@@ -107,8 +107,10 @@ if (params.get('ao') === '1' || (QUALITY === 'high' && params.get('ao') !== '0')
   gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1.0 })
   composer.addPass(gtao)
 }
+// Only lamps and beacons are bright enough to bloom; at a lower threshold the habitat's lit windows
+// spread into a white haze over the whole module.
 if (params.get('bloom') !== '0')
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.3, 0.45, 0.92))
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.3, 0.45, 1.2))
 composer.addPass(
   new ShaderPass({
     uniforms: { tDiffuse: { value: null }, strength: { value: 0.28 } },

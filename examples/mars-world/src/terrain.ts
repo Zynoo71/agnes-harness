@@ -198,7 +198,22 @@ export function buildTerrain(): THREE.Mesh {
     mix[i * 2 + 1] = duneMask(x, z)
     // Large, soft light and dark patches hide the tiling.
     const shade = 0.86 + 0.22 * fbm(x / 30 + 11, z / 30 - 4, 3)
-    colors.set([shade, shade * 0.97, shade * 0.94], i * 3)
+    // Darker, greyer bedrock where the dust is thin, in patches tens of metres across.
+    const bedrock = smooth(0.1, 0.4, fbm(x / 70 - 3, z / 70 + 8, 4))
+    // Pale dust in streaks drawn out along the wind, which blows from the north-east.
+    const along = (x * 0.8 - z * 0.6) / 90
+    const across = (x * 0.6 + z * 0.8) / 22
+    const streak = smooth(0.05, 0.4, fbm(along + 5, across - 2, 3))
+    // Crater floors hold darker sand; the ejecta round the rims is paler.
+    let crater = 0
+    for (const c of CRATERS) {
+      const k = Math.hypot(x - c.x, z - c.z) / c.r
+      if (k < 2.2) crater += k < 0.85 ? -0.12 * smooth(0.85, 0.5, k) : 0.08 * smooth(2.2, 1.1, k)
+    }
+    const r = shade * (1 - 0.24 * bedrock + 0.14 * streak + crater)
+    const g = shade * (0.97 - 0.18 * bedrock + 0.13 * streak + crater)
+    const b = shade * (0.94 - 0.08 * bedrock + 0.08 * streak + crater)
+    colors.set([r, g, b], i * 3)
   }
   geometry.setAttribute('aMix', new THREE.BufferAttribute(mix, 2))
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))

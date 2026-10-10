@@ -6,7 +6,7 @@ import { addCamera } from './camera.js'
 import { castRay } from './map.js'
 import { addPlace, reading } from './place.js'
 import { fromMap, inTheWay, type Point, planRoute, ROVER, round, toMap } from './route.js'
-import { Blocked, Body, every, type World, WorldDevice, wait } from './world.js'
+import { Blocked, Body, every, everyFrame, type World, WorldDevice, wait } from './world.js'
 
 /** The lidar on the mast: one sweep, all round, every 2 degrees. */
 const LIDAR = { range: 30, step: 2, height: 1.9, ahead: 0.8 }
@@ -223,30 +223,26 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
   }
   let manualAt = performance.now()
   let steering = false
-  every(
-    33,
-    () => {
-      const now = performance.now()
-      const dt = Math.min(0.1, (now - manualAt) / 1000)
-      manualAt = now
-      if (manual.vx === 0 && manual.wz === 0) {
-        if (steering) body.speed = body.turn = 0
-        steering = false
-        return
-      }
-      steering = true
-      // The safety stop holds under manual control too: no driving forward into a boulder or a person.
-      const vx = manual.vx > 0 && ahead() ? 0 : manual.vx
-      body.object.rotation.y += ((manual.wz * Math.PI) / 180) * dt
-      body.object.position.x += Math.sin(body.heading) * vx * dt
-      body.object.position.z += Math.cos(body.heading) * vx * dt
-      body.object.position.y = world.ground(body.at)
-      body.odometer += Math.abs(vx * dt)
-      body.speed = vx
-      body.turn = (manual.wz * Math.PI) / 180
-    },
-    log,
-  )
+  everyFrame(() => {
+    const now = performance.now()
+    const dt = Math.min(0.1, (now - manualAt) / 1000)
+    manualAt = now
+    if (manual.vx === 0 && manual.wz === 0) {
+      if (steering) body.speed = body.turn = 0
+      steering = false
+      return
+    }
+    steering = true
+    // The safety stop holds under manual control too: no driving forward into a boulder or a person.
+    const vx = manual.vx > 0 && ahead() ? 0 : manual.vx
+    body.object.rotation.y += ((manual.wz * Math.PI) / 180) * dt
+    body.object.position.x += Math.sin(body.heading) * vx * dt
+    body.object.position.z += Math.cos(body.heading) * vx * dt
+    body.object.position.y = world.ground(body.at)
+    body.odometer += Math.abs(vx * dt)
+    body.speed = vx
+    body.turn = (manual.wz * Math.PI) / 180
+  }, log)
 
   /**
    * Something just ahead of the nose, inside the rover's width, short of where it is driving to

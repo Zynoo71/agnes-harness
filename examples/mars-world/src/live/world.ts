@@ -31,23 +31,82 @@ export interface Thing extends Circle {
   label: string
 }
 
-const FRAME_MS = 33
+/** Frames a second of the one clock everything that moves steps on. */
+export const FRAME_HZ = 60
 
 // Browsers slow down timers in hidden tabs to once a second, and later to once a minute, which
 // would freeze a device's motion whenever its page is behind another window. Timers in a worker
-// keep their pace, so devices wait on those.
+// keep their pace, so devices wait on those. The worker also beats the frame clock, each beat aimed
+// at its exact time: setInterval rounds 16.7 ms down to 16, and a camera filming every other frame
+// then ran faster than its rate, so pictures piled up waiting to be sent until they were dropped.
 const ticker = new Worker(
   URL.createObjectURL(
-    new Blob(['onmessage = (e) => setTimeout(() => postMessage(e.data), e.data.ms)'], {
-      type: 'text/javascript',
-    }),
+    new Blob(
+      [
+        `const period = ${1000 / FRAME_HZ}
+        let next = performance.now() + period
+        const beat = () => {
+          postMessage('frame')
+          next += period
+          const now = performance.now()
+          if (next < now - 100) next = now + period
+          setTimeout(beat, next - now)
+        }
+        setTimeout(beat, period)
+        onmessage = (e) => setTimeout(() => postMessage(e.data), e.data.ms)`,
+      ],
+      { type: 'text/javascript' },
+    ),
   ),
 )
 const waiting = new Map<number, () => void>()
 let ticks = 0
-ticker.onmessage = (e: MessageEvent<{ id: number }>) => {
+let frameWaiters: (() => void)[] = []
+const onFrame = new Set<() => void>()
+const afterFrame = new Set<() => void>()
+// Cameras film once the frame's motion is done: a message is a task, so it runs after every step the
+// frame woke up, however many awaits each takes, and unlike a timeout it is not slowed when hidden.
+const after = new MessageChannel()
+after.port1.onmessage = () => {
+  for (const f of afterFrame) f()
+}
+ticker.onmessage = (e: MessageEvent<{ id: number } | 'frame'>) => {
+  if (e.data === 'frame') {
+    const woken = frameWaiters
+    frameWaiters = []
+    for (const resolve of woken) resolve()
+    for (const f of onFrame) f()
+    after.port2.postMessage(null)
+    return
+  }
   waiting.get(e.data.id)?.()
   waiting.delete(e.data.id)
+}
+
+/**
+ * Waits for the next frame of the clock that all motion steps on. Cameras film right after a frame,
+ * so a steady motion moves the same amount in each picture; on separate timers it moved one step in
+ * one picture and two in the next, and the video stuttered.
+ */
+export async function frame(call: Call): Promise<void> {
+  await Promise.race([new Promise<void>((resolve) => frameWaiters.push(resolve)), call.aborted()])
+  if (call.signal.aborted) await call.checkpoint()
+}
+
+/** Runs `step` on every frame of the motion clock while the page lives; errors are logged. */
+export function everyFrame(step: () => void, log: (line: string) => void): void {
+  onFrame.add(() => {
+    try {
+      step()
+    } catch (e) {
+      log(`live: ${String(e)}`)
+    }
+  })
+}
+
+/** Runs `film` after every frame's motion, for the cameras. */
+export function afterEveryFrame(film: () => void): void {
+  afterFrame.add(film)
 }
 
 /** Waits `ms`, at full pace even in a hidden tab, and ends early once the call is interrupted. */
@@ -413,7 +472,7 @@ export class Body {
         this.object.position.y = height(this.at)
         this.odometer += forward
         options.step?.()
-        await wait(call, FRAME_MS)
+        await frame(call)
       }
     } finally {
       this.speed = 0
@@ -434,7 +493,7 @@ export class Body {
       v = Math.min(rate, v + accel * dt, Math.sqrt(2 * accel * Math.abs(dy)) + 0.05)
       this.object.position.y += Math.sign(dy) * Math.min(Math.abs(dy), v * dt)
       step?.()
-      await wait(call, FRAME_MS)
+      await frame(call)
     }
   }
 }
@@ -460,7 +519,7 @@ export async function turnTo(
       if (to !== undefined) object.rotation[axis] = from[axis] + (to - from[axis]) * e
     }
     if (k >= 1) return
-    await wait(call, FRAME_MS)
+    await frame(call)
   }
 }
 

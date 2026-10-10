@@ -1,20 +1,26 @@
 import type { Device, Source } from '@agnes/mhs/device'
 import * as THREE from 'three'
-import { every, type World } from './world.js'
+import { afterEveryFrame, every, FRAME_HZ, type World } from './world.js'
 
 /** Highest video rate; the hub's mhs/configure may ask for less. */
-const VIDEO_HZ = 20
+const VIDEO_HZ = 30
 /** Stills for a model to read, and video for people to watch, in pixels. */
 const STILL_SIZE = [640, 360] as const
 const VIDEO_SIZE = [1280, 720] as const
 /** Longest time between keyframes, in seconds (VID-5: at most 2). */
 const GOP_S = 1
 /** Video bitrate range in kbit/s; before mhs/configure the lowest applies (MOS 8). */
-const BITRATE_KBPS = [2000, 4000]
+const BITRATE_KBPS = [3000, 6000]
 /** An encoder nobody has wanted for this long is closed, to free it. */
 const IDLE_MS = 5000
 /** A picture still waiting this long after its turn to go out is stale and dropped (MOS 9). */
 const STALE_MS = 300
+/**
+ * Pictures go out this long after they were taken: some take longer to encode than others (keyframes
+ * most), and sent as soon as encoded they left in bursts that the source's rate held back until the
+ * queue overflowed. Held to this delay they leave as evenly as they were taken, and play as evenly.
+ */
+const SEND_DELAY_MS = 3 * (1000 / FRAME_HZ)
 
 export interface CameraOptions {
   /** Id of the still-image source; the video source is `<id>_video`. */
@@ -86,15 +92,10 @@ export function addCamera(
   feeds.push(new VideoFeed(world, camera, video, ...VIDEO_SIZE, log))
   if (!ticking) {
     ticking = true
-    // One timer for every feed, fine enough that each keeps its own pace within a few ms.
-    every(
-      5,
-      () => {
-        const now = performance.now()
-        for (const feed of feeds) feed.tick(now)
-      },
-      log,
-    )
+    afterEveryFrame(() => {
+      const now = performance.now()
+      for (const feed of feeds) feed.tick(now)
+    })
   }
 }
 
@@ -118,8 +119,8 @@ class VideoFeed {
   private hz = 0
   private lastKey = -Infinity
   private lastWanted = 0
-  /** When the next picture is due, and when the one being read back was taken. */
-  private due = 0
+  /** Frames of the motion clock since the last picture, and when the one being read back was taken. */
+  private frames = 0
   private takenAt = 0
   private reading = false
   private readonly out: Chunk[] = []
@@ -145,6 +146,7 @@ class VideoFeed {
       return
     }
     this.lastWanted = now
+    this.frames += 1
     this.flush()
     const hz = this.source.hz ?? VIDEO_HZ
     const kbps = this.source.bitrateKbps ?? (BITRATE_KBPS[0] as number)
@@ -171,10 +173,10 @@ class VideoFeed {
       encoder.encode(frame, { keyFrame: key })
       frame.close()
     }
-    // The next picture, on time; one that cannot be taken now (the encoder is behind) waits a tick.
-    if (now < this.due || encoder.encodeQueueSize > 1) return
-    const period = 1000 / hz
-    this.due = Math.max(this.due + period, now - period / 2)
+    // A picture every so many frames, taken right after the frame's motion, so a steady motion moves
+    // the same in every picture. One that cannot be taken now (the encoder is behind) waits a frame.
+    if (this.frames < Math.round(FRAME_HZ / hz) || encoder.encodeQueueSize > 1) return
+    this.frames = 0
     this.takenAt = now
     this.world.capture(this.camera, this.w, this.h)
     this.reading = true
@@ -237,6 +239,8 @@ class VideoFeed {
   private flush(): void {
     const stale = 1000 / (this.source.hz ?? VIDEO_HZ) + STALE_MS
     while (this.out.length > 0 && this.source.wants()) {
+      // A couple of ms early is on time: frames do not land exactly on the clock.
+      if (performance.now() < (this.out[0] as Chunk).taken + SEND_DELAY_MS - 2) break
       const { key, bytes, t, taken } = this.out.shift() as Chunk
       if (performance.now() - taken > stale) {
         this.broken = true

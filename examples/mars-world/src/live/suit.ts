@@ -3,7 +3,7 @@ import { LAYOUT } from '../base.js'
 import { addCamera } from './camera.js'
 import { addPlace, reading } from './place.js'
 import { headingTo } from './route.js'
-import { Body, every, type World, WorldDevice } from './world.js'
+import { Body, every, everyFrame, type World, WorldDevice } from './world.js'
 
 /** The astronaut's walk: speed in m/s, turning in radians a second, metres per step. */
 const WALK = { speed: 0.55, turn: 2.5, stride: 0.38 }
@@ -19,40 +19,36 @@ function wander(world: World, body: Body, log: (line: string) => void): void {
   let restUntil = performance.now() + 6000
   let phase = 0
   let last = performance.now()
-  every(
-    33,
-    () => {
-      const now = performance.now()
-      const dt = Math.min(0.1, (now - last) / 1000)
-      last = now
-      if (world.astronaut !== 'working' || now < restUntil) {
-        body.speed = 0
-        return
-      }
-      const [x, z] = spots[next] as readonly [number, number]
-      const distance = Math.hypot(x - body.at.x, z - body.at.z)
-      if (distance < 0.05) {
-        next = (next + 1) % spots.length
-        restUntil = now + 5000 + Math.random() * 7000
-        body.speed = 0
-        model.rotation.z = 0
-        model.position.y = world.ground(body.at)
-        return
-      }
-      let delta = headingTo(body.at, { x, z }) - model.rotation.y
-      delta = Math.atan2(Math.sin(delta), Math.cos(delta))
-      model.rotation.y += Math.sign(delta) * Math.min(Math.abs(delta), WALK.turn * dt)
-      const step = Math.abs(delta) < 0.4 ? Math.min(distance, WALK.speed * dt) : 0
-      model.position.x += Math.sin(model.rotation.y) * step
-      model.position.z += Math.cos(model.rotation.y) * step
-      body.odometer += step
-      body.speed = step / Math.max(dt, 1e-3)
-      phase += (step / WALK.stride) * Math.PI
-      model.position.y = world.ground(body.at) + Math.abs(Math.sin(phase)) * 0.05
-      model.rotation.z = Math.sin(phase) * 0.05
-    },
-    log,
-  )
+  everyFrame(() => {
+    const now = performance.now()
+    const dt = Math.min(0.1, (now - last) / 1000)
+    last = now
+    if (world.astronaut !== 'working' || now < restUntil) {
+      body.speed = 0
+      return
+    }
+    const [x, z] = spots[next] as readonly [number, number]
+    const distance = Math.hypot(x - body.at.x, z - body.at.z)
+    if (distance < 0.05) {
+      next = (next + 1) % spots.length
+      restUntil = now + 5000 + Math.random() * 7000
+      body.speed = 0
+      model.rotation.z = 0
+      model.position.y = world.ground(body.at)
+      return
+    }
+    let delta = headingTo(body.at, { x, z }) - model.rotation.y
+    delta = Math.atan2(Math.sin(delta), Math.cos(delta))
+    model.rotation.y += Math.sign(delta) * Math.min(Math.abs(delta), WALK.turn * dt)
+    const step = Math.abs(delta) < 0.4 ? Math.min(distance, WALK.speed * dt) : 0
+    model.position.x += Math.sin(model.rotation.y) * step
+    model.position.z += Math.cos(model.rotation.y) * step
+    body.odometer += step
+    body.speed = step / Math.max(dt, 1e-3)
+    phase += (step / WALK.stride) * Math.PI
+    model.position.y = world.ground(body.at) + Math.abs(Math.sin(phase)) * 0.05
+    model.rotation.z = Math.sin(phase) * 0.05
+  }, log)
 }
 
 /** The astronaut's suit: its supplies, the wearer's vital signs, a helmet camera and where it is. */

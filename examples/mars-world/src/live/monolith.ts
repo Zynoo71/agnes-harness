@@ -19,7 +19,19 @@ import {
   round,
   toMap,
 } from './route.js'
-import { Blocked, Body, every, type Thing, turnTo, type World, WorldDevice, wait } from './world.js'
+import {
+  Blocked,
+  Body,
+  every,
+  everyFrame,
+  FRAME_HZ,
+  frame,
+  type Thing,
+  turnTo,
+  type World,
+  WorldDevice,
+  wait,
+} from './world.js'
 
 /** Gaits: top speed in m/s, acceleration in m/s², turning in radians a second. */
 const GAIT = {
@@ -227,13 +239,9 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     astronaut.position.set(x, world.ground({ x, z }) + HELD.up, z)
     astronaut.rotation.set(-0.1, h, 0)
   }
-  every(
-    33,
-    () => {
-      if (load?.kind === 'astronaut') hold()
-    },
-    log,
-  )
+  everyFrame(() => {
+    if (load?.kind === 'astronaut') hold()
+  }, log)
 
   // What says something: a bubble over it in the scene, for longer the more it says.
   const speak = (text: string) => {
@@ -369,30 +377,26 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   }
   let manualAt = performance.now()
   let steering = false
-  every(
-    33,
-    () => {
-      const now = performance.now()
-      const dt = Math.min(0.1, (now - manualAt) / 1000)
-      manualAt = now
-      if ((manual.vx === 0 && manual.wz === 0) || model.unfolded > 0) {
-        if (steering) body.speed = body.turn = 0
-        steering = false
-        return
-      }
-      steering = true
-      // The safety stop holds under manual control too: no walking forward into a boulder or a person.
-      const vx = manual.vx > 0 && hazard('walk', Number.POSITIVE_INFINITY) ? 0 : manual.vx
-      body.object.rotation.y += ((manual.wz * Math.PI) / 180) * dt
-      body.object.position.x += Math.sin(body.heading) * vx * dt
-      body.object.position.z += Math.cos(body.heading) * vx * dt
-      body.object.position.y = world.ground(body.at)
-      body.odometer += Math.abs(vx * dt)
-      body.speed = vx
-      body.turn = (manual.wz * Math.PI) / 180
-    },
-    log,
-  )
+  everyFrame(() => {
+    const now = performance.now()
+    const dt = Math.min(0.1, (now - manualAt) / 1000)
+    manualAt = now
+    if ((manual.vx === 0 && manual.wz === 0) || model.unfolded > 0) {
+      if (steering) body.speed = body.turn = 0
+      steering = false
+      return
+    }
+    steering = true
+    // The safety stop holds under manual control too: no walking forward into a boulder or a person.
+    const vx = manual.vx > 0 && hazard('walk', Number.POSITIVE_INFINITY) ? 0 : manual.vx
+    body.object.rotation.y += ((manual.wz * Math.PI) / 180) * dt
+    body.object.position.x += Math.sin(body.heading) * vx * dt
+    body.object.position.z += Math.cos(body.heading) * vx * dt
+    body.object.position.y = world.ground(body.at)
+    body.odometer += Math.abs(vx * dt)
+    body.speed = vx
+    body.turn = (manual.wz * Math.PI) / 180
+  }, log)
 
   /** The way it stops, as an estop result. */
   const estop = (e: unknown) => {
@@ -599,12 +603,12 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
           world.astronaut = 'carried'
           model.want.hold = 'astronaut'
           const from = astronaut.position.clone()
-          const steps = (LIFT_S * 1000) / 33
+          const steps = LIFT_S * FRAME_HZ
           for (let i = 1; i <= steps; i++) {
             hold()
             const held = astronaut.position.clone()
             astronaut.position.lerpVectors(from, held, i / steps)
-            await wait(call, 33)
+            await frame(call)
           }
           load = { kind: 'astronaut', id: 'suit-01' }
           report()
@@ -676,10 +680,10 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         const to = new THREE.Vector3(spot.x, world.ground(spot), spot.z)
         world.astronaut = atAirlock ? 'chamber' : 'standing'
         load = undefined
-        const steps = (LIFT_S * 1000) / 33
+        const steps = LIFT_S * FRAME_HZ
         for (let i = 1; i <= steps; i++) {
           astronaut.position.lerpVectors(from, to, i / steps)
-          await wait(call, 33)
+          await frame(call)
         }
         astronaut.rotation.set(0, atAirlock ? Math.PI : h, 0)
         model.want.hold = 'none'

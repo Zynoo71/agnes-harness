@@ -100,7 +100,6 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   let moving: 'walk' | 'roll' | undefined
   /** The motion call running now, which the stop tool ends. */
   let current: Call | undefined
-  const samples = OBSTACLES.filter((o) => o.label === 'unusual rock').map((o) => o.id)
   const dev = new WorldDevice({
     id: MONOLITH.id,
     kind: 'robot',
@@ -564,8 +563,8 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       params: {
         target: {
           type: 'string',
-          enum: ['suit-01', ...samples],
-          description: 'the astronaut (suit-01) or a rock id from a survey',
+          maxLength: 40,
+          description: 'the astronaut (suit-01) or an unusual rock by its id from a survey (rock-1, …)',
         },
       },
       required: ['target'],
@@ -579,7 +578,8 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         const person = target === 'suit-01'
         const t = person
           ? world.things().find((s) => s.id === 'suit-01')
-          : OBSTACLES.find((o) => o.id === target)
+          : OBSTACLES.find((o) => o.id === target && o.label === 'unusual rock')
+        if (!t && !person) throw new CallError('x_no_such_rock', `there is no unusual rock ${target}`)
         if (!t)
           throw new CallError(
             'x_not_here',

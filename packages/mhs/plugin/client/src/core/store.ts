@@ -68,6 +68,8 @@ interface Sub {
   hz: number
   binary: boolean
   sub?: string | undefined
+  /** The newest hub/subscribe still unanswered, 0 for none; replies to older ones are let go. */
+  asking: number
   timer?: ReturnType<typeof setTimeout>
 }
 
@@ -86,6 +88,7 @@ export class Store {
   private readonly listeners = new Map<string, Set<() => void>>()
   private lastEvent: string | undefined
   private wantCount = 0
+  private asks = 0
   private trafficNow: { at: number; devices: Record<string, Traffic> } = { at: 0, devices: {} }
   private pulses: BrainPulse[] = []
   private pulseCount = 0
@@ -215,7 +218,7 @@ export class Store {
     const key = `${device}/${source}`
     let sub = this.subs.get(key)
     if (!sub) {
-      sub = { device, source, wants: new Map(), hz: 0, binary }
+      sub = { device, source, wants: new Map(), hz: 0, binary, asking: 0 }
       this.subs.set(key, sub)
     }
     clearTimeout(sub.timer)
@@ -255,11 +258,14 @@ export class Store {
 
   private resubscribe(sub: Sub): void {
     const hz = Math.max(...sub.wants.values())
-    if (sub.sub && hz === sub.hz) return
+    if ((sub.sub || sub.asking) && hz === sub.hz) return
     sub.hz = hz
     if (this.hub.conn !== 'open') return
     const old = sub.sub
     sub.sub = undefined
+    this.asks += 1
+    const ask = this.asks
+    sub.asking = ask
     this.hub
       .request<{ sub: string }>('hub/subscribe', {
         device: sub.device,
@@ -269,14 +275,19 @@ export class Store {
       })
       .then(
         (r) => {
-          if (this.subs.get(`${sub.device}/${sub.source}`) !== sub) {
+          // Only the newest request counts. Two live subscriptions would hand every video picture to
+          // the decoder twice, which smears the picture as soon as it moves.
+          if (this.subs.get(`${sub.device}/${sub.source}`) !== sub || sub.asking !== ask) {
             this.hub.request('hub/unsubscribe', { sub: r.sub }).catch(() => undefined)
             return
           }
+          sub.asking = 0
           sub.sub = r.sub
           this.bySub.set(r.sub, `${sub.device}/${sub.source}`)
         },
-        () => undefined,
+        () => {
+          if (sub.asking === ask) sub.asking = 0
+        },
       )
     if (old) {
       this.bySub.delete(old)
@@ -344,7 +355,15 @@ export class Store {
 
   private async onConn(conn: Conn): Promise<void> {
     this.emit('conn')
-    if (conn !== 'open') return
+    if (conn !== 'open') {
+      // Subscriptions end with their connection; the next one makes them again.
+      for (const sub of this.subs.values()) {
+        sub.sub = undefined
+        sub.asking = 0
+      }
+      this.bySub.clear()
+      return
+    }
     try {
       const { devices } = await this.hub.request<{ devices: Device[] }>('hub/devices')
       this.devices = new Map()
@@ -359,10 +378,8 @@ export class Store {
         events: true,
         ...(this.lastEvent ? { since: this.lastEvent } : {}),
       })
-      for (const sub of this.subs.values()) {
-        sub.sub = undefined
-        this.resubscribe(sub)
-      }
+      // Those wanted while connecting; a source already subscribed on this connection is kept.
+      for (const sub of this.subs.values()) this.resubscribe(sub)
     } catch {
       // The next reconnect tries again.
     }

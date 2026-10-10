@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { WebSocket } from 'ws'
 import { Device } from '../device/device.js'
+import { Store } from '../plugin/client/src/core/store.js'
 import { Maps, zoneAt } from '../server/maps.js'
 import { North, resultText } from '../server/north.js'
 import { South } from '../server/south.js'
@@ -879,5 +880,28 @@ describe('result text', () => {
     expect(
       resultText('cam-1', 'look_at', { status: 'failed', reason: 'device', detail: 'motor stalled' }),
     ).toBe('cam-1: look_at failed (device): motor stalled.')
+  })
+})
+
+describe('the Devices panel store', () => {
+  it('keeps one subscription per source, so each video picture reaches the decoder once', async () => {
+    const { nerve } = await robot()
+    const store = new Store(base.replace('/ws/mhs', '/ws/hub'))
+    // Wanted just as the connection opens: the store subscribes now and again once it has the
+    // device list, and only one of the two may stay.
+    store.hub.onConn((conn) => {
+      if (conn === 'open') store.want('robot-01', 'front_video', 20)
+    })
+    const seen: number[] = []
+    store.onItem('robot-01', 'front_video', (l) => seen.push(l.item.seq as number))
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    for (let i = 0; i < 3; i++) {
+      nerve.send(data('front_video', i, { key: i === 0, w: 2, h: 2 }, true))
+      nerve.send(Buffer.from([0, 0, 0, 1, i === 0 ? 0x65 : 0x41]))
+    }
+    await until(() => seen.length >= 3)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(seen).toEqual([0, 1, 2])
+    store.close()
   })
 })

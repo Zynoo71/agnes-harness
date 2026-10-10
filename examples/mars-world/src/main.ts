@@ -9,6 +9,7 @@ import { coveredTextures } from './assets.js'
 import { buildBase, GROUND_CONTACTS, LAYOUT } from './base.js'
 import { DETAIL_AREAS } from './details.js'
 import { buildDevices, DEVICES } from './devices.js'
+import { buildDust } from './dust.js'
 import { connectDevices } from './live/index.js'
 import { buildMinimap } from './minimap.js'
 import { applyShot, SHOTS } from './shots.js'
@@ -95,6 +96,9 @@ const keepClear = (x: number, z: number) =>
   (x > -54 && x < -12 && z > 14 && z < 54)
 const rocks = await buildRocks(keepClear)
 scene.add(rocks.group)
+// Dust drifting in the air, ochre in the sunlight; ?dust=0 leaves it out.
+const dust = buildDust(light.horizon.clone().multiply(new THREE.Color(1.05, 0.78, 0.6)))
+if (params.get('dust') !== '0') scene.add(dust.points)
 // Every render, the main view's and each device camera's, picks the rocks that camera needs.
 scene.onBeforeRender = (_renderer, _scene, view) => rocks.pick(view)
 
@@ -251,6 +255,7 @@ renderer.setAnimationLoop(() => {
   if (frames % 10 === 0) renderer.shadowMap.needsUpdate = true
   base.update(t)
   devices.update(t)
+  dust.update(t)
   follow(dt)
   sky.position.copy(camera.position)
   composer.render()

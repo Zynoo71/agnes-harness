@@ -183,7 +183,7 @@ function greenhouse(): THREE.Group {
   const length = 16
   const radius = 3.4
   g.position.set(gx, 0, gz)
-  const glass = std(0xcfe2ee, 0.06, 0.1, {
+  const glass = std(0xcfe2ee, 0.2, 0.1, {
     transparent: true,
     opacity: 0.26,
     depthWrite: false,

@@ -264,21 +264,6 @@ const BOULDERS: [number, number, number, number][] = [
 /** A dark, greenish rock that does not look like the others: the sample the base wants. */
 export const UNUSUAL_ROCK = { x: -46, z: 44 } as const
 
-/** A faceted rock: an icosahedron with its corners pushed in and out. */
-function lowPolyRock(): THREE.BufferGeometry {
-  const g = new THREE.IcosahedronGeometry(1, 1)
-  const pos = g.attributes.position as THREE.BufferAttribute
-  const p = new THREE.Vector3()
-  for (let i = 0; i < pos.count; i++) {
-    p.fromBufferAttribute(pos, i)
-    // The same corner gets the same push in every face that shares it.
-    const k = 0.75 + 0.5 * hash(Math.round(p.x * 50), Math.round(p.y * 50) + Math.round(p.z * 50) * 7)
-    pos.setXYZ(i, p.x * k, p.y * k * 0.8, p.z * k)
-  }
-  g.computeVertexNormals()
-  return g
-}
-
 /**
  * A coarse copy of `geometry` by vertex clustering: vertices that fall in the same cell of a grid
  * `cells` across its largest side become one, at their average position and texture coordinate,
@@ -340,7 +325,8 @@ export function clustered(geometry: THREE.BufferGeometry, cells: number): THREE.
 
 /** Instances of one rock in two levels of detail, chosen per instance for each camera that renders. */
 interface RockSet {
-  detail: THREE.InstancedMesh
+  /** The full shape for near instances; without it, every instance gets the coarse one. */
+  detail?: THREE.InstancedMesh | undefined
   coarse: THREE.InstancedMesh
   matrices: THREE.Matrix4[]
   centres: THREE.Vector3[]
@@ -360,12 +346,13 @@ export interface Rocks {
 }
 
 /**
- * Rocks of four Poly Haven moon-rock shapes, dusted red, scattered around the base; low-poly rocks
- * further out and on crater rims; pebbles; the boulders and the unusual rock.
+ * Rocks of four Poly Haven moon-rock shapes, dusted red, scattered around the base; coarse copies
+ * of two of them further out and on crater rims; pebbles; the boulders and the unusual rock.
  */
 export async function buildRocks(avoid: (x: number, z: number) => boolean): Promise<Rocks> {
   const group = new THREE.Group()
-  const dust = new THREE.Color(0.86, 0.55, 0.4)
+  // Red-brown, given in sRGB: the scans' grey textures times this read as dusty Mars rock.
+  const dust = new THREE.Color().setHSL(0.045, 0.5, 0.62, THREE.SRGBColorSpace)
   const random = seeded(7)
   const m = new THREE.Matrix4()
   const q = new THREE.Quaternion()
@@ -389,6 +376,22 @@ export async function buildRocks(avoid: (x: number, z: number) => boolean): Prom
   // Scanned rocks (thousands of triangles each) only near the base, where the views get close; each
   // also has a coarse copy of a few hundred triangles for when it is far from the camera.
   const sets: RockSet[] = []
+  /** Records where each instance of `mesh` is, for pick(), which culls them one by one. */
+  const track = (coarse: THREE.InstancedMesh, detail?: THREE.InstancedMesh) => {
+    const mesh = detail ?? coarse
+    mesh.geometry.computeBoundingSphere()
+    const sphere = mesh.geometry.boundingSphere as THREE.Sphere
+    const set: RockSet = { detail, coarse, matrices: [], centres: [], radii: [] }
+    for (let i = 0; i < mesh.count; i++) {
+      const matrix = new THREE.Matrix4()
+      mesh.getMatrixAt(i, matrix)
+      set.matrices.push(matrix)
+      set.centres.push(sphere.center.clone().applyMatrix4(matrix))
+      set.radii.push(sphere.radius * matrix.getMaxScaleOnAxis())
+    }
+    for (const m of [coarse, detail]) if (m) m.frustumCulled = false
+    sets.push(set)
+  }
   const near = () => {
     const a = random() * Math.PI * 2
     const r = 10 + random() ** 1.2 * 55
@@ -409,22 +412,9 @@ export async function buildRocks(avoid: (x: number, z: number) => boolean): Prom
     coarse.castShadow = true
     coarse.receiveShadow = true
     group.add(coarse)
-    source.geometry.computeBoundingSphere()
-    const sphere = source.geometry.boundingSphere as THREE.Sphere
-    const set: RockSet = { detail, coarse, matrices: [], centres: [], radii: [] }
-    for (let i = 0; i < n; i++) {
-      const matrix = new THREE.Matrix4()
-      detail.getMatrixAt(i, matrix)
-      set.matrices.push(matrix)
-      set.centres.push(sphere.center.clone().applyMatrix4(matrix))
-      set.radii.push(sphere.radius * matrix.getMaxScaleOnAxis())
-    }
-    // Culled per instance in pick(), so the meshes as a whole are not.
-    detail.frustumCulled = false
-    coarse.frustumCulled = false
-    sets.push(set)
+    track(coarse, detail)
   }
-  // Further out, faceted low-poly rocks of 80 triangles; each crater throws some onto its rim.
+  // Further out, simpler rocks; each crater throws some onto its rim.
   const ejecta: { x: number; z: number; s: number }[] = []
   for (const c of CRATERS)
     for (let i = 0; i < Math.round(c.r * 2.5); i++) {
@@ -443,24 +433,27 @@ export async function buildRocks(avoid: (x: number, z: number) => boolean): Prom
     const r = 55 + random() ** 1.3 * 170
     return { x: Math.cos(a) * r, z: Math.sin(a) * r, s: 0.2 + random() ** 3 * 1.8 }
   }
-  const faceted = new THREE.InstancedMesh(
-    lowPolyRock(),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, flatShading: true }),
-    1100,
-  )
-  scatter(faceted, far)
-  const tint = new THREE.Color()
-  for (let i = 0; i < faceted.count; i++)
-    faceted.setColorAt(
-      i,
-      tint.setHSL(
-        0.04 + random() * 0.025,
-        0.4 + random() * 0.12,
-        0.33 + random() * 0.12,
-        THREE.SRGBColorSpace,
-      ),
-    )
+  // Coarse copies of two scanned rocks, sized to a radius of one metre like the old faceted ones, with
+  // their textures, so the rocks out there look like the near ones, only simpler; one a little redder,
+  // the other browner. Culled per instance like the near ones.
+  for (const [id, hue] of [
+    ['moon_rock_03', 0.035],
+    ['moon_rock_07', 0.055],
+  ] as [string, number][]) {
+    const source = await meshOf(id)
+    // Scaled about the scan's own origin, at its base, so the rocks sit on the ground as the near ones do.
+    const geometry = clustered(source.geometry, 9)
+    geometry.computeBoundingSphere()
+    const radius = (geometry.boundingSphere as THREE.Sphere).radius
+    geometry.scale(1 / radius, 1 / radius, 1 / radius)
+    const material = (source.material as THREE.MeshStandardMaterial).clone()
+    material.color = new THREE.Color().setHSL(hue, 0.5, 0.58, THREE.SRGBColorSpace)
+    const rocks = new THREE.InstancedMesh(geometry, material, 550)
+    scatter(rocks, far)
+    track(rocks)
+  }
   // Pebbles: thousands of small stones in one draw, too small to cast shadows worth drawing.
+  const tint = new THREE.Color()
   const pebbleGeometry = new THREE.IcosahedronGeometry(1, 0)
   const pebbles = new THREE.InstancedMesh(
     pebbleGeometry,
@@ -545,19 +538,22 @@ export async function buildRocks(avoid: (x: number, z: number) => boolean): Prom
     frustum.setFromProjectionMatrix(view)
     camera.getWorldPosition(eye)
     for (const set of sets) {
+      const { detail, coarse } = set
       let d = 0
       let c = 0
       for (const [i, centre] of set.centres.entries()) {
         sphere.set(centre, (set.radii[i] as number) + 6)
         if (!frustum.intersectsSphere(sphere)) continue
         const matrix = set.matrices[i] as THREE.Matrix4
-        if (centre.distanceTo(eye) < DETAIL_DISTANCE) set.detail.setMatrixAt(d++, matrix)
-        else set.coarse.setMatrixAt(c++, matrix)
+        if (detail && centre.distanceTo(eye) < DETAIL_DISTANCE) detail.setMatrixAt(d++, matrix)
+        else coarse.setMatrixAt(c++, matrix)
       }
-      set.detail.count = d
-      set.coarse.count = c
-      set.detail.instanceMatrix.needsUpdate = true
-      set.coarse.instanceMatrix.needsUpdate = true
+      coarse.count = c
+      coarse.instanceMatrix.needsUpdate = true
+      if (detail) {
+        detail.count = d
+        detail.instanceMatrix.needsUpdate = true
+      }
     }
   }
   return { group, pick }

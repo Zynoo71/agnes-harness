@@ -45,7 +45,10 @@ export function weatherStation(world: World, log: (line: string) => void): World
     1000,
     () => {
       const t = performance.now() / 1000
-      const wind = Math.round((6 + Math.sin(t / 30) * 2 + Math.random()) * 10) / 10
+      const hour = world.clock.hour()
+      // Afternoons are gustier than nights; the air is warmest at about 14:00 and coldest before dawn.
+      const afternoon = Math.max(0, Math.cos(((hour - 15) / 24) * 2 * Math.PI))
+      const wind = Math.round((4 + afternoon * 4 + Math.sin(t / 30) * 1.5 + Math.random()) * 10) / 10
       const dust = Math.round((0.6 + Math.sin(t / 200) * 0.05) * 100) / 100
       const storm = wind > 25 || dust > 2.5 ? 'warning' : wind > 15 || dust > 1.2 ? 'watch' : 'none'
       world.weather = { wind, dust, storm }
@@ -54,7 +57,8 @@ export function weatherStation(world: World, log: (line: string) => void): World
       air.send({
         wind,
         pressure: Math.round(728 + Math.sin(t / 90) * 4),
-        temperature: Math.round((-38 + Math.sin(t / 120) * 3) * 10) / 10,
+        temperature:
+          Math.round((-45 + 35 * Math.cos(((hour - 14) / 24) * 2 * Math.PI) + Math.sin(t / 120)) * 10) / 10,
         dust,
         radiation: Math.round((24 + Math.random() * 2) * 10) / 10,
       })

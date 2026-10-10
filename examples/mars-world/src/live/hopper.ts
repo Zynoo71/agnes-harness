@@ -60,7 +60,7 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
       weight_kg: 240,
       max_speed: FLIGHT.speed,
       runtime_min: Math.round(flightTimeLeft(100) / 6) / 10,
-      notes: `A small rocket lander on four legs that flies on a methane-oxygen engine, so it needs no air. It takes off, hovers, hops to points and lands again. Propellant (percent of a full load) sets the limits: hovering burns ${ROCKET.hoverBurn} % a second, moving and climbing more; ${ROCKET.reserve} % is kept for landing; take-off needs ${ROCKET.minTakeOff} %; flight_time_left and max_altitude in its state follow from what is left (at most ${ROCKET.ceiling} m above the ground). It refuels only while landed on the hopper pad, ${ROCKET.refuel} % a second. It does not fly under a dust storm warning at weather-01. Stopped in the air, it hovers; on reaching the landing reserve with nothing to do, it lands where it is. Keep people clear of its pad when it lands.`,
+      notes: `A small rocket lander on four legs that flies on a methane-oxygen engine, so it needs no air. It takes off, hovers, hops to points and lands again. Propellant (percent of a full load) sets the limits: hovering burns ${ROCKET.hoverBurn} % a second, moving and climbing more; ${ROCKET.reserve} % is kept for landing; take-off needs ${ROCKET.minTakeOff} %; flight_time_left and max_altitude in its state follow from what is left (at most ${ROCKET.ceiling} m above the ground). It refuels only while landed on the hopper pad, ${ROCKET.refuel} % a second; landed anywhere else, ${ROCKET.boilOff} % a minute boils off. It does not fly under a dust storm warning at weather-01. Stopped in the air, it hovers; on reaching the landing reserve with nothing to do, it lands where it is. Keep people clear of its pad when it lands.`,
     },
     resources: { engine: 'reject' },
     ui: { primary: 'down_video' },
@@ -227,6 +227,9 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
         if (onPad()) {
           propellant = Math.min(100, propellant + ROCKET.refuel * dt)
           battery = Math.min(100, battery + 0.2 * dt)
+        } else {
+          // Away from the pad's cold service unit, the cryogenic propellant boils off slowly.
+          propellant = Math.max(0, propellant - (ROCKET.boilOff / 60) * dt)
         }
       }
     },

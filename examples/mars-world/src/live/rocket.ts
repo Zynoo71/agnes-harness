@@ -20,6 +20,8 @@ export const ROCKET = {
   ceiling: 30,
   /** Percent a second it refuels while landed on its pad. */
   refuel: 2,
+  /** Percent a minute that boils off while it stands anywhere but its pad. */
+  boilOff: 0.5,
 }
 
 /** Percent burned in `dt` seconds of flight at `speed` m/s, climbing `climbed` metres. */

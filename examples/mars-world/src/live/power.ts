@@ -1,18 +1,20 @@
 import { type Call, CallError } from '@agnes/mhs/device'
 import { LAYOUT, PANEL_TILT } from '../base.js'
+import { sunAt } from '../clock.js'
 import { placed } from './basemap.js'
 import { reading } from './place.js'
 import { every, type World, WorldDevice, wait } from './world.js'
 
 /** Battery bank capacity in watt-hours, and solar output in watts at noon with clean panels. */
 const CAPACITY_WH = 60000
-const PEAK_W = 9000
+const PEAK_W = 14000
 /** Loads the base can shed, in watts. */
 const LOADS = { science: 900, greenhouse: 1400, charging: 1500 } as const
 const LIFE_SUPPORT_W = 2600
 /** Seconds to stow or deploy the array. */
 const TILT_S = 5
 type Load = keyof typeof LOADS
+const SIN_NOON = Math.sin((60 * Math.PI) / 180)
 
 /** The power system: solar array, battery bank and the loads it feeds. */
 export function power(world: World, log: (line: string) => void): WorldDevice {
@@ -85,9 +87,10 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
     (Object.entries(LOADS) as [Load, number][])
       .filter(([k]) => !shed.has(k) && (k !== 'charging' || world.rover.docked))
       .reduce((n, [, w]) => n + w, 0)
-  /** Solar output: the sun with a slow haze drift, dust, and how far the panels face the sun. */
+  /** Solar output: how high the sun stands, a slow haze drift, dust, and how far the panels face it. */
   const production = () => {
-    const day = 0.85 + 0.1 * Math.sin(performance.now() / 300000)
+    const sun = Math.max(0, Math.sin((sunAt(world.clock.hour()).elevation * Math.PI) / 180)) / SIN_NOON
+    const day = sun * (0.9 + 0.08 * Math.sin(performance.now() / 300000))
     const facing = Math.cos(((tilt - PANEL_TILT.deployed) * Math.PI) / 180)
     return PEAK_W * day * (1 - dust / 100) * Math.max(0.08, facing ** 4)
   }
@@ -129,9 +132,11 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
     1000,
     () => {
       const net = production() - load()
-      // The bank's clock runs 30 times faster than the scene's, so a change shows within a demo.
-      storage = Math.max(0, Math.min(100, storage + (net / CAPACITY_WH) * (100 / 3600) * 30))
-      dust = Math.min(100, dust + 0.01)
+      // The bank's clock runs 15 times faster than the scene's, so a change shows within a demo: a
+      // night with every load on takes about half the bank, with only life support about a fifth.
+      storage = Math.max(0, Math.min(100, storage + (net / CAPACITY_WH) * (100 / 3600) * 15))
+      // Dust settles on deployed panels, about a third of their light an hour; stowed, they stay clean.
+      if (panels === 'deployed') dust = Math.min(100, dust + 0.01)
       if (!flow.wants()) return
       flow.send({
         production: Math.round(production()),

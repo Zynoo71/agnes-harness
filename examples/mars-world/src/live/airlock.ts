@@ -24,7 +24,6 @@ const HABITAT = { x: 0, z: 5 }
 export function airlock(world: World, log: (line: string) => void): WorldDevice {
   const { door, astronaut } = world.parts
   let pressure = INSIDE
-  let inner: 'open' | 'closed' = 'open'
   const dev = new WorldDevice({
     id: 'airlock-01',
     kind: 'door',
@@ -56,7 +55,7 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
   const report = () =>
     dev.update({
       pressure: Math.round(pressure),
-      inner,
+      inner: world.airlock.inner,
       outer: world.airlock.outer,
       occupied: world.astronaut === 'chamber',
     })
@@ -127,7 +126,7 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
       ui: { label: 'Cycle out' },
     },
     async (call) => {
-      inner = 'closed'
+      world.airlock.inner = 'closed'
       report()
       await pump(call, OUTSIDE, 'depressurizing')
       return `chamber at ${pressure.toFixed(1)} kPa; the outer door may open`
@@ -145,7 +144,7 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
     },
     async (call) => {
       await pump(call, INSIDE, 'pressurizing')
-      inner = 'open'
+      world.airlock.inner = 'open'
       const person = world.astronaut === 'chamber'
       if (person) {
         world.astronaut = 'inside'
@@ -189,7 +188,6 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
   )
   world.onReset(() => {
     pressure = INSIDE
-    inner = 'open'
     door.rotation.y = 0
     dev.update({ mode: 'idle' })
     report()

@@ -32,11 +32,7 @@ export function connectDevices(
   const all = [
     habitat(world, log),
     airlock(world, log),
-    suit(
-      world,
-      { id: 'suit-01', name: 'Suit', model: parts.astronaut, o2: 71, battery: 78, working: true },
-      log,
-    ),
+    suit(world, { id: 'suit-01', name: 'Suit', model: parts.astronaut, o2: 71, battery: 78 }, log),
     rover(world, log),
     hopper(world, log),
     monolith(world, log),

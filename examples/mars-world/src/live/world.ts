@@ -163,9 +163,11 @@ export class World {
    * Out of doors they stand in other devices' way.
    */
   astronaut: 'working' | 'carried' | 'standing' | 'chamber' | 'inside' = 'working'
-  /** The airlock reports its outer door here, and re-reports its state when told something changed. */
-  airlock = { outer: 'closed' as 'open' | 'closed' }
+  /** The airlock reports its doors here, and re-reports its state when told something changed. */
+  airlock = { inner: 'open' as 'open' | 'closed', outer: 'closed' as 'open' | 'closed' }
   airlockChanged: (() => void) | undefined
+  /** The suit leaks (an event): oxygen goes fast and the wearer cannot walk. */
+  suitLeak = false
   /** Set by the lab: takes a sample handed to it and queues it for analysis. */
   labReceive: ((sample: string) => void) | undefined
   /** The weather station reports these; the hopper reads them before it flies. */
@@ -198,7 +200,8 @@ export class World {
   reset(): void {
     this.rover = { docked: true, cargo: [] }
     this.astronaut = 'working'
-    this.airlock.outer = 'closed'
+    this.airlock = { inner: 'open', outer: 'closed' }
+    this.suitLeak = false
     for (const [rock, scale] of this.rockScales) rock.object.scale.copy(scale)
     for (const reset of this.resets) reset()
   }

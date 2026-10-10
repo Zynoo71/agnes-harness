@@ -162,10 +162,11 @@ class VideoFeed {
         this.source.keyframeRequested = false
       }
       const frame = new VideoFrame(rows, {
-        format: 'RGBA',
+        format: 'I420',
         codedWidth: this.w,
         codedHeight: this.h,
         timestamp: Math.round(this.takenAt * 1000),
+        colorSpace: { primaries: 'bt709', transfer: 'bt709', matrix: 'bt709', fullRange: false },
       })
       encoder.encode(frame, { keyFrame: key })
       frame.close()

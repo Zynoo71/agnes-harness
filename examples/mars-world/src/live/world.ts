@@ -1,6 +1,7 @@
 import { type Call, Device, type ToolHandler, type ToolOptions } from '@agnes/mhs/device'
 import * as THREE from 'three'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js'
 import { FOOTPRINTS } from '../base.js'
 import { MONOLITH, type Parts } from '../devices.js'
 import { heightAt, OBSTACLES } from '../terrain.js'
@@ -12,10 +13,13 @@ import { type Circle, headingTo, type Point, round, toMap, yawOf } from './route
 interface Targets {
   linear: THREE.WebGLRenderTarget
   out: THREE.WebGLRenderTarget
+  /** The picture, as RGBA rows from the top. */
   raw: Uint8Array
-  rows: Uint8Array
   w: number
   h: number
+  /** For video: the picture as I420, packed four bytes to a pixel, and the planes read back. */
+  yuv?: THREE.WebGLRenderTarget
+  planes?: Uint8Array
   /** The GPU-side buffer an asynchronous read goes to, and the fence that says it is done. */
   pbo?: WebGLBuffer | null
   fence?: WebGLSync | undefined
@@ -112,7 +116,8 @@ export class World {
   private readonly rockScales = new Map(OBSTACLES.map((o) => [o, o.object.scale.clone()]))
   /** Render targets by camera and size: a camera's stills and its video are not the same size. */
   private readonly snapshots = new Map<string, Targets>()
-  private readonly output = new OutputPass()
+  private readonly output = flippedOutput()
+  private readonly i420 = new I420()
   private readonly skyAt = new THREE.Vector3()
 
   constructor(
@@ -217,7 +222,6 @@ export class World {
         linear: new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 }),
         out: new THREE.WebGLRenderTarget(w, h),
         raw: new Uint8Array(w * h * 4),
-        rows: new Uint8Array(w * h * 4),
         w,
         h,
       }
@@ -236,12 +240,6 @@ export class World {
     return targets
   }
 
-  /** The picture in `raw` (WebGL rows, bottom-up) as rows from the top, in `rows`. */
-  private flip({ raw, rows, w, h }: Targets): Uint8Array {
-    for (let y = 0; y < h; y++) rows.set(raw.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4)
-    return rows
-  }
-
   /**
    * What `camera` sees, tone-mapped like the main view, as RGBA rows from the top. Waits for the
    * GPU; the buffer is reused by the next call for the same camera.
@@ -249,7 +247,7 @@ export class World {
   pixels(camera: THREE.PerspectiveCamera, w: number, h: number): Uint8Array {
     const targets = this.draw(camera, w, h)
     this.renderer.readRenderTargetPixels(targets.out, 0, 0, w, h, targets.raw)
-    return this.flip(targets)
+    return targets.raw
   }
 
   /**
@@ -263,11 +261,15 @@ export class World {
     if (!targets.pbo) {
       targets.pbo = gl.createBuffer()
       gl.bindBuffer(gl.PIXEL_PACK_BUFFER, targets.pbo)
-      gl.bufferData(gl.PIXEL_PACK_BUFFER, w * h * 4, gl.STREAM_READ)
+      gl.bufferData(gl.PIXEL_PACK_BUFFER, I420.bytes(w, h), gl.STREAM_READ)
+      targets.yuv = new THREE.WebGLRenderTarget(w / 4, (h * 3) / 2)
+      targets.planes = new Uint8Array(I420.bytes(w, h))
     } else gl.bindBuffer(gl.PIXEL_PACK_BUFFER, targets.pbo)
     const previous = this.renderer.getRenderTarget()
-    this.renderer.setRenderTarget(targets.out)
-    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, 0)
+    const yuv = targets.yuv as THREE.WebGLRenderTarget
+    this.i420.convert(this.renderer, targets.out, yuv)
+    this.renderer.setRenderTarget(yuv)
+    gl.readPixels(0, 0, yuv.width, yuv.height, gl.RGBA, gl.UNSIGNED_BYTE, 0)
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null)
     this.renderer.setRenderTarget(previous)
     if (targets.fence) gl.deleteSync(targets.fence)
@@ -276,20 +278,21 @@ export class World {
   }
 
   /**
-   * The picture the last `capture` of `camera` at this size started, as RGBA rows from the top, once the GPU
-   * has it; undefined while it is not there yet. The buffer is reused by the next picture.
+   * The picture the last `capture` of `camera` at this size started, as I420 planes (`I420`),
+   * once the GPU has it; undefined while it is not there yet. The buffer is reused by the next
+   * picture.
    */
   collect(camera: THREE.PerspectiveCamera, w: number, h: number): Uint8Array | undefined {
     const targets = this.snapshots.get(`${camera.uuid} ${w}x${h}`)
-    if (!targets?.fence || !targets.pbo) return undefined
+    if (!targets?.fence || !targets.pbo || !targets.planes) return undefined
     const gl = this.renderer.getContext() as WebGL2RenderingContext
     if (gl.clientWaitSync(targets.fence, 0, 0) === gl.TIMEOUT_EXPIRED) return undefined
     gl.deleteSync(targets.fence)
     targets.fence = undefined
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, targets.pbo)
-    gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, targets.raw)
+    gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, targets.planes)
     gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null)
-    return this.flip(targets)
+    return targets.planes
   }
 
   /** A JPEG of what `camera` sees, tone-mapped like the main view. */
@@ -475,4 +478,83 @@ export function every(ms: number, send: () => void | Promise<void>, log: (line: 
     ticker.postMessage({ id, ms })
   }
   loop()
+}
+
+/**
+ * The main view's output pass (tone mapping, sRGB), drawn upside down: WebGL reads pixels from the
+ * bottom row up, so pictures read back from it come out top row first, ready for JPEG and video.
+ */
+function flippedOutput(): OutputPass {
+  const pass = new OutputPass()
+  pass.material.vertexShader = pass.material.vertexShader.replace(
+    'vUv = uv;',
+    'vUv = vec2( uv.x, 1.0 - uv.y );',
+  )
+  return pass
+}
+
+/**
+ * Converts a picture to I420 on the GPU, the planes a video encoder takes: Y at full size, then U
+ * and V at half width and half height, BT.709 limited range. Reading these back moves 1.5 bytes a
+ * pixel instead of 4, and the read is what holds up the page.
+ *
+ * The target is a quarter as wide as the picture and one and a half times as tall, four bytes to a
+ * pixel, so its rows read back from the top are exactly the planes one after another.
+ */
+export class I420 {
+  static bytes(w: number, h: number): number {
+    return (w * h * 3) / 2
+  }
+
+  private readonly uniforms = {
+    picture: { value: null as THREE.Texture | null },
+    size: { value: new THREE.Vector2() },
+  }
+  private readonly material = new THREE.ShaderMaterial({
+    glslVersion: THREE.GLSL3,
+    uniforms: this.uniforms,
+    vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    // `picture` holds the top row first (flippedOutput), so v grows downwards.
+    fragmentShader: `
+      uniform sampler2D picture;
+      uniform vec2 size;
+      out vec4 bytes;
+      vec3 at(float x, float y) { return texture(picture, vec2(x, y) / size).rgb; }
+      float luma(vec3 c) { return (16.0 + 219.0 * dot(c, vec3(0.2126, 0.7152, 0.0722))) / 255.0; }
+      float cb(vec3 c) { return (128.0 + 224.0 * dot(c, vec3(-0.1146, -0.3854, 0.5))) / 255.0; }
+      float cr(vec3 c) { return (128.0 + 224.0 * dot(c, vec3(0.5, -0.4542, -0.0458))) / 255.0; }
+      void main() {
+        float w = size.x;
+        float h = size.y;
+        // readPixels returns the bottom row (gl_FragCoord.y 0) first, so that is the first row out.
+        float row = floor(gl_FragCoord.y);
+        float x = floor(gl_FragCoord.x) * 4.0;
+        vec4 o;
+        if (row < h) {
+          for (int k = 0; k < 4; k++) o[k] = luma(at(x + float(k) + 0.5, row + 0.5));
+        } else {
+          // Chroma: each sample is the centre of a 2x2 block, which linear filtering averages.
+          float t = row - h;
+          bool v = t >= h / 4.0;
+          if (v) t -= h / 4.0;
+          for (int k = 0; k < 4; k++) {
+            float i = t * w + x + float(k);
+            float r = floor(i / (w / 2.0));
+            vec3 c = at(2.0 * (i - r * w / 2.0) + 1.0, 2.0 * r + 1.0);
+            o[k] = v ? cr(c) : cb(c);
+          }
+        }
+        bytes = o;
+      }`,
+    depthTest: false,
+    depthWrite: false,
+  })
+  private readonly quad = new FullScreenQuad(this.material)
+
+  convert(renderer: THREE.WebGLRenderer, from: THREE.WebGLRenderTarget, to: THREE.WebGLRenderTarget): void {
+    this.uniforms.picture.value = from.texture
+    this.uniforms.size.value.set(from.width, from.height)
+    renderer.setRenderTarget(to)
+    this.quad.render(renderer)
+  }
 }

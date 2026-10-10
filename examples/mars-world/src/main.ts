@@ -42,7 +42,7 @@ renderer.setSize(innerWidth, innerHeight)
 renderer.toneMapping = THREE.AgXToneMapping
 renderer.toneMappingExposure = 1.0
 renderer.shadowMap.enabled = true
-renderer.shadowMap.type = THREE.PCFSoftShadowMap
+renderer.shadowMap.type = THREE.PCFShadowMap
 // Nothing large moves yet, so the sun's shadow map is redrawn three times a second, not every frame.
 renderer.shadowMap.autoUpdate = false
 app.appendChild(renderer.domElement)

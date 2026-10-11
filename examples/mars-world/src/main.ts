@@ -10,6 +10,8 @@ import { buildBase, GROUND_CONTACTS, LAYOUT } from './base.js'
 import { MarsClock, SOL_MINUTES, START_HOURS, type TimeOfDay } from './clock.js'
 import { DETAIL_AREAS } from './details.js'
 import { buildDevices, DEVICES, MONOLITH } from './devices.js'
+import { DM } from './dm/dm.js'
+import { SCENE } from './dm/scene.js'
 import { buildDust } from './dust.js'
 import { buildEffects } from './effects.js'
 import type { EventKind, Headline } from './live/events.js'
@@ -379,6 +381,13 @@ if (live) {
   live.world.effects = effects
   // Scripts (an evaluation, a test) reach the events and the director here: mars.director.next().
   Object.assign(window, { mars: { events: live.world.events, director: live.director, world: live.world } })
+}
+// The decision model of the DM + LLM mode (?dm=on; ?dm=dry decides without acting).
+const dmParam = params.get('dm')
+const dm = hub && dmParam ? new DM(hub, SCENE, dmParam !== 'dry', (line) => console.log(line)) : undefined
+if (dm) {
+  dm.start()
+  Object.assign(window, { dm })
 }
 // What is drawn over the scene: the bar along the bottom, the activity list, banners, the controls
 // panel and the About card, in English or Chinese (?lang=zh, or the button; the page remembers).

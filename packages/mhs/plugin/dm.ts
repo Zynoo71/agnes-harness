@@ -13,6 +13,8 @@ import { NOTHING } from '../server/dm-options.js'
 
 type Message = RequestBody['messages'][number]
 
+/** The device actions whose results the DM may answer; it takes them too. */
+const ACTIONS = ['call_device', 'set_device']
 /** At most this many DM steps in a row; then the LLM looks again. */
 const MAX_DM_STEPS = 3
 /** Every DM step's text starts with this, so the LLM and the person see who acted. */
@@ -108,9 +110,11 @@ export function dmOperation(link: () => DmLink | undefined) {
 }
 
 /**
- * The step the DM may take, read from the request: tool results to answer (after at most
- * MAX_DM_STEPS of its own in a row), or a wake-up from AgnesHub. Undefined when the person spoke
- * last.
+ * The step the DM may take, read from the request: the results of a device action, to carry the
+ * task on (after at most MAX_DM_STEPS of its own in a row), or a wake-up from AgnesHub. Undefined
+ * when the person spoke last or the LLM was reading devices: then the LLM is making its plan.
+ * `woken` is true only for a turn a wake-up started; a wake-up within a task leaves the end of the
+ * task to the LLM.
  */
 export function momentOf(messages: Message[]): (Moment & { woken: boolean }) | undefined {
   const results: string[] = []
@@ -127,12 +131,18 @@ export function momentOf(messages: Message[]): (Moment & { woken: boolean }) | u
     .find((m) => m.role === 'user' && !isNote(textOf(m.content)) && !isWake(textOf(m.content)))
   const asked = instruction ? { instruction: textOf(instruction.content) } : {}
   if (results.length && last?.role === 'assistant') {
+    if (!last.toolCalls?.every((c) => ACTIONS.includes(c.name))) return undefined
     if (dmSteps(messages.slice(0, i + 1)) >= MAX_DM_STEPS) return undefined
     const said = textOf(last.content)
     return { ...asked, ...(said ? { said } : {}), happened: results.join('\n'), woken: false }
   }
-  if (last?.role === 'user' && isWake(textOf(last.content)))
-    return { ...asked, happened: textOf(last.content), woken: true }
+  if (last?.role === 'user' && isWake(textOf(last.content))) {
+    const before = messages
+      .slice(0, i)
+      .reverse()
+      .find((m) => !(m.role === 'user' && isNote(textOf(m.content))))
+    return { ...asked, happened: textOf(last.content), woken: before?.role !== 'tool_result' }
+  }
   return undefined
 }
 

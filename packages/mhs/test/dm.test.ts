@@ -7,7 +7,12 @@ import type { North } from '../server/north.js'
 
 type Message = RequestBody['messages'][number]
 const user = (text: string): Message => ({ role: 'user', content: [{ type: 'text', text }] })
-const said = (text: string): Message => ({ role: 'assistant', content: text ? [{ type: 'text', text }] : [] })
+const said = (text: string, tool = 'call_device'): Message => ({
+  role: 'assistant',
+  content: text ? [{ type: 'text', text }] : [],
+  toolCalls: [{ toolUseId: 't', name: tool, args: {}, ordinal: 0 }],
+})
+const ended = (text: string): Message => ({ role: 'assistant', content: [{ type: 'text', text }] })
 const result = (text: string): Message => ({
   role: 'tool_result',
   toolUseId: 't',
@@ -26,11 +31,15 @@ describe('the DM in the loop', () => {
       happened: 'took off',
       woken: false,
     })
-    expect(momentOf([user('盯着基地'), said('好'), user('[AgnesHub] weather-01: storm')])).toEqual({
+    expect(momentOf([user('去东边看看'), said('先看看', 'read_device'), result('landed')])).toBeUndefined()
+    expect(momentOf([user('盯着基地'), ended('好'), user('[AgnesHub] weather-01: storm')])).toEqual({
       instruction: '盯着基地',
       happened: '[AgnesHub] weather-01: storm',
       woken: true,
     })
+    expect(
+      momentOf([user('盯着基地'), said('先看看', 'read_device'), result('ok'), user('[AgnesHub] storm')]),
+    ).toMatchObject({ happened: '[AgnesHub] storm', woken: false })
     const dm = (n: number) => [said(`DM chose step ${n}.`), result('ok')]
     expect(momentOf([user('go'), said(''), result('ok'), ...dm(1), ...dm(2)])).toBeDefined()
     expect(momentOf([user('go'), said(''), result('ok'), ...dm(1), ...dm(2), ...dm(3)])).toBeUndefined()

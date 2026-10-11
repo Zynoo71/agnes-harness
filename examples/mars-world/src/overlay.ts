@@ -50,6 +50,7 @@ const TEXT = {
     dmConfidence: 'Sure',
     dmModelConfidence: (n: number, model: string) => `${model} confidence ${n}%`,
     dmAskLlm: 'hand it to the LLM',
+    dmUnsure: (n: number) => `unsure ${n}%`,
     dmEarlier: 'Earlier',
     nowBtn: 'Start one now',
     startBtn: 'Start',
@@ -100,14 +101,14 @@ const TEXT = {
     close: 'Close',
     helpBody: `
 <h2>Agnes Base</h2>
-<p>A small base on Mars, simulated in your browser. Its eleven devices (habitat, airlock, suit, rover, hopper, Monolith, lab, power, weather station, comms dish, base camera) each speak <b>MHS</b> to <b>AgnesHub</b>, the same way real hardware would. An LLM agent, the <b>brain</b>, runs the base only through their tools, state and cameras.</p>
-<p>The world moves on its own, so the brain has to notice and act:</p>
+<p>A small base on Mars, simulated in your browser. Its eleven devices (habitat, airlock, suit, rover, hopper, Monolith, lab, power, weather station, comms dish, base camera) each speak <b>MHS</b> to <b>AgnesHub</b>, the same way real hardware would. Agnes runs the base only through their tools, state and cameras, with two deciders: the <b class="by-llm">LLM</b>, which reads, plans and talks, and the <b class="by-dm">DM</b>, a fast decision model that takes the obvious next step on its own and hands everything else to the LLM.</p>
+<p>The world moves on its own, so Agnes has to notice and act:</p>
 <ul>
 <li><b>Time.</b> A sol takes 40 minutes. The sun, the light, the solar output and the cold follow the clock; at night the batteries carry the base.</li>
 <li><b>Drift.</b> Dust settles on the panels, the suit's oxygen runs down, a hopper away from its pad boils off propellant.</li>
 <li><b>Controls</b> (<kbd>E</kbd>). Start an event (a dust storm, a suit leak, a dust devil, a meteorite) with the parameters you choose, end it, skip the clock to morning, noon, sunset or night, or bring about trouble: low suit oxygen, a low battery bank, dusty panels, a drop in cabin oxygen.</li>
 </ul>
-<h3>Ask the brain</h3>
+<h3>Ask Agnes</h3>
 <ul>
 <li>Mission Control would like a photo of a Martian sunset: take one and send it home.</li>
 <li>Get the astronaut back inside before their oxygen runs low.</li>
@@ -116,7 +117,7 @@ const TEXT = {
 </ul>
 <h3>On this page</h3>
 <ul>
-<li>Tags over the devices show the tool each one runs, its progress and who called it.</li>
+<li>Tags over the devices show the tool each one runs, its progress and who called it: the DM in teal with a bolt, the LLM in blue.</li>
 <li>Bottom left: the latest calls, alerts and events. Top: banners for what needs attention.</li>
 <li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> views · <kbd>A</kbd> auto camera · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
 <li>Address: <code>?time=night</code>, <code>?sol=10</code> (minutes a sol takes), <code>?events=auto&amp;seed=7</code> (an event every few minutes on its own) or <code>off</code>, <code>?lang=zh</code></li>
@@ -160,6 +161,7 @@ const TEXT = {
     dmConfidence: '把握',
     dmModelConfidence: (n: number, model: string) => `${model} 置信度 ${n}%`,
     dmAskLlm: '交给 LLM',
+    dmUnsure: (n: number) => `没把握 ${n}%`,
     dmEarlier: '之前',
     nowBtn: '马上来一个',
     startBtn: '触发',
@@ -253,14 +255,14 @@ const TEXT = {
     close: '关闭',
     helpBody: `
 <h2>Agnes 基地</h2>
-<p>一座在浏览器里模拟的火星小基地。十一台设备（栖息舱、气闸、宇航服、火星车、飞行器、Monolith、实验室、电力、气象站、通信天线、基地相机）都像真实硬件一样，用 <b>MHS</b> 连到 <b>AgnesHub</b>。一个 LLM 智能体——<b>大脑</b>——只通过它们的工具、状态和相机来管理基地。</p>
-<p>世界自己会变，大脑得自己发现、自己处理：</p>
+<p>一座在浏览器里模拟的火星小基地。十一台设备（栖息舱、气闸、宇航服、火星车、飞行器、Monolith、实验室、电力、气象站、通信天线、基地相机）都像真实硬件一样，用 <b>MHS</b> 连到 <b>AgnesHub</b>。Agnes 只通过它们的工具、状态和相机来管理基地，由两个角色做决定：<b class="by-llm">LLM</b> 负责读、规划和沟通；<b class="by-dm">DM</b> 是快速的决策模型，明摆着的下一步自己直接做，其余都交给 LLM。</p>
+<p>世界自己会变，Agnes 得自己发现、自己处理：</p>
 <ul>
 <li><b>时间。</b>一个火星日 40 分钟。太阳、光照、发电量和气温都跟着时钟走；夜里靠电池撑着。</li>
 <li><b>漂移。</b>太阳能板慢慢积灰，宇航服的氧气一直在减少，离开停机坪的飞行器推进剂会蒸发。</li>
 <li><b>控制台</b>（<kbd>E</kbd>）。按自己选的参数触发事件（沙尘暴、宇航服漏气、尘卷风、陨石）或提前结束；把时钟跳到清晨、正午、日落或夜里；制造状况：宇航服氧气不足、储能电池电量低、太阳能板积灰、舱内氧气骤降。</li>
 </ul>
-<h3>可以让大脑做</h3>
+<h3>可以让 Agnes 做</h3>
 <ul>
 <li>地面控制中心想要一张火星日落的照片：拍下来发回地球。</li>
 <li>在氧气见底之前把宇航员接回舱里。</li>
@@ -269,7 +271,7 @@ const TEXT = {
 </ul>
 <h3>页面上</h3>
 <ul>
-<li>设备上方的标签显示它正在执行的工具、进度和调用者。</li>
+<li>设备上方的标签显示它正在执行的工具、进度和调用者：DM 是青绿色带闪电，LLM 是蓝色。</li>
 <li>左下角是最近的调用、告警和事件；顶部横幅提示需要注意的事。</li>
 <li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 视角 · <kbd>A</kbd> 自动镜头 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
 <li>地址参数：<code>?time=night</code>、<code>?sol=10</code>（一个火星日的分钟数）、<code>?events=auto&amp;seed=7</code>（每隔几分钟自动来一个事件）或 <code>off</code>、<code>?lang=en</code></li>
@@ -338,6 +340,30 @@ export function buildOverlay(options: {
   const { clock, live, tags } = options
   let lang: Lang = options.lang
   const t = () => TEXT[lang]
+  // Who made a call: the DM (teal, a bolt) or the LLM (blue, a speech bubble); anyone else by name.
+  const BOLT =
+    '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1.5L3.5 9h4l-1 5.5 6-7.5h-4z" fill="currentColor"/></svg>'
+  const BUBBLE =
+    '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3h11v7.5H7l-3.5 3v-3h-1z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>'
+  const byOf = (caller: string | undefined) => (caller === 'DM' ? 'dm' : caller === 'LLM' ? 'llm' : undefined)
+  const chip = (caller: string, extra = '') => {
+    const by = byOf(caller)
+    if (!by) return el('span', 'who', `← ${caller}`)
+    const c = el('span', `who ${by}`)
+    c.innerHTML = by === 'dm' ? BOLT : BUBBLE
+    c.append(caller)
+    if (extra) c.append(el('span', 'p', extra))
+    return c
+  }
+  // The DM's decision behind a call it made: the newest `did` for the device, from just before the call.
+  const dmBehind = (a: Activity) => {
+    const startedAt = Date.now() - (performance.now() - a.started)
+    return dm
+      ?.decisions()
+      .find(
+        (d) => d.outcome === 'did' && d.device === a.device && Math.abs(d.time * 1000 - startedAt) < 15_000,
+      )
+  }
   const name = (id: string, fallback = id) => t().names[id] ?? fallback
   const fieldName = (field: string) => t().fields[field] ?? field.replaceAll('_', ' ')
 
@@ -371,7 +397,15 @@ export function buildOverlay(options: {
     act.append(tool, who, meter)
     act.hidden = true
     tag.el.appendChild(act)
-    return { ...tag, act, tool, who, fill, title: tag.el.querySelector('b') as HTMLElement }
+    return {
+      ...tag,
+      act,
+      tool,
+      who,
+      fill,
+      caller: undefined as string | undefined,
+      title: tag.el.querySelector('b') as HTMLElement,
+    }
   })
 
   // The activity list: the latest six lines, the newest at the bottom. Each line keeps the Mars time
@@ -413,24 +447,35 @@ export function buildOverlay(options: {
         : '…'
   const callLine = (a: Activity) => {
     const draw = push(
-      () => `call ${a.status ?? 'running'}`,
-      () => [
-        el('b', 'dev', name(a.device)),
-        el('span', 'tool', a.tool + (a.caller ? ` ← ${a.caller}` : '')),
-        el('span', 'state', callText(a)),
-      ],
+      () => `call ${a.status ?? 'running'} by-${byOf(a.caller) ?? 'other'}`,
+      () => {
+        const d = a.caller === 'DM' ? dmBehind(a) : undefined
+        return [
+          el('b', 'dev', name(a.device)),
+          el('span', 'tool', a.tool),
+          ...(a.caller ? [chip(a.caller, d ? `${Math.round(d.sure * 100)}%` : '')] : []),
+          el('span', 'state', callText(a)),
+        ]
+      },
     )
     return draw
   }
   const lineFor = new Map<Activity, () => void>()
 
   // Banners along the top: severe events and alarms stay while they last, the rest a few seconds.
-  const banner = (key: string, level: 'info' | 'warn' | 'bad', text: () => string, until?: () => boolean) => {
+  const banner = (
+    key: string,
+    level: 'info' | 'warn' | 'bad' | 'dm',
+    text: () => string,
+    until?: () => boolean,
+    head?: HTMLElement,
+  ) => {
     banners.querySelector(`[data-key="${key}"]`)?.remove()
     const b = el('div', `banner ${level}`)
     b.dataset.key = key
     const label = el('span', 'text')
     const left = el('span', 'left')
+    if (head) b.append(head)
     b.append(label, left)
     banners.appendChild(b)
     const started = performance.now()
@@ -707,7 +752,47 @@ export function buildOverlay(options: {
   // probabilities, the choice and its confidence, what came of it), then the earlier ones in a line
   // each. Something a device reported that the DM hands to the LLM also gets a banner.
   let dmVersion = -1
-  let dmBanner: Decision | undefined
+  const dmSeen = new WeakSet<Decision>()
+  /** What the DM did lately, for its banner. */
+  let dmDid: Decision[] = []
+  const dmHead = (to?: string) => {
+    const h = el('span', 'h')
+    h.innerHTML = BOLT
+    h.append('DM')
+    if (to) h.append(' → ', el('span', 'to', to))
+    return h
+  }
+  // Every action the DM takes gets a banner, together with what else it did in the last 20 s; what
+  // devices reported that it hands to the LLM gets a banner and a line in the activity list.
+  const dmAnnounce = (d: Decision) => {
+    if (d.outcome === 'did' && d.device) {
+      const device = d.device
+      dmDid = [...dmDid.filter((x) => d.time - x.time < 20), d]
+      const did = dmDid
+      const what = (x: Decision) => `${name(x.device ?? '')} ${x.choice.replace(`${x.device} `, '')}`
+      banner(
+        'dm-did',
+        'dm',
+        () => `${did.map(what).join(' · ')} · ${d.model} ${(d.ms / 1000).toFixed(1)} s`,
+        undefined,
+        dmHead(),
+      )
+      return
+    }
+    if (!d.woken) return
+    const trigger = d.trigger.join(' · ')
+    banner('dm-llm', 'dm', () => trigger, undefined, dmHead('LLM'))
+    const state = el('span', 'state')
+    state.innerHTML = BOLT
+    state.append(
+      ` DM ${d.outcome === 'error' ? t().dmOutcome.error : t().dmUnsure(Math.round(d.sure * 100))} → `,
+      el('b', 'to', 'LLM'),
+    )
+    push(
+      () => 'hand',
+      () => [el('span', 'trigger', d.trigger[0] ?? ''), state],
+    )
+  }
   const optionName = (option: string) => (option === 'ask_llm' ? t().dmAskLlm : option)
   const dmCard = (d: Decision) => {
     const card = el('div', `card ${d.outcome}`)
@@ -750,10 +835,10 @@ export function buildOverlay(options: {
     dmPanel.hidden = !current
     if (!current || (!force && dm.version() === dmVersion)) return
     dmVersion = dm.version()
-    if (current.woken && current.outcome === 'llm' && dmBanner !== current) {
-      dmBanner = current
-      const trigger = current.trigger.join(' · ')
-      banner('dm-llm', 'info', () => `DM → LLM: ${trigger}`)
+    for (const d of [...dm.decisions()].reverse()) {
+      if (dmSeen.has(d)) continue
+      dmSeen.add(d)
+      dmAnnounce(d)
     }
     const head = el('div', 'head')
     head.append(el('span', '', t().dmTitle), el('span', 'model', current.model))
@@ -828,7 +913,10 @@ export function buildOverlay(options: {
       tag.act.hidden = !a
       if (a) {
         tag.tool.textContent = a.tool
-        tag.who.textContent = a.caller ? `← ${a.caller}` : ''
+        if (tag.caller !== a.caller) {
+          tag.caller = a.caller
+          tag.who.replaceChildren(...(a.caller ? [chip(a.caller)] : []))
+        }
         const p = a.progress
         const k = p?.total ? Math.min(1, (p.done ?? 0) / p.total) : undefined
         tag.fill.style.width = k === undefined ? '100%' : `${Math.round(k * 100)}%`
@@ -839,6 +927,8 @@ export function buildOverlay(options: {
         (dev?.last?.status === 'error' || dev?.last?.status === 'rejected') &&
         now - (dev.last.ended ?? 0) < 8000
       tag.el.classList.toggle('busy', Boolean(a))
+      tag.el.classList.toggle('by-dm', a?.caller === 'DM')
+      tag.el.classList.toggle('by-llm', a?.caller === 'LLM')
       tag.el.classList.toggle('warn', levels.includes('warn') && !levels.includes('bad'))
       tag.el.classList.toggle('bad', levels.includes('bad') || failed)
     }

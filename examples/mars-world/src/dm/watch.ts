@@ -15,6 +15,10 @@ export interface Decision {
   /** Whether a wake-up from AgnesHub (what devices reported) started the step. */
   woken: boolean
   choice: string
+  /** With `did`: the device the action went to. */
+  device: string | undefined
+  /** How sure it was of its choice: the chosen option's probability. */
+  sure: number
   /** The decision model that chose: jev or clef. */
   model: string
   /** did: the step was the action; llm: the LLM took the step; error: the model could not decide, so the LLM took it. */
@@ -75,6 +79,8 @@ export class DmWatch {
         .filter(Boolean)
         .slice(0, 4),
       choice: String(d.choice ?? ''),
+      device: typeof d.device === 'string' ? d.device : undefined,
+      sure: ((d.top as [string, number][] | undefined)?.[0]?.[1] as number | undefined) ?? 0,
       model: String(d.model ?? 'DM'),
       outcome: d.outcome as Decision['outcome'],
       top: (d.top as [string, number][]) ?? [],

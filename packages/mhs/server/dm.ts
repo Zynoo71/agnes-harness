@@ -55,6 +55,10 @@ export function clef(account: string, token: string, model = 'clef'): Ask {
   }
 }
 
+/** State changes this soon after a job on the device ended count as the job's doing. */
+const AFTER_JOB_MS = 3000
+/** What devices report within this window is told as one. */
+const MERGE_MS = 1000
 /** What the DM did stays in its state this long. */
 const DONE_MS = 600_000
 const DONE_KEPT = 10
@@ -65,13 +69,26 @@ export class DecisionModel {
   private readonly candidates = new Map<string, Candidate[]>()
   /** Per conversation, what the DM did, newest last. */
   private readonly done = new Map<string, { time: number; text: string }[]>()
+  /** Per device: a job is running (Infinity), or the time its last job ended plus AFTER_JOB_MS. */
+  private readonly quietUntil = new Map<string, number>()
+  /** Per device, the state values last seen. */
+  private readonly seen = new Map<string, Json>()
+  private reported: string[] = []
+  private timer: NodeJS.Timeout | undefined
 
   constructor(
     private readonly north: North,
     private readonly scene: string,
     private readonly ask: Ask,
+    /** Gets what devices report by themselves (an alert, a state that changed with no job), merged. */
+    private readonly notice: (lines: string[]) => void = () => undefined,
   ) {
     north.on('event', (event: HubEvent) => this.onEvent(event))
+    north.on('state', (device: string, values: Json) => this.onState(device, values))
+  }
+
+  stop(): void {
+    clearTimeout(this.timer)
   }
 
   /** Asks the model once for one step of a conversation. Throws when the model cannot answer. */
@@ -118,9 +135,40 @@ export class DecisionModel {
     this.done.set(conversation, list.slice(-DONE_KEPT))
   }
 
-  /** Run-time ids from anyone's results become options for parameters of the same name. */
+  /** An enum field a device changed by itself: no job of its running or just ended. */
+  private onState(id: string, values: Json): void {
+    const d = this.north.devices().find((e) => e.id === id)
+    const before = this.seen.get(id) ?? {}
+    this.seen.set(id, { ...before, ...values })
+    if (!d || performance.now() < (this.quietUntil.get(id) ?? 0)) return
+    for (const [name, value] of Object.entries(values)) {
+      const field = d.state.fields[name] as { enum?: unknown[]; writable?: boolean; description?: string }
+      if (!field?.enum || field.writable || before[name] === undefined || before[name] === value) continue
+      this.report(
+        `${id}: ${name} changed from ${before[name]} to ${value}${field.description ? ` (${field.description})` : ''}`,
+      )
+    }
+  }
+
+  private report(line: string): void {
+    this.reported.push(line)
+    this.timer ??= setTimeout(() => {
+      this.timer = undefined
+      const lines = this.reported
+      this.reported = []
+      this.notice(lines)
+    }, MERGE_MS)
+    this.timer.unref?.()
+  }
+
+  /** Alerts are reported; jobs keep their device's state changes quiet; results give run-time ids. */
   private onEvent(event: HubEvent): void {
-    if (event.type !== 'job' || event.data.state !== 'ended' || event.data.status !== 'done') return
+    if (event.type === 'alert' && (event.data.alert === 'warn' || event.data.alert === 'bad'))
+      this.report(event.text)
+    if (event.type !== 'job' || !event.device) return
+    if (event.data.state === 'running') this.quietUntil.set(event.device, Number.POSITIVE_INFINITY)
+    else if (event.data.state === 'ended') this.quietUntil.set(event.device, performance.now() + AFTER_JOB_MS)
+    if (event.data.state !== 'ended' || event.data.status !== 'done') return
     let job: { tool: string; arguments?: Json; result?: { data?: Json } }
     try {
       job = this.north.job(String(event.data.job)) as typeof job

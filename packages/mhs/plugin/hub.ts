@@ -167,9 +167,15 @@ export const hub = {
     const token = env.CLOUDFLARE_API_TOKEN
     if (env.AGNES_DM === 'on' && account && token) {
       const scene = env.AGNES_DM_SCENE ? readFileSync(env.AGNES_DM_SCENE, 'utf8').trim() : DEFAULT_SCENE
-      dmLink = { model: new DecisionModel(north, scene, clef(account, token)), on: () => true, log }
+      const on = () => true
+      // What devices report by themselves wakes the conversation on duty, where the DM takes it first.
+      const model = new DecisionModel(north, scene, clef(account, token), (lines) => {
+        if (brain.onDuty && on()) brain.wakeOnDuty(lines.join('\n'))
+      })
+      dmLink = { model, on, log }
       log('the decision model (clef) takes steps')
       ctx.effect(() => () => {
+        model.stop()
         dmLink = undefined
       })
     }

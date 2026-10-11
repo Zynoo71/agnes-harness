@@ -5,10 +5,11 @@
  * LLM. Everything else, and every choice of `ask_llm`, goes to the LLM as before. A step the person
  * started always goes to the LLM: it reads what they want and makes the plan.
  */
-import type { InferenceEvent, RequestBody } from '@agnes/protocol'
+
 import { createHash } from 'node:crypto'
-import { NOTHING } from '../server/dm-options.js'
+import type { InferenceEvent, RequestBody } from '@agnes/protocol'
 import type { DecisionModel, Moment } from '../server/dm.js'
+import { NOTHING } from '../server/dm-options.js'
 
 type Message = RequestBody['messages'][number]
 

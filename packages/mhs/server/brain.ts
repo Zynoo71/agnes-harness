@@ -451,7 +451,7 @@ export function capabilities(d: DeviceEntry): string {
     lines.push('Data sources (read_device sources; watch_device {"source", "field"} for values and switch):')
     for (const s of sources) {
       const fields = Object.entries((s as { fields?: Record<string, { unit?: string }> }).fields ?? {}).map(
-        ([n, f]) => `${n}${f.unit ? ` ${f.unit}` : ''}`,
+        ([n, f]) => `${n}${f.unit ? ` (${f.unit})` : ''}`,
       )
       const hz = (s as { hz?: number }).hz
       lines.push(

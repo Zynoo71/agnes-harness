@@ -1418,10 +1418,14 @@ function untilProblem(entry: DeviceEntry, until: Json): string | undefined {
   if (typeof until.source === 'string') {
     const source = entry.sources.find((s) => s.id === until.source)
     if (!source) return `${entry.id} has no source ${until.source}`
-    if (typeof until.field === 'string')
-      return (source.kind === 'values' || source.kind === 'switch') && ops.length > 0
+    if (typeof until.field === 'string') {
+      if ((source.kind !== 'values' && source.kind !== 'switch') || ops.length === 0)
+        return 'a field watch needs a values or switch source and a comparison'
+      const fields = Object.keys((source as { fields?: Record<string, unknown> }).fields ?? {})
+      return fields.length === 0 || fields.includes(until.field)
         ? undefined
-        : 'a field watch needs a values or switch source and a comparison'
+        : `${until.source} has no field ${until.field}; its fields are ${fields.join(', ')}`
+    }
     if (typeof until.has === 'string')
       return source.kind === 'detections' ? undefined : `${until.source} is not a detections source`
     if (typeof until.says === 'string')

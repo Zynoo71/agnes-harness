@@ -279,9 +279,9 @@ export class North extends EventEmitter {
   brief?: (caller: Caller, text: string, wake: boolean) => boolean
   /**
    * Takes a `hub/dm` (section 15.5): set by the plugin when a decision model is configured; turns
-   * it on or off for a conversation and says whether it is ready and on.
+   * it on or off for a conversation and says whether it is ready and on, and which model it is.
    */
-  dm?: (conversation: string, on: boolean | undefined) => { ready: boolean; on: boolean }
+  dm?: (conversation: string, on: boolean | undefined) => { ready: boolean; on: boolean; model?: string }
 
   constructor(
     private readonly south: South,

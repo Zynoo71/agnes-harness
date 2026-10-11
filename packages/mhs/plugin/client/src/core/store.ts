@@ -9,7 +9,7 @@
  */
 import { dmNoteOf } from './describe.js'
 import { type Conn, HubClient } from './hub.js'
-import type { Device, DmNote, HubEvent, Item, JobResult, Json, World } from './types.js'
+import type { By, Device, DmNote, HubEvent, Item, JobResult, Json, World } from './types.js'
 
 const EVENTS_KEPT = 200
 /** A call the DM made is matched to its `dm` event this long after it. */
@@ -55,13 +55,21 @@ export interface Traffic {
   bytes_up: number
 }
 
-/** Something the brain sent to or got from a device, for drawing it (host-reported). */
+/** Something the LLM or the DM sent to or got from a device, for drawing it (host-reported). */
 export interface BrainPulse {
   id: number
   device: string | undefined
   tool: string
   dir: 'down' | 'up'
+  by: By
   at: number
+}
+
+/** The DM in a conversation (hub/dm). */
+export interface DmMode {
+  ready: boolean
+  on: boolean
+  model?: string
 }
 
 interface Sub {
@@ -95,6 +103,7 @@ export class Store {
   private trafficNow: { at: number; devices: Record<string, Traffic> } = { at: 0, devices: {} }
   private pulses: BrainPulse[] = []
   private pulseCount = 0
+  private readonly dmModes = new Map<string, DmMode>()
   private worldList: World[] = []
 
   constructor(url: string) {
@@ -211,13 +220,13 @@ export class Store {
     return this.pulses
   }
 
-  /** The host reports the brain's device tool calls and their results. */
-  brain(device: string | undefined, tool: string, dir: 'down' | 'up'): void {
+  /** The host reports the device tool calls of the LLM and the DM, and their results. */
+  brain(device: string | undefined, tool: string, dir: 'down' | 'up', by: By = 'llm'): void {
     this.pulseCount += 1
     const now = Date.now()
     this.pulses = [
       ...this.pulses.filter((p) => now - p.at < 10_000),
-      { id: this.pulseCount, device, tool, dir, at: now },
+      { id: this.pulseCount, device, tool, dir, by, at: now },
     ]
     this.emit('brain')
   }
@@ -350,9 +359,22 @@ export class Store {
     return this.hub.request<SetOutcome>('hub/set', { device, values })
   }
 
-  /** Whether the decision model is ready and on for a conversation; `on` switches it (hub/dm). */
-  async dm(conversation: string, on?: boolean): Promise<{ ready: boolean; on: boolean }> {
-    return this.hub.request('hub/dm', on === undefined ? { conversation } : { conversation, on })
+  /**
+   * Whether the decision model is ready and on for a conversation, and which it is; `on` switches
+   * it (hub/dm). The answer is kept for dmMode() and announced as `dm`.
+   */
+  async dm(conversation: string, on?: boolean): Promise<DmMode> {
+    const mode = await this.hub.request<DmMode>(
+      'hub/dm',
+      on === undefined ? { conversation } : { conversation, on },
+    )
+    this.dmModes.set(conversation, mode)
+    this.emit('dm')
+    return mode
+  }
+
+  dmMode(conversation: string): DmMode | undefined {
+    return this.dmModes.get(conversation)
   }
 
   async configure(device: string, source: string, on: boolean): Promise<void> {

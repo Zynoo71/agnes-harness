@@ -1,6 +1,6 @@
 /** Hooks that connect components to the store (mhs-ui-design section 6.4). */
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from 'react'
-import type { Latest, MyJob, Store } from '../core/store.js'
+import type { DmMode, Latest, MyJob, Store } from '../core/store.js'
 import type { Device, HubEvent, World } from '../core/types.js'
 import { getLocale, onLocale } from '../i18n/i18n.js'
 
@@ -120,4 +120,16 @@ export function useVisible(element: Element | null): boolean {
     return () => observer.disconnect()
   }, [element])
   return inView && tabVisible
+}
+
+/** The DM in a conversation: asked of AgnesHub when the conversation or the connection changes. */
+export function useDmMode(conversation: string | undefined): DmMode | undefined {
+  const store = useStore()
+  useEffect(() => {
+    if (!conversation) return
+    const ask = () => void store.dm(conversation).catch(() => undefined)
+    ask()
+    return store.subscribe('conn', ask)
+  }, [store, conversation])
+  return useKey('dm', () => (conversation ? store.dmMode(conversation) : undefined))
 }

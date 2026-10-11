@@ -1,18 +1,28 @@
 /**
- * The flow view: the brain at the top, AgnesHub below it as a bus down the left edge, and every
+ * The flow view: the LLM and the DM at the top, AgnesHub below them as a bus down the left edge, and every
  * device in a column of wide cards, each joined to the bus by two lanes: MHS, the command channel
  * (calls, control, state, results), and MOS, the Nerve data channel (data streams, manual input).
  * It only moves when something is exchanged: a comet per call (bright, down) and per result (dim,
  * up) on MHS, particles at the rate AgnesHub counted on Nerve (hub/traffic), amber ones while a
- * person drives.
+ * person drives. A call rides down the line of whoever made it, the LLM's (accent) on the left or
+ * the DM's (teal) on the right; a step the DM hands to the LLM crosses from its line to the LLM's.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ByIcon } from '../controls/ui.js'
 import { type Rgb, rgba, rgbOf } from '../core/color.js'
 import { displayName, keyFields, previewImage, tone } from '../core/describe.js'
 import type { BrainPulse, Traffic } from '../core/store.js'
-import type { Device } from '../core/types.js'
+import type { By, Device, HubEvent } from '../core/types.js'
 import { num, t } from '../i18n/i18n.js'
-import { useBrainPulses, useDevices, useLocale, useNav, useTraffic } from '../react/hooks.js'
+import {
+  useBrainPulses,
+  useDevices,
+  useDmMode,
+  useEvents,
+  useLocale,
+  useNav,
+  useTraffic,
+} from '../react/hooks.js'
 import { FieldView } from '../widgets/fields.js'
 import { ImageView, VideoView } from '../widgets/image.js'
 import type { Brain } from './panel.js'
@@ -27,6 +37,10 @@ const BRAIN_H = 48
 const BRAIN_X = 36
 const HUB_Y = 84
 const HUB_H = 28
+/** Where a step the DM hands to the LLM crosses, between the two nodes and AgnesHub. */
+const HAND_Y = BRAIN_Y + BRAIN_H + 13
+/** The DM's last decision stays on its node this long. */
+const DM_SHOWN_MS = 15_000
 /** A card's text part until the card is measured; a device with a picture shows it above, as wide as the card. */
 const INFO_H = 184
 const CARD_GAP = 16
@@ -40,7 +54,8 @@ const tripOf = (d: { kind: string }) => (d.kind === 'data' || d.kind === 'drive'
 /** At most this many particles per lane per second, whatever the traffic. */
 const MAX_DOTS = 6
 
-type Lane = 'mhs' | 'nerve' | 'brain'
+/** `brain` is the LLM's line, `dm` the DM's, `hand` from the DM's line across to the LLM's. */
+type Lane = 'mhs' | 'nerve' | 'brain' | 'dm' | 'hand'
 type Kind = 'call' | 'result' | 'data' | 'drive'
 interface Dot {
   lane: Lane
@@ -48,6 +63,7 @@ interface Dot {
   device?: string | undefined
   up: boolean
   start: number
+  by?: By
 }
 
 interface Geometry {
@@ -76,12 +92,23 @@ function layout(devices: Device[], width: number, heights: Map<string, number>, 
   return { width, height: y, cards, pictures, hub }
 }
 
-/** The polyline a lane follows, from AgnesHub (t = 0) to the device, or up to the brain (t = 1). */
+/**
+ * The polyline a lane follows, from AgnesHub (t = 0) to the device, or up to the LLM or the DM
+ * (t = 1); the hand-over line runs from the DM's line to the LLM's.
+ */
 function path(g: Geometry, lane: Lane, device?: string): [number, number][] {
-  if (lane === 'brain')
+  const dmX = g.width - BRAIN_X
+  if (lane === 'brain' || lane === 'dm') {
+    const x = lane === 'brain' ? BRAIN_X : dmX
     return [
-      [BRAIN_X, g.hub],
-      [BRAIN_X, BRAIN_Y + BRAIN_H],
+      [x, g.hub],
+      [x, BRAIN_Y + BRAIN_H],
+    ]
+  }
+  if (lane === 'hand')
+    return [
+      [dmX, HAND_Y],
+      [BRAIN_X, HAND_Y],
     ]
   const top = g.cards.get(device ?? '')
   if (top === undefined) return []
@@ -203,6 +230,9 @@ export function Flow(props: { brain?: Brain | undefined }) {
   const devices = useDevices()
   const traffic = useTraffic()
   const pulses = useBrainPulses()
+  const events = useEvents()
+  const conversation = props.brain?.conversation
+  const mode = useDmMode(conversation)
   const [width, setWidth] = useState(360)
   const [heights, setHeights] = useState(() => new Map<string, number>())
   const onHeight = useCallback(
@@ -213,6 +243,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
   const canvas = useRef<HTMLCanvasElement | null>(null)
   const dots = useRef<Dot[]>([])
   const seenPulse = useRef(0)
+  const seenEvent = useRef<HubEvent | null | undefined>(undefined)
   // A page without a session (the standalone page) has no brain to draw.
   const g = layout(devices, width, heights, props.brain ? HUB_Y : BRAIN_Y)
   const geometry = useRef(g)
@@ -244,29 +275,56 @@ export function Flow(props: { brain?: Brain | undefined }) {
     }
   }, [traffic])
 
-  // The brain's calls ride its line down, then the device's MHS lane; results come back up.
+  // A call rides down the line of whoever made it, then the device's MHS lane; results come back up.
   useEffect(() => {
     const now = performance.now()
     for (const p of pulses as BrainPulse[]) {
       if (p.id <= seenPulse.current) continue
       seenPulse.current = p.id
       const kind: Kind = p.dir === 'down' ? 'call' : 'result'
+      const lane: Lane = p.by === 'dm' ? 'dm' : 'brain'
+      const by = p.by
       if (p.dir === 'down') {
-        dots.current.push({ lane: 'brain', kind, up: false, start: now })
+        dots.current.push({ lane, kind, up: false, start: now, by })
         if (p.device)
-          dots.current.push({ lane: 'mhs', kind, device: p.device, up: false, start: now + TRIP_MS * 0.6 })
+          dots.current.push({
+            lane: 'mhs',
+            kind,
+            device: p.device,
+            up: false,
+            start: now + TRIP_MS * 0.6,
+            by,
+          })
       } else {
-        if (p.device) dots.current.push({ lane: 'mhs', kind, device: p.device, up: true, start: now })
-        dots.current.push({ lane: 'brain', kind, up: true, start: now + TRIP_MS * 0.6 })
+        if (p.device) dots.current.push({ lane: 'mhs', kind, device: p.device, up: true, start: now, by })
+        dots.current.push({ lane, kind, up: true, start: now + TRIP_MS * 0.6, by })
       }
     }
   }, [pulses])
 
+  // A step the DM hands to the LLM crosses from its line to the LLM's. Events from before the view
+  // opened are history.
+  useEffect(() => {
+    const list = events as HubEvent[]
+    const last = list[list.length - 1] ?? null
+    if (seenEvent.current === undefined) {
+      seenEvent.current = last
+      return
+    }
+    const from = seenEvent.current ? list.indexOf(seenEvent.current) + 1 : 0
+    seenEvent.current = last
+    const now = performance.now()
+    for (const e of list.slice(from))
+      if (e.type === 'dm' && e.data.conversation === conversation && e.data.outcome !== 'did')
+        dots.current.push({ lane: 'hand', kind: 'call', up: false, start: now, by: 'dm' })
+  }, [events, conversation])
+
   // One animation loop draws every comet and particle, in the panel's own colours.
   useEffect(() => {
     let raf = 0
-    let colors: { accent: Rgb; dim: Rgb; warn: Rgb; glow: boolean } = {
+    let colors: { accent: Rgb; dm: Rgb; dim: Rgb; warn: Rgb; glow: boolean } = {
       accent: [50, 72, 175],
+      dm: [15, 138, 122],
       dim: [66, 70, 86],
       warn: [128, 94, 33],
       glow: false,
@@ -291,6 +349,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
         const glow = style.getPropertyValue('--mhs-glow').trim()
         colors = {
           accent: read('--mhs-accent', colors.accent),
+          dm: read('--mhs-dm', colors.dm),
           dim: read('--mhs-text-3', colors.dim),
           warn: read('--mhs-warn', colors.warn),
           glow: glow !== '' && glow !== 'transparent',
@@ -305,13 +364,14 @@ export function Flow(props: { brain?: Brain | undefined }) {
         if (t < 0) continue
         const pts = path(geo, d.lane, d.device)
         if (pts.length === 0) continue
-        // Lanes run from AgnesHub outwards; the brain's line runs from AgnesHub up.
-        const at = (s: number) => (d.lane === 'brain' ? (d.up ? s : 1 - s) : d.up ? 1 - s : s)
+        // Lanes run from AgnesHub outwards; the LLM's and the DM's lines run from AgnesHub up.
+        const at = (s: number) =>
+          d.lane === 'brain' || d.lane === 'dm' ? (d.up ? s : 1 - s) : d.up ? 1 - s : s
         const [x, y] = pointAt(pts, at(t))
         if (d.kind === 'call' || d.kind === 'result') {
           // A comet: a head and a tail of the same colour fading out behind it.
           const [tx, ty] = pointAt(pts, at(Math.max(0, t - 0.14)))
-          const color = d.kind === 'call' ? colors.accent : colors.dim
+          const color = d.kind === 'result' ? colors.dim : d.by === 'dm' ? colors.dm : colors.accent
           const tail = ctx.createLinearGradient(tx, ty, x, y)
           tail.addColorStop(0, rgba(color, 0))
           tail.addColorStop(1, rgba(color, 0.9))
@@ -348,13 +408,24 @@ export function Flow(props: { brain?: Brain | undefined }) {
   }, [])
 
   const fresh = Date.now() - traffic.at < 2500
-  const recent = (pulses as BrainPulse[]).slice(-4)
-  const last = recent[recent.length - 1]
+  const llmLast = (pulses as BrainPulse[]).filter((p) => p.by !== 'dm').at(-1)
   const thinking = props.brain?.thinking === true
+  // The DM is drawn while a decision model is configured; its node dims while it is off here.
+  const dm = props.brain && mode?.ready ? mode : undefined
+  const decision = dm
+    ? (events as HubEvent[]).findLast((e) => e.type === 'dm' && e.data.conversation === conversation)
+    : undefined
+  const recent = decision && Date.now() - decision.time * 1000 < DM_SHOWN_MS ? decision : undefined
   return (
     <div className="mhs-flow" ref={box} style={{ height: g.height }}>
       <svg className="mhs-flow-lines" width={g.width} height={g.height} aria-hidden="true">
         {props.brain && <polyline points={line(path(g, 'brain'))} className="mhs-flow-brainline" />}
+        {dm && (
+          <>
+            <polyline points={line(path(g, 'dm'))} className="mhs-flow-dmline" data-on={dm.on || undefined} />
+            <polyline points={line(path(g, 'hand'))} className="mhs-flow-handline" />
+          </>
+        )}
         {devices.map((d) => {
           const top = g.cards.get(d.id) ?? 0
           return (
@@ -391,21 +462,27 @@ export function Flow(props: { brain?: Brain | undefined }) {
             <b>{t('flow.brain')}</b>
             <span>
               {thinking ? <em>{t('flow.thinking')}</em> : t('flow.idle')}
-              {last && Date.now() - last.at < 15_000
-                ? ` · ${last.tool}${last.device ? ` → ${last.device}` : ''}`
+              {llmLast && Date.now() - llmLast.at < 15_000
+                ? ` · ${llmLast.tool}${llmLast.device ? ` → ${llmLast.device}` : ''}`
                 : ''}
             </span>
           </span>
         </div>
       )}
-      {props.brain && (
-        <div className="mhs-flow-term" style={{ top: BRAIN_Y }}>
-          {recent.map((p) => (
-            <span key={p.id} data-dir={p.dir}>
-              {p.tool}
-              {p.device ? ` ${p.device}` : ''}
-            </span>
-          ))}
+      {dm && (
+        <div
+          className="mhs-flow-brain mhs-flow-dm"
+          style={{ right: 12, top: BRAIN_Y }}
+          data-on={dm.on || undefined}
+          data-flash={(recent && Date.now() - recent.time * 1000 < 1500) || undefined}
+        >
+          <span className="mhs-flow-core">
+            <ByIcon by="dm" />
+          </span>
+          <span className="mhs-flow-brain-text">
+            <b>{t('flow.dm')}</b>
+            <span>{dmStatus(dm, recent)}</span>
+          </span>
         </div>
       )}
       <div className="mhs-flow-hub" style={{ top: g.hub, left: 12, width: g.width - 24, height: HUB_H }}>
@@ -438,4 +515,19 @@ export function Flow(props: { brain?: Brain | undefined }) {
       })}
     </div>
   )
+}
+
+/** What the DM's node says: off, on duty, or its last decision here. */
+function dmStatus(mode: { on: boolean; model?: string | undefined }, recent: HubEvent | undefined): string {
+  if (!mode.on) return t('flow.dm.off')
+  const d = recent?.data
+  if (!d) return `${mode.model ?? ''} · ${t('flow.dm.on')}`
+  const sure = Math.round(
+    (((d.top as [string, number][] | undefined)?.[0]?.[1] as number | undefined) ?? 0) * 100,
+  )
+  if (d.outcome === 'error') return t('flow.dm.error')
+  if (d.outcome !== 'did') return t('flow.dm.handed', { sure })
+  const call = d.call as { name?: string; args?: { device?: string; tool?: string } } | undefined
+  const tool = call?.name === 'call_device' ? call.args?.tool : call?.name
+  return `${sure}% · ${tool ?? d.choice} → ${call?.args?.device ?? d.device ?? ''}`
 }

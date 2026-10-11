@@ -185,7 +185,7 @@ export const hub = {
       })
       north.dm = (conversation, value) => {
         if (value !== undefined) switched.set(conversation, value)
-        return { ready: true, on: on(conversation) }
+        return { ready: true, on: on(conversation), model: model.name }
       }
       dmLink = {
         dm,

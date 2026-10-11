@@ -15,11 +15,11 @@ import {
 import { Button, Chevron } from '../../controls/ui.js'
 import { brainCalls } from '../../core/describe.js'
 import { Store } from '../../core/store.js'
-import type { Json } from '../../core/types.js'
+import type { By, Json } from '../../core/types.js'
 import { catalogs, setLocale, t } from '../../i18n/i18n.js'
 import { Activity } from '../../layout/activity.js'
 import { type Brain, Panel } from '../../layout/panel.js'
-import { type Nav, NavContext, StoreContext, useDevices, useLocale } from '../../react/hooks.js'
+import { type Nav, NavContext, StoreContext, useDevices, useDmMode, useLocale } from '../../react/hooks.js'
 import '../../style.css'
 
 const RAIL = 36
@@ -143,7 +143,7 @@ export function apply(ctx: Ctx, config?: { publicConfig?: Json }) {
   function useBrainEvents() {
     useEffect(() => {
       const since = Date.now() - 2000
-      const calls = new Map<string, [string | undefined, string]>()
+      const calls = new Map<string, [string | undefined, string, By]>()
       let handle: Ctx['session']['handle']
       const listener = (method: string, params: Json) => {
         const event = params?.event as { type?: string; ts?: string; data?: Json } | undefined
@@ -158,13 +158,19 @@ export function apply(ctx: Ctx, config?: { publicConfig?: Json }) {
           const device = typeof args.device === 'string' ? args.device : undefined
           const what =
             event.data?.name === 'call_device' ? String(args.tool ?? 'call') : String(event.data?.name)
-          calls.set(String(event.data?.toolUseId), [device, what])
-          store.brain(device, what, 'down')
-          if (device) ui.set({ brain: { thinking: true, device } })
+          // The DM's calls are known by its `dm` event, which AgnesHub sends before the step runs.
+          const by: By = store.dmCall(String(event.data?.name), args, ctx.session.sessionId) ? 'dm' : 'llm'
+          calls.set(String(event.data?.toolUseId), [device, what, by])
+          store.brain(device, what, 'down', by)
+          if (device) ui.set({ brain: { thinking: true, device, by } })
         } else if (event.type === 'tool/result' && calls.has(String(event.data?.toolUseId))) {
-          const [device, what] = calls.get(String(event.data?.toolUseId)) as [string | undefined, string]
+          const [device, what, by] = calls.get(String(event.data?.toolUseId)) as [
+            string | undefined,
+            string,
+            By,
+          ]
           calls.delete(String(event.data?.toolUseId))
-          store.brain(device, what, 'up')
+          store.brain(device, what, 'up', by)
         }
       }
       const attach = () => {
@@ -233,7 +239,8 @@ export function apply(ctx: Ctx, config?: { publicConfig?: Json }) {
   function Dock() {
     useLocale()
     useBrainEvents()
-    const { open, width, brain, full } = useUi()
+    const { open, width, brain: doing, full } = useUi()
+    const brain = useBrain(doing)
     useEffect(() => {
       document.body.classList.add('mhs-docked')
       return () => {
@@ -275,9 +282,16 @@ export function apply(ctx: Ctx, config?: { publicConfig?: Json }) {
     )
   }
 
+  /** What the LLM is doing, with the conversation for the DM beside it. */
+  function useBrain(doing: Brain): Brain {
+    const conversation = useSyncExternalStore(ctx.session.subscribe, () => ctx.session.sessionId)
+    return conversation ? { ...doing, conversation } : doing
+  }
+
   function Console() {
     useLocale()
-    const { full, brain } = useUi()
+    const { full, brain: doing } = useUi()
+    const brain = useBrain(doing)
     useEffect(() => {
       if (!full) return
       const esc = (e: KeyboardEvent) => e.key === 'Escape' && ui.set({ full: false })
@@ -355,15 +369,8 @@ export function apply(ctx: Ctx, config?: { publicConfig?: Json }) {
   /** The DM / LLM switch beside the model picker, for the open conversation. */
   function DmSwitch() {
     const conversation = useSyncExternalStore(ctx.session.subscribe, () => ctx.session.sessionId)
-    const [mode, setMode] = useState<{ ready: boolean; on: boolean }>()
+    const mode = useDmMode(conversation)
     useLocale()
-    useEffect(() => {
-      setMode(undefined)
-      if (!conversation) return
-      const ask = () => void store.dm(conversation).then(setMode, () => undefined)
-      ask()
-      return store.subscribe('conn', ask)
-    }, [conversation])
     if (!conversation || !mode?.ready) return null
     return (
       <div className="mhs-root">
@@ -371,7 +378,7 @@ export function apply(ctx: Ctx, config?: { publicConfig?: Json }) {
           type="button"
           className={`mhs-dm-switch${mode.on ? ' on' : ''}`}
           title={t('dm.mode.title')}
-          onClick={() => void store.dm(conversation, !mode.on).then(setMode, () => undefined)}
+          onClick={() => void store.dm(conversation, !mode.on).catch(() => undefined)}
         >
           {t(mode.on ? 'dm.mode.on' : 'dm.mode.off')}
         </button>

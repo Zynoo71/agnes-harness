@@ -28,6 +28,11 @@ export const zhCN: Partial<Record<Key, string>> = {
   'dm.mode.title':
     'DM + LLM：决策模型先做有把握的设备步骤，每步约一秒，其余交给 LLM。LLM：每一步都由 LLM 做。点击切换。',
   'flow.brain': 'LLM',
+  'flow.dm': 'DM',
+  'flow.dm.on': '值守中',
+  'flow.dm.off': '这个对话里关着',
+  'flow.dm.handed': '→ LLM · 把握 {sure}%',
+  'flow.dm.error': '没能决定 → LLM',
   'flow.idle': '空闲',
   'flow.thinking': '思考中',
   'view.devices': '设备',
@@ -48,7 +53,7 @@ export const zhCN: Partial<Record<Key, string>> = {
   'overview.empty.hint': '设备一连上就会出现在这里。',
   'overview.watch': '需要注意',
   'overview.stopAll': '全部停止',
-  'overview.brain': '正在操作：{device}',
+  'overview.brain': '{who} 正在操作：{device}',
 
   'device.back': '全部设备',
   'device.available': '可用',

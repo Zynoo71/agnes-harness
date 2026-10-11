@@ -366,6 +366,15 @@ body.mhs-dragging {
   font: 11px var(--mhs-font);
   cursor: pointer;
 }
+.mhs-root .mhs-brain[data-by="dm"] {
+  border-color: var(--mhs-dm-line);
+  background: var(--mhs-dm-wash);
+  color: var(--mhs-dm);
+}
+.mhs-root .mhs-brain[data-by="dm"] .mhs-brain-pulse {
+  background: var(--mhs-dm);
+  box-shadow: 0 0 6px var(--mhs-dm);
+}
 .mhs-root .mhs-brain-pulse {
   width: 6px;
   height: 6px;
@@ -1690,33 +1699,59 @@ body.mhs-dragging {
   font-style: normal;
   color: var(--mhs-accent);
 }
-/* The last few things the brain said to devices and heard back, like a terminal. */
-.mhs-root .mhs-flow-term {
-  position: absolute;
-  right: 12px;
-  display: grid;
-  justify-items: end;
-  gap: 1px;
-  max-width: 46%;
-  font: 10.5px / 1.5 var(--mhs-mono);
-  pointer-events: none;
+/* The DM: the same node mirrored on the right, teal, with a bolt; dim while it is off here, and a
+   flash when it decides. A step it hands to the LLM crosses on the line between the two. */
+.mhs-root .mhs-flow-dm {
+  flex-direction: row-reverse;
+  max-width: calc(46% - 12px);
+  padding: 7px 8px 7px 18px;
+  border-color: var(--mhs-dm-line);
+  box-shadow:
+    var(--mhs-lift),
+    0 0 0 5px var(--mhs-dm-wash);
+  text-align: right;
 }
-.mhs-root .mhs-flow-term span {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.mhs-root .mhs-flow-dm .mhs-flow-core {
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--mhs-dm);
+  border-radius: 50%;
+  color: var(--mhs-dm);
+}
+.mhs-root .mhs-flow-dm .mhs-flow-core .mhs-icon {
+  width: 16px;
+  height: 16px;
+}
+.mhs-root .mhs-flow-dm:not([data-on]) {
+  border-style: dashed;
+  border-color: var(--mhs-line);
+  box-shadow: var(--mhs-lift);
+  opacity: 0.6;
+}
+.mhs-root .mhs-flow-dm:not([data-on]) .mhs-flow-core {
+  border-color: var(--mhs-text-3);
   color: var(--mhs-text-3);
 }
-.mhs-root .mhs-flow-term span[data-dir="down"] {
-  color: var(--mhs-text);
+.mhs-root .mhs-flow-dm[data-flash] .mhs-flow-core {
+  background: var(--mhs-dm);
+  color: var(--mhs-on-dm);
+  box-shadow: 0 0 12px var(--mhs-dm);
 }
-.mhs-root .mhs-flow-term span[data-dir="down"]::before {
-  content: "> ";
-  color: var(--mhs-accent);
+.mhs-root .mhs-flow-dmline {
+  fill: none;
+  stroke: var(--mhs-text-3);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
 }
-.mhs-root .mhs-flow-term span[data-dir="up"]::before {
-  content: "< ";
+.mhs-root .mhs-flow-dmline[data-on] {
+  stroke: var(--mhs-dm);
+  stroke-dasharray: none;
+}
+.mhs-root .mhs-flow-handline {
+  fill: none;
+  stroke: var(--mhs-dm-line);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
 }
 .mhs-root .mhs-flow-hub {
   position: absolute;

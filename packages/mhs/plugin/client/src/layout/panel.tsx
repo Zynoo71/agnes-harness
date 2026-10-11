@@ -5,6 +5,7 @@
 
 import { type ReactNode, useState } from 'react'
 import { Segmented } from '../controls/ui.js'
+import type { By } from '../core/types.js'
 import { t } from '../i18n/i18n.js'
 import { useConn, useDevices, useLocale, useNav } from '../react/hooks.js'
 import { DevicePage } from './device-page.js'
@@ -15,8 +16,12 @@ import { WorldView } from './world.js'
 
 export interface Brain {
   thinking: boolean
-  /** The device of the brain's last device call while a turn runs. */
+  /** The device of the last device call while a turn runs, */
   device?: string | undefined
+  /** and who made it: the LLM, or the DM in its stead. */
+  by?: By | undefined
+  /** The conversation shown, for the DM's part in it. */
+  conversation?: string | undefined
 }
 
 type View = 'devices' | 'flow' | 'activity' | 'world'
@@ -65,11 +70,17 @@ export function Panel(props: { brain?: Brain; actions?: ReactNode; activity?: Re
           <button
             type="button"
             className="mhs-brain"
+            data-by={props.brain.by}
             disabled={!props.brain.device}
             onClick={() => props.brain?.device && nav.open(props.brain.device)}
           >
             <span className="mhs-brain-pulse" />
-            {props.brain.device ? t('overview.brain', { device: props.brain.device }) : '…'}
+            {props.brain.device
+              ? t('overview.brain', {
+                  who: props.brain.by === 'dm' ? 'DM' : 'LLM',
+                  device: props.brain.device,
+                })
+              : '…'}
           </button>
         )}
         <span className="mhs-grow" />

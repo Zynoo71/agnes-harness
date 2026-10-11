@@ -522,10 +522,10 @@ The DM is a decision model that takes some steps of the brain's loop in the LLM'
 
 ```json
 → {"jsonrpc": "2.0", "id": "70", "method": "hub/dm", "params": {"conversation": "c1", "on": true}}
-← {"jsonrpc": "2.0", "id": "70", "result": {"ready": true, "on": true}}
+← {"jsonrpc": "2.0", "id": "70", "result": {"ready": true, "on": true, "model": "jev"}}
 ```
 
-- **`hub/dm`** switches the DM for one conversation; without `on` it only reports. `ready` is false when no decision model is configured.
+- **`hub/dm`** switches the DM for one conversation; without `on` it only reports. `ready` is false when no decision model is configured; `model` names the one that is.
 - **Device reports.** While the DM is on for the conversation on duty, an alert or a read-only enumerated state that changed with no job running wakes that conversation, merged within 1 s, so the DM can take it first.
 - **`dm` event**, one per decision, `level` `info`:
 

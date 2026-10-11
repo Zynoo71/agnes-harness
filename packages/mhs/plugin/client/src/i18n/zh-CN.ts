@@ -19,6 +19,10 @@ export const zhCN: Partial<Record<Key, string>> = {
   'state.off': '离线',
   'flow.lane.mhs': 'MHS：命令、状态和结果',
   'flow.lane.mos': 'MOS：数据流（画面、视频、雷达、遥测）和手动驾驶',
+  'dm.mode.on': 'DM + LLM',
+  'dm.mode.off': 'LLM',
+  'dm.mode.title':
+    'DM + LLM：决策模型先做有把握的设备步骤，每步约一秒，其余交给 LLM。LLM：每一步都由 LLM 做。点击切换。',
   'flow.brain': '大脑',
   'flow.idle': '空闲',
   'flow.thinking': '思考中',

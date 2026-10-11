@@ -16,6 +16,10 @@ export const en = {
   'state.warn': 'Attention',
   'state.bad': 'Fault',
   'state.off': 'Offline',
+  'dm.mode.on': 'DM + LLM',
+  'dm.mode.off': 'LLM',
+  'dm.mode.title':
+    'DM + LLM: the decision model takes the device steps it is sure of, in about a second each, and the LLM the rest. LLM: the LLM takes every step. Click to switch.',
   'flow.brain': 'Brain',
   'flow.lane.mhs': 'MHS: commands, state and results',
   'flow.lane.mos': 'MOS: data streams (pictures, video, scans, telemetry) and manual driving',

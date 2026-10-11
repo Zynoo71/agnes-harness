@@ -1999,3 +1999,26 @@ body.mhs-dragging {
 .mhs-root .mhs-world-item:hover .mhs-world-item-name {
   color: var(--mhs-accent);
 }
+
+/* --- the DM / LLM switch in the composer bar --- */
+.mhs-root .mhs-dm-switch {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--mhs-line-2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--mhs-text-2);
+  font: 500 12.5px var(--mhs-font);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mhs-root .mhs-dm-switch:hover {
+  border-color: var(--mhs-accent);
+}
+.mhs-root .mhs-dm-switch.on {
+  border-color: var(--mhs-accent);
+  background: var(--mhs-accent-wash);
+  color: var(--mhs-accent);
+}

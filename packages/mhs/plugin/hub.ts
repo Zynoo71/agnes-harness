@@ -8,9 +8,10 @@
  * AGNES_HUB_LISTEN  host:port to listen on, default 127.0.0.1:4180 (loopback only unless configured)
  * AGNES_HUB_DATA    data directory, default <AGH_HOME or ~/.agh>/hub; it keeps maps.json, the maps
  *                   devices declared
- * AGNES_DM          `on` lets the decision model take steps (plugin/dm.ts), with Cloudflare's clef
- *                   (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) and the scene in the file named by
- *                   AGNES_DM_SCENE
+ * CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN
+ *                   Cloudflare's clef as the decision model (plugin/dm.ts), switched per conversation
+ *                   with hub/dm; AGNES_DM=on has it on where it was never switched; AGNES_DM_SCENE
+ *                   names a file that tells it about the place
  */
 import { mkdirSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -165,17 +166,41 @@ export const hub = {
     const disposers = registerBrainTools(agnes, brain)
     const account = env.CLOUDFLARE_ACCOUNT_ID
     const token = env.CLOUDFLARE_API_TOKEN
-    if (env.AGNES_DM === 'on' && account && token) {
+    if (account && token) {
       const scene = env.AGNES_DM_SCENE ? readFileSync(env.AGNES_DM_SCENE, 'utf8').trim() : DEFAULT_SCENE
-      const on = () => true
+      // Per conversation, as switched with hub/dm; AGNES_DM=on turns it on where it was never switched.
+      const switched = new Map<string, boolean>()
+      const on = (conversation: string) => switched.get(conversation) ?? env.AGNES_DM === 'on'
       // What devices report by themselves wakes the conversation on duty, where the DM takes it first.
       const model = new DecisionModel(north, scene, clef(account, token), (lines) => {
-        if (brain.onDuty && on()) brain.wakeOnDuty(lines.join('\n'))
+        if (brain.onDuty && on(brain.onDuty)) brain.wakeOnDuty(lines.join('\n'))
       })
-      dmLink = { model, on, log }
-      log('the decision model (clef) takes steps')
+      north.dm = (conversation, value) => {
+        if (value !== undefined) switched.set(conversation, value)
+        return { ready: true, on: on(conversation) }
+      }
+      dmLink = {
+        model,
+        on,
+        report: (d) =>
+          north.publish({
+            ...(d.device ? { device: d.device } : {}),
+            type: 'dm',
+            level: 'info',
+            text:
+              d.outcome === 'did'
+                ? `DM chose ${d.choice}.`
+                : d.outcome === 'nothing'
+                  ? 'DM chose to do nothing.'
+                  : 'DM handed the step to the LLM.',
+            data: { ...d },
+          }),
+        log,
+      }
+      log('the decision model (clef) is ready')
       ctx.effect(() => () => {
         model.stop()
+        delete north.dm
         dmLink = undefined
       })
     }

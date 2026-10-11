@@ -339,6 +339,11 @@ export class Store {
     return this.hub.request<SetOutcome>('hub/set', { device, values })
   }
 
+  /** Whether the decision model is ready and on for a conversation; `on` switches it (hub/dm). */
+  async dm(conversation: string, on?: boolean): Promise<{ ready: boolean; on: boolean }> {
+    return this.hub.request('hub/dm', on === undefined ? { conversation } : { conversation, on })
+  }
+
   async configure(device: string, source: string, on: boolean): Promise<void> {
     await this.hub.request('hub/configure', { device, sources: { [source]: { on } } })
   }

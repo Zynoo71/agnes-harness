@@ -34,7 +34,24 @@ export interface DmLink {
   model: DecisionModel
   /** Whether the DM may take steps in this conversation. */
   on(conversation: string): boolean
+  /** Tells pages of a decision, as a `dm` hub event. */
+  report(decision: Decision): void
   log(line: string): void
+}
+
+/** One decision, as the `dm` hub event's data carries it (hub-api.md section 15.5). */
+export interface Decision {
+  conversation: string
+  /** What the step answered: tool results or a wake-up. */
+  happened: string
+  choice: string
+  /** did: the step is the action; nothing: the turn ends; llm: the LLM takes the step. */
+  outcome: 'did' | 'nothing' | 'llm'
+  device?: string
+  top: [string, number][]
+  options: number
+  confidence: number | undefined
+  ms: number
 }
 
 export function dmOperation(link: () => DmLink | undefined) {
@@ -59,8 +76,21 @@ export function dmOperation(link: () => DmLink | undefined) {
       }
       const [, p] = picked.top[0] as [string, number]
       const how = `sure ${Math.round(p * 100)}% among ${picked.options}, ${(picked.ms / 1000).toFixed(1)} s`
-      dm.log(`DM ${picked.choice} (${how}) for ${request.sessionKey}`)
       const action = picked.action
+      // Nothing to do after a wake-up ends the turn; within a task the LLM decides when it is done.
+      const outcome = action ? 'did' : picked.choice === NOTHING && moment.woken ? 'nothing' : 'llm'
+      dm.log(`DM ${picked.choice} (${how}) for ${request.sessionKey}`)
+      dm.report({
+        conversation: request.sessionKey,
+        happened: moment.happened,
+        choice: picked.choice,
+        outcome,
+        ...(action ? { device: action.device } : {}),
+        top: picked.top,
+        options: picked.options,
+        confidence: picked.confidence,
+        ms: picked.ms,
+      })
       const target = { route: request.route, model: request.model }
       const parser = (ctx.session.d.contractForModel?.(target) ?? ctx.session.d.contract).parser_version
       if (action) {
@@ -71,9 +101,7 @@ export function dmOperation(link: () => DmLink | undefined) {
             : { name: 'call_device', args: { device: action.device, tool: action.tool, args: action.args } }
         return step(request, parser, `${MARK}chose ${picked.choice} (${how}).`, call)
       }
-      // Nothing to do after a wake-up ends the turn; within a task the LLM decides when it is done.
-      if (picked.choice === NOTHING && moment.woken)
-        return step(request, parser, `${MARK}chose to do nothing (${how}).`)
+      if (outcome === 'nothing') return step(request, parser, `${MARK}chose to do nothing (${how}).`)
       return ctx.next()
     },
   }

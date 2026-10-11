@@ -352,6 +352,34 @@ export function apply(ctx: Ctx, config?: { publicConfig?: Json }) {
     )
   }
 
+  /** The DM / LLM switch beside the model picker, for the open conversation. */
+  function DmSwitch() {
+    const conversation = useSyncExternalStore(ctx.session.subscribe, () => ctx.session.sessionId)
+    const [mode, setMode] = useState<{ ready: boolean; on: boolean }>()
+    useLocale()
+    useEffect(() => {
+      setMode(undefined)
+      if (!conversation) return
+      const ask = () => void store.dm(conversation).then(setMode, () => undefined)
+      ask()
+      return store.subscribe('conn', ask)
+    }, [conversation])
+    if (!conversation || !mode?.ready) return null
+    return (
+      <div className="mhs-root">
+        <button
+          type="button"
+          className={`mhs-dm-switch${mode.on ? ' on' : ''}`}
+          title={t('dm.mode.title')}
+          onClick={() => void store.dm(conversation, !mode.on).then(setMode, () => undefined)}
+        >
+          {t(mode.on ? 'dm.mode.on' : 'dm.mode.off')}
+        </button>
+      </div>
+    )
+  }
+
+  ctx.slots.register('conversation.input.left', DmSwitch)
   ctx.slots.register('rightbar', Dock, { priority: -1 })
   ctx.slots.register('sidebar.panellist', SidebarEntry)
   ctx.slots.register('shell.overlay', Console)

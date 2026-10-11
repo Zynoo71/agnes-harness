@@ -277,6 +277,11 @@ export class North extends EventEmitter {
    * Without a brain, briefs go nowhere.
    */
   brief?: (caller: Caller, text: string, wake: boolean) => boolean
+  /**
+   * Takes a `hub/dm` (section 15.5): set by the plugin when a decision model is configured; turns
+   * it on or off for a conversation and says whether it is ready and on.
+   */
+  dm?: (conversation: string, on: boolean | undefined) => { ready: boolean; on: boolean }
 
   constructor(
     private readonly south: South,
@@ -1064,7 +1069,7 @@ export class North extends EventEmitter {
   }
 
   /** Appends an event, prunes old ones, and sends it to matching subscriptions and in-process listeners. */
-  private publish(e: Omit<HubEvent, 'id' | 'time'>): void {
+  publish(e: Omit<HubEvent, 'id' | 'time'>): void {
     this.eventCount += 1
     const event: HubEvent = { id: `e${this.eventCount}`, time: now(), ...e }
     this.events.push(event)
@@ -1361,6 +1366,12 @@ export class North extends EventEmitter {
         if (typeof params.device !== 'string' || !isObject(params.values))
           throw new HubError(-32602, 'device and values are required')
         return this.set(params.device, params.values)
+      case 'hub/dm':
+        if (typeof params.conversation !== 'string' || !params.conversation)
+          throw new HubError(-32602, 'conversation is required')
+        if (params.on !== undefined && typeof params.on !== 'boolean')
+          throw new HubError(-32602, 'on must be a boolean')
+        return this.dm?.(params.conversation, params.on) ?? { ready: false, on: false }
       case 'hub/brief':
         if (typeof params.text !== 'string' || !params.text.trim())
           throw new HubError(-32602, 'text is required')

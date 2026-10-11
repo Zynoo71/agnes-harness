@@ -173,7 +173,7 @@ export class Brain {
     }
     this.waiting.set(job, conversation)
     return {
-      text: `${device}: ${args.tool} is still running as job ${job}. You will be woken when it ends; stop_device stops it.`,
+      text: `${device}: ${args.tool} is still running (AgnesHub job ${job}, not a subagent). This conversation is woken with its result when it ends: go on with other work or end your turn, and do not wait for it with other tools. stop_device stops it.`,
       data: { ...facts, job, status: 'running' },
     }
   }

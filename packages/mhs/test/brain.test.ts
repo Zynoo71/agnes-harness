@@ -142,7 +142,7 @@ describe('brain tools', () => {
       'toolu-7',
     )
     expect(running.text).toBe(
-      'mover-01: move is still running as job j2. You will be woken when it ends; stop_device stops it.',
+      'mover-01: move is still running (AgnesHub job j2, not a subagent). This conversation is woken with its result when it ends: go on with other work or end your turn, and do not wait for it with other tools. stop_device stops it.',
     )
     expect(running.data).toMatchObject({ job: 'j2', status: 'running' })
     // Pages find the conversation step a job belongs to by its ref.

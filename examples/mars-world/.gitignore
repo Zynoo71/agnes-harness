@@ -1,2 +1,4 @@
 dist/
 dist-types/
+# Local secrets for tools/dev.mjs (TYPESAFE_API_KEY), never committed
+.env

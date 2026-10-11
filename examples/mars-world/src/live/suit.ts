@@ -418,6 +418,15 @@ export function suit(
     },
   )
 
+  world.conditions.push({
+    device: dev.id,
+    en: 'Suit oxygen low',
+    zh: '宇航服氧气不足',
+    apply: () => {
+      o2 = 22
+      report()
+    },
+  })
   world.onReset(() => {
     o2 = options.o2
     battery = options.battery

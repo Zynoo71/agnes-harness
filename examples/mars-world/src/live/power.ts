@@ -258,6 +258,26 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
     dust = Math.min(100, dust + percent * (panels === 'deployed' ? 1 : 0.2))
     report()
   }
+  world.conditions.push(
+    {
+      device: dev.id,
+      en: 'Battery bank low',
+      zh: '储能电池电量低',
+      apply: () => {
+        storage = 15
+        report()
+      },
+    },
+    {
+      device: dev.id,
+      en: 'Panels heavily dusted',
+      zh: '太阳能板积灰严重',
+      apply: () => {
+        dust = 60
+        report()
+      },
+    },
+  )
   world.onReset(() => {
     storage = 74
     dust = 12

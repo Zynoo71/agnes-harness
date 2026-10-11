@@ -132,6 +132,15 @@ export function habitat(world: World, log: (line: string) => void): WorldDevice 
       return `habitat set to ${to.sentence}`
     },
   )
+  world.conditions.push({
+    device: dev.id,
+    en: 'Cabin oxygen drop (recovers)',
+    zh: '舱内氧气骤降（会恢复）',
+    apply: () => {
+      air.o2 = 18.4
+      report()
+    },
+  })
   world.onReset(() => {
     mode = 'normal'
     Object.assign(air, { o2: 20.9, co2: 900, pressure: 101.3, temperature: 21.5, humidity: 38 })

@@ -1,4 +1,4 @@
-import type { MarsClock } from './clock.js'
+import { type MarsClock, START_HOURS, type TimeOfDay } from './clock.js'
 import type { Director } from './live/director.js'
 import { CATALOG, type EventKind, type Happening } from './live/events.js'
 import { type Activity, type Alert, type World, type WorldDevice, watchers } from './live/world.js'
@@ -26,14 +26,24 @@ const TEXT = {
     language: '中文',
     reset: 'Reset',
     help: 'About',
-    director: 'Director',
-    llm: (m: string) => `a model picks (${m})`,
-    seeded: 'seeded picks',
-    manual: 'only from this panel',
-    nowBtn: 'Pick one now',
+    controls: 'Controls',
+    eventsHead: 'Events',
+    timeHead: 'Skip to',
+    conditionsHead: 'Conditions',
+    nowBtn: 'Start one now',
     startBtn: 'Start',
-    nextIn: (t: string) => `Next in ${t}`,
-    thinking: 'the director is choosing…',
+    endBtn: 'End',
+    applyBtn: 'Apply',
+    nextIn: (t: string) => `Next on its own in ${t}`,
+    hours: { morning: 'Morning', noon: 'Noon', sunset: 'Sunset', night: 'Night' } as Record<
+      TimeOfDay,
+      string
+    >,
+    params: { intensity: 'intensity', minutes: 'min', strength: 'dust %', area: '' } as Record<
+      string,
+      string
+    >,
+    areas: { 'west field': 'west field', 'east dunes': 'east dunes' } as Record<string, string>,
     going: 'Going on',
     nothing: 'nothing',
     untilHandled: 'until handled',
@@ -74,7 +84,7 @@ const TEXT = {
 <ul>
 <li><b>Time.</b> A sol takes 40 minutes. The sun, the light, the solar output and the cold follow the clock; at night the batteries carry the base.</li>
 <li><b>Drift.</b> Dust settles on the panels, the suit's oxygen runs down, a hopper away from its pad boils off propellant.</li>
-<li><b>Events.</b> Every few minutes a director starts one: a dust storm, a suit leak, a dust devil, a meteorite. With a model set up, the model picks what and when; code keeps it to the rules.</li>
+<li><b>Controls</b> (<kbd>E</kbd>). Start an event (a dust storm, a suit leak, a dust devil, a meteorite) with the parameters you choose, end it, skip the clock to morning, noon, sunset or night, or bring about trouble: low suit oxygen, a low battery bank, dusty panels, a drop in cabin oxygen.</li>
 </ul>
 <h3>Ask the brain</h3>
 <ul>
@@ -86,8 +96,8 @@ const TEXT = {
 <ul>
 <li>Tags over the devices show the tool each one runs, its progress and who called it.</li>
 <li>Bottom left: the latest calls, alerts and events. Top: banners for what needs attention.</li>
-<li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> views · <kbd>A</kbd> auto camera · <kbd>E</kbd> events · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
-<li>Address: <code>?time=night</code>, <code>?sol=10</code> (minutes a sol takes), <code>?events=manual</code> or <code>off</code>, <code>?director=seeded&amp;seed=7</code>, <code>?lang=zh</code></li>
+<li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> views · <kbd>A</kbd> auto camera · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
+<li>Address: <code>?time=night</code>, <code>?sol=10</code> (minutes a sol takes), <code>?events=auto&amp;seed=7</code> (an event every few minutes on its own) or <code>off</code>, <code>?lang=zh</code></li>
 </ul>`,
   },
   zh: {
@@ -109,14 +119,18 @@ const TEXT = {
     language: 'EN',
     reset: '重置',
     help: '说明',
-    director: '导演',
-    llm: (m: string) => `由模型挑选（${m}）`,
-    seeded: '按种子挑选',
-    manual: '只从这里触发',
-    nowBtn: '让导演马上选一个',
+    controls: '控制台',
+    eventsHead: '事件',
+    timeHead: '跳到',
+    conditionsHead: '状况',
+    nowBtn: '马上来一个',
     startBtn: '触发',
-    nextIn: (t: string) => `${t} 后下一个`,
-    thinking: '导演正在挑选…',
+    endBtn: '结束',
+    applyBtn: '设置',
+    nextIn: (t: string) => `${t} 后自动来下一个`,
+    hours: { morning: '清晨', noon: '正午', sunset: '日落', night: '夜里' } as Record<TimeOfDay, string>,
+    params: { intensity: '强度', minutes: '分钟', strength: '积灰 %', area: '' } as Record<string, string>,
+    areas: { 'west field': '西边野外', 'east dunes': '东边沙丘' } as Record<string, string>,
     going: '正在进行',
     nothing: '无',
     untilHandled: '直到处理完',
@@ -203,7 +217,7 @@ const TEXT = {
 <ul>
 <li><b>时间。</b>一个火星日 40 分钟。太阳、光照、发电量和气温都跟着时钟走；夜里靠电池撑着。</li>
 <li><b>漂移。</b>太阳能板慢慢积灰，宇航服的氧气一直在减少，离开停机坪的飞行器推进剂会蒸发。</li>
-<li><b>事件。</b>每隔几分钟导演出一个事件：沙尘暴、宇航服漏气、尘卷风、陨石。配置了模型时由模型挑什么、什么时候出，代码保证不越规矩。</li>
+<li><b>控制台</b>（<kbd>E</kbd>）。按自己选的参数触发事件（沙尘暴、宇航服漏气、尘卷风、陨石）或提前结束；把时钟跳到清晨、正午、日落或夜里；制造状况：宇航服氧气不足、储能电池电量低、太阳能板积灰、舱内氧气骤降。</li>
 </ul>
 <h3>可以让大脑做</h3>
 <ul>
@@ -215,8 +229,8 @@ const TEXT = {
 <ul>
 <li>设备上方的标签显示它正在执行的工具、进度和调用者。</li>
 <li>左下角是最近的调用、告警和事件；顶部横幅提示需要注意的事。</li>
-<li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 视角 · <kbd>A</kbd> 自动镜头 · <kbd>E</kbd> 事件 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
-<li>地址参数：<code>?time=night</code>、<code>?sol=10</code>（一个火星日的分钟数）、<code>?events=manual</code> 或 <code>off</code>、<code>?director=seeded&amp;seed=7</code>、<code>?lang=en</code></li>
+<li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 视角 · <kbd>A</kbd> 自动镜头 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
+<li>地址参数：<code>?time=night</code>、<code>?sol=10</code>（一个火星日的分钟数）、<code>?events=auto&amp;seed=7</code>（每隔几分钟自动来一个事件）或 <code>off</code>、<code>?lang=en</code></li>
 </ul>`,
   },
 }
@@ -443,16 +457,18 @@ export function buildOverlay(options: {
     })
   }
 
-  // The events panel: who picks, when the next comes, what is going on, and a button per event.
+  // The controls panel: events with their parameters (End while one runs), the clock, and trouble
+  // the devices offer; with ?events=auto, when the next event comes on its own.
   const panelHead = el('div', 'head')
-  const panelDirector = el('div', 'director')
   const panelNext = el('div', 'next')
   const nowButton = el('button', 'small')
   nowButton.type = 'button'
-  nowButton.addEventListener('click', () => void live?.director.next())
+  nowButton.addEventListener('click', () => live?.director.next())
   panelNext.append(el('span'), nowButton)
-  const panelReason = el('div', 'reason')
+  panelNext.hidden = options.eventsMode !== 'auto'
   const panelActive = el('div', 'active')
+  const section = () => el('div', 'section')
+  const eventsHead = section()
   const panelList = el('div', 'list')
   const startButtons = (Object.keys(CATALOG) as EventKind[]).map((kind) => {
     const item = el('div', 'item')
@@ -460,10 +476,39 @@ export function buildOverlay(options: {
     const title = el('b')
     const about = el('span')
     text.append(title, about)
+    // A choice per parameter: the ends and the middle of a number's range, or each of a list.
+    const choices = Object.entries(CATALOG[kind].params as Record<string, readonly (number | string)[]>).map(
+      ([param, range]) => {
+        const select = el('select')
+        const values =
+          typeof range[0] === 'number'
+            ? [range[0] as number, ((range[0] as number) + (range[1] as number)) / 2, range[1] as number].map(
+                // Whole numbers stay whole: 3, 6, 8 minutes.
+                (n) => (Number.isInteger(range[0]) ? Math.round(n) : Math.round(n * 100) / 100),
+              )
+            : range
+        for (const v of values) select.appendChild(el('option', '', String(v)))
+        select.selectedIndex = typeof range[0] === 'number' ? 1 : 0
+        return { param, select, values, unit: el('span') }
+      },
+    )
+    const controls = el('div', 'controls')
+    for (const c of choices) {
+      const label = el('label')
+      label.append(c.unit, c.select)
+      controls.appendChild(label)
+    }
     const go = el('button', 'small')
     go.type = 'button'
+    controls.appendChild(go)
     go.addEventListener('click', () => {
-      const why = live?.director.start(kind)
+      const running = live?.world.events?.active.find((h) => h.kind === kind)
+      if (running) {
+        live?.world.events?.end(running)
+        return
+      }
+      const given = Object.fromEntries(choices.map((c) => [c.param, c.values[c.select.selectedIndex]]))
+      const why = live?.director.start(kind, given)
       if (why)
         push(
           () => 'alert warn',
@@ -473,11 +518,51 @@ export function buildOverlay(options: {
           ],
         )
     })
-    item.append(text, go)
+    text.appendChild(controls)
+    item.append(text)
     panelList.appendChild(item)
-    return { kind, title, about, go }
+    return { kind, title, about, go, choices }
   })
-  panel.append(panelHead, panelDirector, panelNext, panelReason, panelActive, panelList)
+  const timeHead = section()
+  const timeRow = el('div', 'row')
+  const hourButtons = (Object.keys(START_HOURS) as TimeOfDay[]).map((name) => {
+    const b = el('button', 'small')
+    b.type = 'button'
+    b.addEventListener('click', () => clock.skipTo(START_HOURS[name]))
+    timeRow.appendChild(b)
+    return { name, b }
+  })
+  const conditionsHead = section()
+  const conditionList = el('div', 'list')
+  const conditionButtons = (live?.world.conditions ?? []).map((c) => {
+    const item = el('div', 'item')
+    const text = el('div')
+    const title = el('b')
+    text.append(title, el('span', '', c.device))
+    const b = el('button', 'small')
+    b.type = 'button'
+    b.addEventListener('click', () => {
+      c.apply()
+      push(
+        () => 'event info',
+        () => [el('b', 'dev', name(c.device)), el('span', '', c[lang])],
+      )
+    })
+    item.append(text, b)
+    conditionList.appendChild(item)
+    return { c, title, b }
+  })
+  panel.append(
+    panelHead,
+    panelNext,
+    panelActive,
+    eventsHead,
+    panelList,
+    timeHead,
+    timeRow,
+    conditionsHead,
+    conditionList,
+  )
 
   const closeHelp = el('button', 'close')
   closeHelp.type = 'button'
@@ -493,17 +578,31 @@ export function buildOverlay(options: {
     document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
     ;(brand.querySelector('h1') as HTMLElement).textContent = t().title
     ;(brand.querySelector('p') as HTMLElement).textContent = t().subtitle
-    buttons.events.textContent = t().events
+    buttons.events.textContent = t().controls
     buttons.lang.textContent = t().language
     buttons.help.textContent = '?'
     buttons.help.title = t().help
     buttons.reset.textContent = t().reset
-    panelHead.textContent = t().events
+    panelHead.textContent = t().controls
     nowButton.textContent = t().nowBtn
+    eventsHead.textContent = t().eventsHead
+    timeHead.textContent = t().timeHead
+    conditionsHead.textContent = t().conditionsHead
     for (const b of startButtons) {
       b.title.textContent = t().kinds[b.kind]
       b.about.textContent = t().kindAbout[b.kind]
-      b.go.textContent = t().startBtn
+      for (const c of b.choices) {
+        c.unit.textContent = t().params[c.param] ?? c.param
+        c.values.forEach((v, i) => {
+          ;(c.select.options[i] as HTMLOptionElement).textContent =
+            typeof v === 'string' ? (t().areas[v] ?? v) : String(v)
+        })
+      }
+    }
+    for (const h of hourButtons) h.b.textContent = t().hours[h.name]
+    for (const c of conditionButtons) {
+      c.title.textContent = c.c[lang]
+      c.b.textContent = t().applyBtn
     }
     helpBody.innerHTML = t().helpBody
     closeHelp.textContent = t().close
@@ -536,18 +635,11 @@ export function buildOverlay(options: {
       const d = live.director
       const next = d.nextAt === undefined ? undefined : (d.nextAt - now) / 1000
       field('happening').textContent =
-        options.eventsMode === 'auto' && next !== undefined
-          ? t().next(d.thinking ? '…' : clockTime(next))
-          : ''
+        options.eventsMode === 'auto' && next !== undefined ? t().next(clockTime(next)) : ''
       // The panel, while it is open.
       if (!panel.hidden) {
-        panelDirector.textContent = `${t().director}: ${options.eventsMode !== 'auto' ? t().manual : d.mode === 'llm' ? t().llm(d.model ?? '…') : t().seeded}`
-        ;(panelNext.firstChild as HTMLElement).textContent = d.thinking
-          ? t().thinking
-          : next !== undefined
-            ? t().nextIn(clockTime(next))
-            : ''
-        panelReason.textContent = d.lastReason && d.lastReason !== 'seeded' ? `“${d.lastReason}”` : ''
+        ;(panelNext.firstChild as HTMLElement).textContent =
+          next !== undefined ? t().nextIn(clockTime(next)) : ''
         const active = live.world.events?.active ?? []
         panelActive.textContent = `${t().going}: ${
           active.length
@@ -559,6 +651,12 @@ export function buildOverlay(options: {
                 .join(' · ')
             : t().nothing
         }`
+        for (const b of startButtons) {
+          const running = active.some((h) => h.kind === b.kind)
+          b.go.textContent = running ? t().endBtn : t().startBtn
+          b.go.classList.toggle('on', running)
+          for (const c of b.choices) c.select.disabled = running
+        }
       }
     }
     // Tags: the call each device runs, and the device's colour: busy, warning, alarm, failed.

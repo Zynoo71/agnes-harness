@@ -368,11 +368,9 @@ const live = hub
       (line) => console.log(line),
       params.get('devices')?.split(','),
       {
-        // ?events=auto (the default, but not for screenshots) starts an event every few minutes;
-        // manual only from the event panel; off never, for evaluations that must run the same.
-        auto: (params.get('events') ?? (params.has('shot') ? 'manual' : 'auto')) === 'auto',
-        // A model picks them when the dev server has one set up (MARS_DIRECTOR_URL), unless ?director=seeded.
-        mode: params.get('director') === 'seeded' ? 'seeded' : 'llm',
+        // ?events=auto starts an event every few minutes, picked from the seed; otherwise events
+        // start only from the controls panel.
+        auto: params.get('events') === 'auto',
         seed: Number(params.get('seed') ?? Math.floor(Math.random() * 1e9)),
       },
     )
@@ -382,7 +380,7 @@ if (live) {
   // Scripts (an evaluation, a test) reach the events and the director here: mars.director.next().
   Object.assign(window, { mars: { events: live.world.events, director: live.director } })
 }
-// What is drawn over the scene: the bar along the bottom, the activity list, banners, the events
+// What is drawn over the scene: the bar along the bottom, the activity list, banners, the controls
 // panel and the About card, in English or Chinese (?lang=zh, or the button; the page remembers).
 const stored = (key: string) => {
   try {
@@ -391,10 +389,7 @@ const stored = (key: string) => {
     return null
   }
 }
-const eventsMode = (params.get('events') ?? (params.has('shot') ? 'manual' : 'auto')) as
-  | 'auto'
-  | 'manual'
-  | 'off'
+const eventsMode = (params.get('events') ?? 'manual') as 'auto' | 'manual' | 'off'
 const overlay = buildOverlay({
   clock,
   live,

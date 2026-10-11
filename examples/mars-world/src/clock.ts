@@ -17,6 +17,8 @@ const NOON_ELEVATION = 60
 
 export class MarsClock {
   private startedAt = performance.now()
+  /** Hours the clock was moved on by hand. */
+  private skipped = 0
 
   constructor(
     /** Local hour (0–24) the clock starts at, and goes back to on Reset. */
@@ -27,8 +29,8 @@ export class MarsClock {
 
   /** Hours since 00:00 of sol 1, so it keeps rising through the night into the next sol. */
   hours(now = performance.now()): number {
-    if (this.solMinutes <= 0) return this.startHour
-    return this.startHour + ((now - this.startedAt) / 60_000 / this.solMinutes) * 24
+    if (this.solMinutes <= 0) return this.startHour + this.skipped
+    return this.startHour + this.skipped + ((now - this.startedAt) / 60_000 / this.solMinutes) * 24
   }
 
   /** The local hour, 0–24. */
@@ -55,8 +57,14 @@ export class MarsClock {
     return (ahead / 24) * this.solMinutes * 60
   }
 
+  /** Moves the clock on to the next time it is `hour`, into the next sol when that hour has passed. */
+  skipTo(hour: number, now = performance.now()): void {
+    this.skipped += (hour - this.hour(now) + 24) % 24
+  }
+
   reset(): void {
     this.startedAt = performance.now()
+    this.skipped = 0
   }
 }
 

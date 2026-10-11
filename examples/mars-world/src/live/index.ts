@@ -4,7 +4,7 @@ import type { Parts } from '../devices.js'
 import { airlock } from './airlock.js'
 import { baseCamera } from './basecam.js'
 import { comms } from './comms.js'
-import { Director, type DirectorMode } from './director.js'
+import { Director } from './director.js'
 import { Events } from './events.js'
 import { habitat } from './habitat.js'
 import { hopper } from './hopper.js'
@@ -29,8 +29,8 @@ export function connectDevices(
   clock: MarsClock,
   log: (line: string) => void,
   only: string[] | undefined,
-  /** Whether events come on their own, who picks them, and the seed of the seeded director. */
-  directing: { auto: boolean; mode: DirectorMode; seed: number },
+  /** Whether events come on their own, and the seed they are picked from. */
+  directing: { auto: boolean; seed: number },
 ): { devices: WorldDevice[]; world: World; director: Director; reset: () => Promise<void> } {
   const world = new World(renderer, scene, parts, sky, clock)
   world.events = new Events(world, log)
@@ -47,7 +47,7 @@ export function connectDevices(
     comms(world, log),
     baseCamera(world, log),
   ]
-  const director = new Director(world, all, directing, log)
+  const director = new Director(world, directing, log)
   // ?devices=hopper-01,rover-01 connects only these, for example to check one device on its own.
   const devices = only ? all.filter((d) => only.includes(d.id)) : all
   for (const dev of devices) void dev.run(hub)

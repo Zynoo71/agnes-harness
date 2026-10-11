@@ -61,17 +61,23 @@
       .banner.info { border-left-color: #b9a2ff; }
       .banner.warn { border-left-color: var(--amber); }
       .banner.bad { border-left-color: var(--red); border-color: rgba(255, 107, 87, 0.5); }
-      #events-panel { position: fixed; right: 14px; top: 246px; width: 330px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line);
+      #events-panel { position: fixed; right: 14px; top: 246px; width: 340px; max-height: calc(100vh - 300px); overflow: auto; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line);
                       border-radius: 8px; color: var(--text); font-size: 12px; backdrop-filter: blur(6px); }
       #events-panel .head { font: 700 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
-      #events-panel .director, #events-panel .active { margin-top: 6px; font-family: var(--mono); font-size: 11px; }
+      #events-panel .active { margin-top: 6px; font-family: var(--mono); font-size: 11px; }
       #events-panel .next { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-family: var(--mono); font-size: 11px; }
-      #events-panel .reason { margin-top: 4px; color: var(--dim); font-style: italic; font-size: 11.5px; }
-      #events-panel .reason:empty { display: none; }
-      #events-panel .list { margin-top: 8px; border-top: 1px solid var(--line); }
+      #events-panel .next[hidden] { display: none; }
+      #events-panel .section { margin-top: 10px; padding-bottom: 3px; border-bottom: 1px solid var(--line); font: 700 10.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
       #events-panel .item { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255, 196, 120, 0.12); }
+      #events-panel .item > div { flex: 1; }
       #events-panel .item b { display: block; font-size: 12px; }
       #events-panel .item span { color: var(--dim); font-size: 11px; }
+      #events-panel .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 4px; }
+      #events-panel .controls label { display: flex; gap: 4px; align-items: center; }
+      #events-panel select { font: 11px var(--mono); color: var(--text); background: rgba(16, 13, 11, 0.9); border: 1px solid var(--line); border-radius: 4px; padding: 1px 2px; }
+      #events-panel select:disabled { opacity: 0.5; }
+      #events-panel .row { display: flex; gap: 6px; margin-top: 6px; }
+      #events-panel .row button { flex: 1; }
       #help { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(640px, 88vw); max-height: 78vh; overflow: auto;
               padding: 20px 26px 16px; background: rgba(22, 16, 12, 0.95); border: 1px solid var(--line); border-radius: 10px; color: var(--text);
               font-size: 13.5px; line-height: 1.55; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
@@ -104,7 +110,7 @@
       <span id="clock"></span><span id="daylight"></span><span id="earth"></span><span id="weather"></span><span id="happening"></span>
       <span class="spacer"></span>
       <span id="status">Landing…</span>
-      <button id="events-toggle" type="button" title="Events (E)" hidden>Events</button>
+      <button id="events-toggle" type="button" title="Controls (E)" hidden>Controls</button>
       <button id="lang" type="button">中文</button>
       <button id="help-toggle" type="button">?</button>
       <button id="reset" type="button" title="Put every device back to how it started (R)" hidden>Reset</button>

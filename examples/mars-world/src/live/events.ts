@@ -9,7 +9,7 @@ import { every, type World } from './world.js'
 
 /**
  * What can happen to Agnes Base on its own: each event's parameters and their ranges (numbers as
- * [min, max], choices as a list), whether it is severe, and a sentence a director reads.
+ * [min, max], choices as a list), whether it is severe, and what it does.
  */
 export const CATALOG = {
   dust_storm: {
@@ -66,7 +66,7 @@ export interface Happening {
   kind: EventKind
   headline: Headline
   params: Params
-  /** Who started it: the director (seeded or a model) or a person on the page. */
+  /** Who started it: a person on the page or the seeded director. */
   by: string
   /** performance.now() when it started, and when it ends (undefined: when it is dealt with). */
   start: number
@@ -147,6 +147,13 @@ export class Events {
     this.log(`event ${kind} by ${by}: ${headline.en} ${JSON.stringify(params)}`)
     for (const listen of this.listeners) listen(h, 'start')
     return h
+  }
+
+  /** Ends an event now, for a person on the page: a leaking suit is mended, a storm drops. */
+  end(h: Happening): void {
+    if (h.kind === 'suit_leak') this.world.suitLeak = false
+    else h.end = performance.now()
+    this.tick()
   }
 
   /** Seconds an event has left, or undefined when it lasts until it is dealt with. */

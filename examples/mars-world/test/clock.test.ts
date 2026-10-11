@@ -41,4 +41,17 @@ describe('the sun', () => {
     expect(sunAt(START_HOURS.morning).elevation).toBeCloseTo(24, 0)
     expect(sunAt(START_HOURS.sunset).elevation).toBeCloseTo(3.5, 0)
   })
+
+  it('skips on to an hour, into the next sol when it has passed, and goes back on reset', () => {
+    const clock = new MarsClock(START_HOURS.noon, 40)
+    const now = performance.now()
+    clock.reset()
+    clock.skipTo(START_HOURS.night, now)
+    expect(clock.hour(now)).toBeCloseTo(22, 5)
+    clock.skipTo(START_HOURS.morning, now)
+    expect(clock.hour(now)).toBeCloseTo(7.6, 5)
+    expect(clock.sol(now)).toBe(2)
+    clock.reset()
+    expect(clock.sol()).toBe(1)
+  })
 })

@@ -305,6 +305,14 @@ export class WorldDevice extends Device {
   }
 }
 
+/** Trouble a person can bring about from the controls panel; the device it touches reports it. */
+export interface Condition {
+  device: string
+  en: string
+  zh: string
+  apply(): void
+}
+
 /** What the live devices share: the scene, its truth, and the state that ties devices together. */
 export class World {
   /** The rover reports these; the lab reads them before it unloads. */
@@ -332,6 +340,8 @@ export class World {
   dustPanels: ((percent: number) => void) | undefined
   /** Set by the lab: takes a sample handed to it and queues it for analysis. */
   labReceive: ((sample: string) => void) | undefined
+  /** Conditions the devices offer the controls panel. */
+  readonly conditions: Condition[] = []
   /** The weather station reports these; the hopper reads them before it flies. */
   weather = { wind: 6, dust: 0.6, storm: 'none' as 'none' | 'watch' | 'warning' }
   /** What each device does on Reset: back to how it started, its state reported at once. */

@@ -47,7 +47,8 @@ const TEXT = {
     dmSaw: 'What happened',
     dmDeciding: (n: number) => `choosing among ${n} actions…`,
     dmChose: (n: number, s: string) => `chose among ${n} actions in ${s} s`,
-    dmConfidence: 'Confidence',
+    dmConfidence: 'Sure',
+    dmModelConfidence: (n: number) => `clef confidence ${n}%`,
     dmActing: 'doing it…',
     dmHanding: 'handing it to the LLM…',
     dmNothing: 'do nothing',
@@ -159,7 +160,8 @@ const TEXT = {
     dmSaw: '发生了什么',
     dmDeciding: (n: number) => `正在 ${n} 个动作里选…`,
     dmChose: (n: number, s: string) => `${s} 秒内从 ${n} 个动作里选出`,
-    dmConfidence: '置信度',
+    dmConfidence: '把握',
+    dmModelConfidence: (n: number) => `clef 置信度 ${n}%`,
     dmActing: '执行中…',
     dmHanding: '正在交给 LLM…',
     dmNothing: '不动',
@@ -728,13 +730,18 @@ export function buildOverlay(options: {
         d.stage === 'deciding' ? t().dmDeciding(d.options) : t().dmChose(d.options, (d.ms / 1000).toFixed(1)),
       ),
     )
-    if (d.confidence !== undefined) {
+    // How sure it is of its choice: the chosen action's probability, with the model's own confidence
+    // (computed over all the options, so it runs low among dozens) beside it.
+    const sure = d.top[0]?.[1]
+    if (sure !== undefined) {
       const gauge = el('div', 'confidence')
       const track = el('span', 'track')
       const fill = el('i')
-      fill.style.width = `${Math.round(d.confidence * 100)}%`
+      fill.style.width = `${Math.round(sure * 100)}%`
       track.append(fill)
-      gauge.append(el('span', '', t().dmConfidence), track, el('b', '', `${Math.round(d.confidence * 100)}%`))
+      gauge.append(el('span', '', t().dmConfidence), track, el('b', '', `${Math.round(sure * 100)}%`))
+      if (d.confidence !== undefined)
+        gauge.append(el('span', 'model', t().dmModelConfidence(Math.round(d.confidence * 100))))
       card.append(gauge)
     }
     d.top.forEach(([option, p], i) => {

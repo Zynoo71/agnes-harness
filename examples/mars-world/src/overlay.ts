@@ -51,6 +51,7 @@ const TEXT = {
     dmModelConfidence: (n: number, model: string) => `${model} confidence ${n}%`,
     dmAskLlm: 'hand it to the LLM',
     dmUnsure: (n: number) => `unsure ${n}%`,
+    dmHands: 'hands it over',
     dmEarlier: 'Earlier',
     nowBtn: 'Start one now',
     startBtn: 'Start',
@@ -162,6 +163,7 @@ const TEXT = {
     dmModelConfidence: (n: number, model: string) => `${model} 置信度 ${n}%`,
     dmAskLlm: '交给 LLM',
     dmUnsure: (n: number) => `没把握 ${n}%`,
+    dmHands: '转交',
     dmEarlier: '之前',
     nowBtn: '马上来一个',
     startBtn: '触发',
@@ -785,7 +787,13 @@ export function buildOverlay(options: {
     const state = el('span', 'state')
     state.innerHTML = BOLT
     state.append(
-      ` DM ${d.outcome === 'error' ? t().dmOutcome.error : t().dmUnsure(Math.round(d.sure * 100))} → `,
+      ` DM ${
+        d.outcome === 'error'
+          ? t().dmOutcome.error
+          : d.choice === 'ask_llm'
+            ? t().dmHands
+            : t().dmUnsure(Math.round(d.sure * 100))
+      } → `,
       el('b', 'to', 'LLM'),
     )
     push(

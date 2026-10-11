@@ -66,6 +66,14 @@ The world changes on its own, so an agent has something to notice and handle. Al
 - **On their own.** `?events=auto` starts one every 5–8 real minutes (the first after 2.5–4), picked from a seed (`?seed=` makes the picks repeat): one severe event at a time, three minutes between severe events. `?events=off` hides the controls, for evaluations that must run the same each time.
 - Scripts reach them in the page as `window.mars.events` (`start(kind, params, headline, by)`, `active`, `past`) and `window.mars.director` (`next()`, `start(kind, params)`).
 
+## Two modes: LLM, and DM + LLM
+
+The button in the bar switches who acts on what the devices report by themselves (alerts, an enum state that changed with no job running, such as `storm_warning`); the page remembers it, and `?dm=on` or `?dm=off` sets it for one load.
+
+- **LLM**: nothing happens until someone asks in Agnes, or the LLM set a watch.
+- **DM + LLM**: a decision model (DM), Cloudflare Workers AI's `@cf/cloudflare/clef`, answers within a second. The page joins AgnesHub as the agent `DM` and asks one Choice question: the scene (`src/dm/scene.ts`), what just happened, the triggering device's state now and what the DM did in the last ten minutes, against every fixed action the devices allow (`src/dm/options.ts`: each combination of enum and boolean parameters, writable enum fields, ids from earlier results such as a survey's `targets`), with `nothing` first and `ask_llm` last. It takes the top option: an action is called at once (its tags and the activity list say `← DM`) and it asks again, up to three actions; `ask_llm` wakes the Agnes conversation that last used a device (`hub/brief`). Its decisions show in a panel at the bottom right. `?dm=dry` decides without acting.
+- The dev server keeps the key: with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the environment or in `examples/mars-world/.env` (git-ignored), it answers `POST /dm` and passes it to clef. Without them the button is greyed out.
+
 ## Live devices
 
 All the devices speak MHS from the page and drive their part of the scene (`src/live/`). `?devices=hopper-01,rover-01` connects only the listed ones, for example to run `python -m agnes_mhs.check` against one device.

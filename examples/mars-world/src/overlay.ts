@@ -1,4 +1,5 @@
 import type { MarsClock } from './clock.js'
+import type { Decision } from './dm/dm.js'
 import type { Director } from './live/director.js'
 import { CATALOG, type EventKind, type Happening } from './live/events.js'
 import { type Activity, type Alert, type Mail, type World, type WorldDevice, watchers } from './live/world.js'
@@ -38,6 +39,11 @@ const TEXT = {
     eventsHead: 'Events',
     timeHead: 'Skip to',
     conditionsHead: 'Conditions',
+    dmTitle: 'DM · decision model',
+    dmMode: 'Who acts on what devices report: the LLM only, or the decision model (DM) first',
+    dmNoKey: 'Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN for the dev server to use the DM',
+    dmEmpty: 'Waiting for something a device reports by itself.',
+    dmOutcome: { did: 'did', nothing: 'no action', llm: '→ LLM', error: 'error' } as Record<string, string>,
     nowBtn: 'Start one now',
     startBtn: 'Start',
     endBtn: 'End',
@@ -136,6 +142,11 @@ const TEXT = {
     eventsHead: '事件',
     timeHead: '跳到',
     conditionsHead: '状况',
+    dmTitle: 'DM · 决策模型',
+    dmMode: '设备报出来的事由谁处理：只有 LLM，或决策模型（DM）先处理',
+    dmNoKey: '给 dev server 设 CLOUDFLARE_ACCOUNT_ID 和 CLOUDFLARE_API_TOKEN 后才能用 DM',
+    dmEmpty: '等设备自己报出来的事。',
+    dmOutcome: { did: '执行', nothing: '不动', llm: '→ LLM', error: '出错' } as Record<string, string>,
     nowBtn: '马上来一个',
     startBtn: '触发',
     endBtn: '结束',
@@ -299,6 +310,8 @@ export function buildOverlay(options: {
   eventsMode: 'auto' | 'manual' | 'off'
   lang: Lang
   showHelp: boolean
+  /** The mode switch: the DM's decisions while it is on; `ready` once POST /dm can answer. */
+  dm?: { ready(): boolean; on(): boolean; set(on: boolean): void; decisions(): Decision[] }
 }): {
   stats(text: string): void
   toggleEvents(): void
@@ -328,7 +341,12 @@ export function buildOverlay(options: {
     lang: document.getElementById('lang') as HTMLButtonElement,
     help: document.getElementById('help-toggle') as HTMLButtonElement,
     reset: document.getElementById('reset') as HTMLButtonElement,
+    dm: document.getElementById('dm-toggle') as HTMLButtonElement,
   }
+  const dmPanel = document.getElementById('dm-panel') as HTMLElement
+  const dm = options.dm
+  buttons.dm.hidden = !dm
+  buttons.dm.addEventListener('click', () => dm?.set(!dm.on()))
   buttons.events.hidden = !live || options.eventsMode === 'off'
 
   // The tags: a line under the name for the call a device runs, with a progress bar.
@@ -645,6 +663,7 @@ export function buildOverlay(options: {
     buttons.help.textContent = '?'
     buttons.help.title = t().help
     buttons.reset.textContent = t().reset
+    drawDm(true)
     panelHead.textContent = t().controls
     nowButton.textContent = t().nowBtn
     eventsHead.textContent = t().eventsHead
@@ -673,7 +692,51 @@ export function buildOverlay(options: {
     drawMail()
   }
 
+  // The DM panel: its latest decisions, each with the three likeliest options; a hand-over to the
+  // LLM also gets a banner.
+  let dmShown: Decision | undefined
+  const drawDm = (force = false) => {
+    if (!dm) return
+    const on = dm.on()
+    buttons.dm.textContent = on ? 'DM + LLM' : 'LLM'
+    buttons.dm.classList.toggle('on', on)
+    buttons.dm.disabled = !dm.ready()
+    buttons.dm.title = dm.ready() ? t().dmMode : t().dmNoKey
+    dmPanel.hidden = !on
+    const list = dm.decisions()
+    if (!on || (!force && list[0] === dmShown)) return
+    const fresh = list[0] !== dmShown
+    dmShown = list[0]
+    if (fresh && dmShown?.outcome === 'llm') {
+      const trigger = dmShown.trigger.join(' · ')
+      banner('dm-llm', 'info', () => `DM → LLM: ${trigger}`)
+    }
+    const rows = list.slice(0, 6).map((d) => {
+      const row = el('div', `decision ${d.outcome}`)
+      const head = el('div', 'what')
+      head.append(
+        el('span', 'trigger', d.trigger.join(' · ')),
+        el('span', 'outcome', `${t().dmOutcome[d.outcome]} · ${(d.ms / 1000).toFixed(1)} s`),
+      )
+      row.append(head)
+      for (const [option, p] of d.top) {
+        const bar = el('div', 'option')
+        const fill = el('i')
+        fill.style.width = `${Math.round(p * 100)}%`
+        bar.append(el('span', '', option), el('b', '', p.toFixed(2)), fill)
+        row.append(bar)
+      }
+      if (d.outcome !== 'nothing') row.append(el('div', 'detail', d.detail))
+      return row
+    })
+    dmPanel.replaceChildren(
+      el('div', 'head', t().dmTitle),
+      ...(rows.length ? rows : [el('div', 'empty', t().dmEmpty)]),
+    )
+  }
+
   const refresh = () => {
+    drawDm()
     const now = performance.now()
     const hour = clock.hour(now)
     const part = hour < 6 || hour >= 19 ? t().night : hour < 9 ? t().morning : hour < 17 ? t().day : t().dusk

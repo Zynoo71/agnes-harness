@@ -382,13 +382,6 @@ if (live) {
   // Scripts (an evaluation, a test) reach the events and the director here: mars.director.next().
   Object.assign(window, { mars: { events: live.world.events, director: live.director, world: live.world } })
 }
-// The decision model of the DM + LLM mode (?dm=on; ?dm=dry decides without acting).
-const dmParam = params.get('dm')
-const dm = hub && dmParam ? new DM(hub, SCENE, dmParam !== 'dry', (line) => console.log(line)) : undefined
-if (dm) {
-  dm.start()
-  Object.assign(window, { dm })
-}
 // What is drawn over the scene: the bar along the bottom, the activity list, banners, the controls
 // panel and the About card, in English or Chinese (?lang=zh, or the button; the page remembers).
 const stored = (key: string) => {
@@ -398,6 +391,26 @@ const stored = (key: string) => {
     return null
   }
 }
+// The decision model of the DM + LLM mode, switched in the bar and remembered; ?dm=on|off sets
+// it for this load, and ?dm=dry decides without acting.
+const dmParam = params.get('dm')
+let dm: DM | undefined
+let dmReady = false
+let dmOn = dmParam ? dmParam !== 'off' : stored('mars-dm') === 'on'
+const setDm = (on: boolean) => {
+  dmOn = on
+  dm?.stop()
+  dm = hub && on && dmReady ? new DM(hub, SCENE, dmParam !== 'dry', (line) => console.log(line)) : undefined
+  dm?.start()
+  Object.assign(window, { dm })
+}
+if (hub)
+  void fetch('dm')
+    .then((r) => {
+      dmReady = r.ok
+      setDm(dmOn)
+    })
+    .catch(() => undefined)
 const eventsMode = (params.get('events') ?? 'manual') as 'auto' | 'manual' | 'off'
 const overlay = buildOverlay({
   clock,
@@ -407,6 +420,21 @@ const overlay = buildOverlay({
   lang: (params.get('lang') ?? stored('mars-lang') ?? 'en') === 'zh' ? 'zh' : ('en' as Lang),
   // The About card opens by itself the first time the page is visited.
   showHelp: !params.has('shot') && !stored('mars-seen'),
+  ...(hub
+    ? {
+        dm: {
+          ready: () => dmReady,
+          on: () => dmOn && dmReady,
+          set: (on: boolean) => {
+            setDm(on)
+            try {
+              localStorage.setItem('mars-dm', on ? 'on' : 'off')
+            } catch {}
+          },
+          decisions: () => dm?.decisions ?? [],
+        },
+      }
+    : {}),
 })
 try {
   localStorage.setItem('mars-seen', '1')

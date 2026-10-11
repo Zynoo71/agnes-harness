@@ -26,7 +26,7 @@ export interface Moment {
 }
 
 export interface Choice {
-  /** The chosen option: an action's id, `nothing` or `ask_llm`. */
+  /** The chosen option: an action's id or `ask_llm`. */
   choice: string
   /** The action to take, when the choice is one. */
   action?: Action

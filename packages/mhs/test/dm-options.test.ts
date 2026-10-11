@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ASK_LLM, buildOptions, type DeviceEntry, idsIn, NOTHING } from '../server/dm-options.js'
+import { ASK_LLM, buildOptions, type DeviceEntry, idsIn } from '../server/dm-options.js'
 
 const rover: DeviceEntry = {
   id: 'rover-01',
@@ -46,13 +46,12 @@ const rover: DeviceEntry = {
 }
 
 describe('decision model options', () => {
-  it('spells out fixed actions, leaves free ones to the LLM, and puts nothing first and ask_llm last', () => {
+  it('spells out fixed actions, leaves free ones to the LLM, and puts ask_llm last', () => {
     const { criteria, actions } = buildOptions(
       [rover, { ...rover, id: 'off-01', available: false }],
       new Map(),
     )
     expect(Object.keys(criteria)).toEqual([
-      NOTHING,
       'rover-01 drive_to place=dock',
       'rover-01 drive_to place=lab',
       'rover-01 land',

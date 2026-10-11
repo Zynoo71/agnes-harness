@@ -15,8 +15,8 @@ export interface Decision {
   /** Whether a wake-up from AgnesHub (what devices reported) started the step. */
   woken: boolean
   choice: string
-  /** did: the step was the action; nothing: the turn ended; llm: the LLM took the step; error: the model could not decide, so the LLM took it. */
-  outcome: 'did' | 'nothing' | 'llm' | 'error'
+  /** did: the step was the action; llm: the LLM took the step; error: the model could not decide, so the LLM took it. */
+  outcome: 'did' | 'llm' | 'error'
   error?: string
   /** The likeliest options with their probabilities, most likely first. */
   top: [string, number][]

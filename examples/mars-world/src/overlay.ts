@@ -42,7 +42,6 @@ const TEXT = {
     dmTitle: 'DM · decision model',
     dmOutcome: {
       did: 'did it',
-      nothing: 'no action, turn ended',
       llm: 'the LLM takes this step',
       error: 'could not decide; the LLM takes this step',
     } as Record<string, string>,
@@ -50,7 +49,6 @@ const TEXT = {
     dmChose: (n: number, s: string) => `chose among ${n} actions in ${s} s`,
     dmConfidence: 'Sure',
     dmModelConfidence: (n: number) => `clef confidence ${n}%`,
-    dmNothing: 'do nothing',
     dmAskLlm: 'hand it to the LLM',
     dmEarlier: 'Earlier',
     nowBtn: 'Start one now',
@@ -154,7 +152,6 @@ const TEXT = {
     dmTitle: 'DM · 决策模型',
     dmOutcome: {
       did: '已执行',
-      nothing: '不动，本轮结束',
       llm: '这一步交给 LLM',
       error: '没能决定，这一步交给 LLM',
     } as Record<string, string>,
@@ -162,7 +159,6 @@ const TEXT = {
     dmChose: (n: number, s: string) => `${s} 秒内从 ${n} 个动作里选出`,
     dmConfidence: '把握',
     dmModelConfidence: (n: number) => `clef 置信度 ${n}%`,
-    dmNothing: '不动',
     dmAskLlm: '交给 LLM',
     dmEarlier: '之前',
     nowBtn: '马上来一个',
@@ -712,8 +708,7 @@ export function buildOverlay(options: {
   // each. Something a device reported that the DM hands to the LLM also gets a banner.
   let dmVersion = -1
   let dmBanner: Decision | undefined
-  const optionName = (option: string) =>
-    option === 'nothing' ? t().dmNothing : option === 'ask_llm' ? t().dmAskLlm : option
+  const optionName = (option: string) => (option === 'ask_llm' ? t().dmAskLlm : option)
   const dmCard = (d: Decision) => {
     const card = el('div', `card ${d.outcome}`)
     card.append(el('div', 'label', t().dmSaw))

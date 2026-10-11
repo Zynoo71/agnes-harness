@@ -9,7 +9,6 @@
 import { createHash } from 'node:crypto'
 import type { InferenceEvent, RequestBody } from '@agnes/protocol'
 import type { DecisionModel, Moment } from '../server/dm.js'
-import { NOTHING } from '../server/dm-options.js'
 
 type Message = RequestBody['messages'][number]
 
@@ -44,8 +43,8 @@ export interface Decision {
   conversation: string
   /** What the step answered: tool results or a wake-up. */
   happened: string
-  /** did: the step is the action; nothing: the turn ends; llm: the LLM takes the step. */
-  outcome: 'did' | 'nothing' | 'llm'
+  /** did: the step is the action; llm: the LLM takes the step. */
+  outcome: 'did' | 'llm'
   choice: string
   device?: string
   top: [string, number][]
@@ -111,7 +110,8 @@ export function dmOperation(link: () => DmLink | undefined) {
       const how = `sure ${Math.round(p * 100)}% among ${picked.options}, ${(picked.ms / 1000).toFixed(1)} s`
       const action = picked.action
       // Nothing to do after a wake-up ends the turn; within a task the LLM decides when it is done.
-      const outcome = action ? 'did' : picked.choice === NOTHING && moment.woken ? 'nothing' : 'llm'
+      // Only the LLM judges that nothing needs doing; the DM only acts or hands over.
+      const outcome = action ? 'did' : 'llm'
       dm.log(`DM ${picked.choice} (${how}) for ${conversation}`)
       dm.report({
         conversation: conversation,
@@ -140,7 +140,6 @@ export function dmOperation(link: () => DmLink | undefined) {
         return step(request, parser, call)
       }
       streak.delete(conversation)
-      if (outcome === 'nothing') return step(request, parser)
       return ctx.next()
     },
   }
@@ -148,10 +147,8 @@ export function dmOperation(link: () => DmLink | undefined) {
 
 /**
  * The step the DM may take, read from the request: the results of a device action, to carry the
- * task on, or a wake-up from AgnesHub. Undefined
- * when the person spoke last or the LLM was reading devices: then the LLM is making its plan.
- * `woken` is true only for a turn a wake-up started; a wake-up within a task leaves the end of the
- * task to the LLM.
+ * task on, or a wake-up from AgnesHub. Undefined when the person spoke last or the LLM was reading
+ * devices: then the LLM is making its plan. `woken` is true only for a turn a wake-up started.
  */
 export function momentOf(messages: Message[]): (Moment & { woken: boolean }) | undefined {
   const results: string[] = []
@@ -195,7 +192,7 @@ const isWake = (text: string) => text.includes('[AgnesHub]')
 async function* step(
   request: RequestBody,
   parserVersion: string,
-  call?: { name: string; args: Record<string, unknown> },
+  call: { name: string; args: Record<string, unknown> },
 ): AsyncIterable<InferenceEvent> {
   yield {
     type: 'sent',
@@ -210,21 +207,18 @@ async function* step(
       transforms: [{ event: 'sent_hash', ext: 'unreported' }],
     },
   }
-  // A step without a call ends the turn, and an empty one would read as a failed answer.
-  if (!call) yield { type: 'text_delta', delta: 'Nothing to do.' }
-  if (call)
-    yield {
-      type: 'toolcall_end',
-      call: { toolUseId: '', name: call.name, args: call.args as never, ordinal: 0 },
-      via: 'native',
-    }
+  yield {
+    type: 'toolcall_end',
+    call: { toolUseId: '', name: call.name, args: call.args as never, ordinal: 0 },
+    via: 'native',
+  }
   yield {
     type: 'usage',
     tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     credits: 0,
     creditSource: 'estimated',
   }
-  yield { type: 'done', reason: call ? 'toolUse' : 'stop' }
+  yield { type: 'done', reason: 'toolUse' }
 }
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')

@@ -142,7 +142,7 @@ export const presets = {
 }
 
 const DEFAULT_SCENE =
-  'You are the duty decision maker for the devices connected to AgnesHub. You act alone only when one fixed action from the list is clearly right; anything else goes to the LLM operator (ask_llm). If nothing needs doing, choose nothing.'
+  'You are the duty decision maker for the devices connected to AgnesHub. You act alone only when one fixed action from the list is clearly right; anything else goes to the LLM operator (ask_llm).'
 
 /** The decision model of the loaded hub, for the Operation the host builds at assembly. */
 let dmLink: DmLink | undefined
@@ -192,9 +192,7 @@ export const hub = {
                 ? `DM could not decide: ${d.error}`
                 : d.outcome === 'did'
                   ? `DM chose ${d.choice}.`
-                  : d.outcome === 'nothing'
-                    ? 'DM chose to do nothing.'
-                    : 'DM handed the step to the LLM.',
+                  : 'DM handed the step to the LLM.',
             data: { ...d },
           }),
         log,

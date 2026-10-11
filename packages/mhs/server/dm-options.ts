@@ -43,7 +43,6 @@ export interface Candidate {
 /** What choosing an option does: a hub/call, or a hub/set. */
 export type Action = { device: string; tool: string; args: Json } | { device: string; values: Json }
 
-export const NOTHING = 'nothing'
 export const ASK_LLM = 'ask_llm'
 
 export interface Options {
@@ -55,15 +54,13 @@ export interface Options {
 const firstSentence = (text: string) => text.split('. ')[0]?.replace(/\.$/, '') ?? text
 
 /**
- * `nothing` first (a decision model leans to the first options), then for each available device
+ * For each available device
  * every combination of its tools' enum and boolean parameters without a default, then its
  * writable enum fields, and `ask_llm` last. A parameter named like a run-time candidate takes the
  * candidates' values; a tool with another required free parameter (text, a number) is the LLM's.
  */
 export function buildOptions(devices: DeviceEntry[], candidates: Map<string, Candidate[]>): Options {
-  const criteria: Record<string, string> = {
-    [NOTHING]: 'do nothing now; everything is in hand or it needs no action',
-  }
+  const criteria: Record<string, string> = {}
   const actions = new Map<string, Action>()
   const add = (id: string, description: string, action: Action) => {
     criteria[id] = description
@@ -115,7 +112,7 @@ export function buildOptions(devices: DeviceEntry[], candidates: Map<string, Can
     }
   }
   criteria[ASK_LLM] =
-    'hand it to the LLM operator: talk to the astronaut, write a report, pick coordinates, judge a picture, or plan several steps'
+    'hand it to the LLM operator: judge that nothing needs doing, talk to the astronaut, write a report, pick coordinates, judge a picture, or plan several steps'
   return { criteria, actions }
 }
 

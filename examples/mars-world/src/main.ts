@@ -10,8 +10,7 @@ import { buildBase, GROUND_CONTACTS, LAYOUT } from './base.js'
 import { MarsClock, SOL_MINUTES, START_HOURS, type TimeOfDay } from './clock.js'
 import { DETAIL_AREAS } from './details.js'
 import { buildDevices, DEVICES, MONOLITH } from './devices.js'
-import { DM } from './dm/dm.js'
-import { SCENE } from './dm/scene.js'
+import { DmWatch } from './dm/watch.js'
 import { buildDust } from './dust.js'
 import { buildEffects } from './effects.js'
 import type { EventKind, Headline } from './live/events.js'
@@ -391,26 +390,10 @@ const stored = (key: string) => {
     return null
   }
 }
-// The decision model of the DM + LLM mode, switched in the bar and remembered; ?dm=on|off sets
-// it for this load, and ?dm=dry decides without acting.
-const dmParam = params.get('dm')
-let dm: DM | undefined
-let dmReady = false
-let dmOn = dmParam ? dmParam !== 'off' : stored('mars-dm') === 'on'
-const setDm = (on: boolean) => {
-  dmOn = on
-  dm?.stop()
-  dm = hub && on && dmReady ? new DM(hub, SCENE, dmParam !== 'dry', (line) => console.log(line)) : undefined
-  dm?.start()
-  Object.assign(window, { dm })
-}
-if (hub)
-  void fetch('dm')
-    .then((r) => {
-      dmReady = r.ok
-      setDm(dmOn)
-    })
-    .catch(() => undefined)
+// The DM's decisions, for the DM panel: the DM itself works in Agnes's loop, switched per
+// conversation in Agnes.
+const dmWatch = hub ? new DmWatch(hub) : undefined
+dmWatch?.start()
 const eventsMode = (params.get('events') ?? 'manual') as 'auto' | 'manual' | 'off'
 const overlay = buildOverlay({
   clock,
@@ -420,22 +403,7 @@ const overlay = buildOverlay({
   lang: (params.get('lang') ?? stored('mars-lang') ?? 'en') === 'zh' ? 'zh' : ('en' as Lang),
   // The About card opens by itself the first time the page is visited.
   showHelp: !params.has('shot') && !stored('mars-seen'),
-  ...(hub
-    ? {
-        dm: {
-          ready: () => dmReady,
-          on: () => dmOn && dmReady,
-          set: (on: boolean) => {
-            setDm(on)
-            try {
-              localStorage.setItem('mars-dm', on ? 'on' : 'off')
-            } catch {}
-          },
-          decisions: () => dm?.decisions ?? [],
-          version: () => (dm?.version ?? 0) + (dm ? 0 : -1),
-        },
-      }
-    : {}),
+  ...(dmWatch ? { dm: { decisions: () => dmWatch.decisions, version: () => dmWatch.version } } : {}),
 })
 try {
   localStorage.setItem('mars-seen', '1')

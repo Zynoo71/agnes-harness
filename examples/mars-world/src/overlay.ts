@@ -1,5 +1,5 @@
 import type { MarsClock } from './clock.js'
-import type { Decision } from './dm/dm.js'
+import type { Decision } from './dm/watch.js'
 import type { Director } from './live/director.js'
 import { CATALOG, type EventKind, type Happening } from './live/events.js'
 import { type Activity, type Alert, type Mail, type World, type WorldDevice, watchers } from './live/world.js'
@@ -40,17 +40,14 @@ const TEXT = {
     timeHead: 'Skip to',
     conditionsHead: 'Conditions',
     dmTitle: 'DM · decision model',
-    dmMode: 'Who acts on what devices report: the LLM only, or the decision model (DM) first',
-    dmNoKey: 'Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN for the dev server to use the DM',
-    dmEmpty: 'Waiting for something a device reports by itself.',
-    dmOutcome: { did: 'did', nothing: 'no action', llm: '→ LLM', error: 'error' } as Record<string, string>,
+    dmOutcome: { did: 'did it', nothing: 'no action, turn ended', llm: 'the LLM takes this step' } as Record<
+      string,
+      string
+    >,
     dmSaw: 'What happened',
-    dmDeciding: (n: number) => `choosing among ${n} actions…`,
     dmChose: (n: number, s: string) => `chose among ${n} actions in ${s} s`,
     dmConfidence: 'Sure',
     dmModelConfidence: (n: number) => `clef confidence ${n}%`,
-    dmActing: 'doing it…',
-    dmHanding: 'handing it to the LLM…',
     dmNothing: 'do nothing',
     dmAskLlm: 'hand it to the LLM',
     dmEarlier: 'Earlier',
@@ -153,17 +150,11 @@ const TEXT = {
     timeHead: '跳到',
     conditionsHead: '状况',
     dmTitle: 'DM · 决策模型',
-    dmMode: '设备报出来的事由谁处理：只有 LLM，或决策模型（DM）先处理',
-    dmNoKey: '给 dev server 设 CLOUDFLARE_ACCOUNT_ID 和 CLOUDFLARE_API_TOKEN 后才能用 DM',
-    dmEmpty: '等设备自己报出来的事。',
-    dmOutcome: { did: '执行', nothing: '不动', llm: '→ LLM', error: '出错' } as Record<string, string>,
+    dmOutcome: { did: '已执行', nothing: '不动，本轮结束', llm: '这一步交给 LLM' } as Record<string, string>,
     dmSaw: '发生了什么',
-    dmDeciding: (n: number) => `正在 ${n} 个动作里选…`,
     dmChose: (n: number, s: string) => `${s} 秒内从 ${n} 个动作里选出`,
     dmConfidence: '把握',
     dmModelConfidence: (n: number) => `clef 置信度 ${n}%`,
-    dmActing: '执行中…',
-    dmHanding: '正在交给 LLM…',
     dmNothing: '不动',
     dmAskLlm: '交给 LLM',
     dmEarlier: '之前',
@@ -330,8 +321,8 @@ export function buildOverlay(options: {
   eventsMode: 'auto' | 'manual' | 'off'
   lang: Lang
   showHelp: boolean
-  /** The mode switch: the DM's decisions while it is on; `ready` once POST /dm can answer. */
-  dm?: { ready(): boolean; on(): boolean; set(on: boolean): void; decisions(): Decision[]; version(): number }
+  /** The DM's decisions from AgnesHub, newest first; the panel shows once there is one. */
+  dm?: { decisions(): Decision[]; version(): number }
 }): {
   stats(text: string): void
   toggleEvents(): void
@@ -361,12 +352,9 @@ export function buildOverlay(options: {
     lang: document.getElementById('lang') as HTMLButtonElement,
     help: document.getElementById('help-toggle') as HTMLButtonElement,
     reset: document.getElementById('reset') as HTMLButtonElement,
-    dm: document.getElementById('dm-toggle') as HTMLButtonElement,
   }
   const dmPanel = document.getElementById('dm-panel') as HTMLElement
   const dm = options.dm
-  buttons.dm.hidden = !dm
-  buttons.dm.addEventListener('click', () => dm?.set(!dm.on()))
   buttons.events.hidden = !live || options.eventsMode === 'off'
 
   // The tags: a line under the name for the call a device runs, with a progress bar.
@@ -712,24 +700,18 @@ export function buildOverlay(options: {
     drawMail()
   }
 
-  // The DM panel: the latest decision as it goes (what happened, the likeliest actions with their
+  // The DM panel: the latest decision (what happened, the likeliest actions with their
   // probabilities, the choice and its confidence, what came of it), then the earlier ones in a line
-  // each. A hand-over to the LLM also gets a banner.
+  // each. Something a device reported that the DM hands to the LLM also gets a banner.
   let dmVersion = -1
   let dmBanner: Decision | undefined
   const optionName = (option: string) =>
     option === 'nothing' ? t().dmNothing : option === 'ask_llm' ? t().dmAskLlm : option
   const dmCard = (d: Decision) => {
-    const card = el('div', `card ${d.stage} ${d.outcome ?? ''}`)
+    const card = el('div', `card ${d.outcome}`)
     card.append(el('div', 'label', t().dmSaw))
     for (const line of d.trigger) card.append(el('div', 'trigger', line))
-    card.append(
-      el(
-        'div',
-        'status',
-        d.stage === 'deciding' ? t().dmDeciding(d.options) : t().dmChose(d.options, (d.ms / 1000).toFixed(1)),
-      ),
-    )
+    card.append(el('div', 'status', t().dmChose(d.options, (d.ms / 1000).toFixed(1))))
     // How sure it is of its choice: the chosen action's probability, with the model's own confidence
     // (computed over all the options, so it runs low among dozens) beside it.
     const sure = d.top[0]?.[1]
@@ -745,56 +727,41 @@ export function buildOverlay(options: {
       card.append(gauge)
     }
     d.top.forEach(([option, p], i) => {
-      const chosen = i === 0 && d.stage !== 'deciding'
-      const row = el('div', `option${chosen ? ' chosen' : ''}`)
+      const row = el('div', `option${i === 0 ? ' chosen' : ''}`)
       const fill = el('i')
       fill.style.width = `${Math.max(1, Math.round(p * 100))}%`
       row.append(
-        el('span', 'mark', chosen ? (d.stage === 'acting' ? '▶' : '✓') : ''),
+        el('span', 'mark', i === 0 ? '✓' : ''),
         el('span', 'name', optionName(option)),
         el('b', '', `${Math.round(p * 100)}%`),
         fill,
       )
       card.append(row)
     })
-    if (d.stage === 'acting')
-      card.append(el('div', 'result', d.top[0]?.[0] === 'ask_llm' ? t().dmHanding : t().dmActing))
-    if (d.stage === 'done' && d.outcome !== 'nothing')
-      card.append(el('div', 'result', `${t().dmOutcome[d.outcome ?? 'error']}: ${d.detail}`))
+    card.append(el('div', 'result', t().dmOutcome[d.outcome] ?? ''))
     return card
   }
   const drawDm = (force = false) => {
     if (!dm) return
-    const on = dm.on()
-    buttons.dm.textContent = on ? 'DM + LLM' : 'LLM'
-    buttons.dm.classList.toggle('on', on)
-    buttons.dm.disabled = !dm.ready()
-    buttons.dm.title = dm.ready() ? t().dmMode : t().dmNoKey
-    dmPanel.hidden = !on
-    if (!on || (!force && dm.version() === dmVersion)) return
-    dmVersion = dm.version()
     const [current, ...earlier] = dm.decisions()
-    if (current?.outcome === 'llm' && dmBanner !== current) {
+    dmPanel.hidden = !current
+    if (!current || (!force && dm.version() === dmVersion)) return
+    dmVersion = dm.version()
+    if (current.woken && current.outcome === 'llm' && dmBanner !== current) {
       dmBanner = current
       const trigger = current.trigger.join(' · ')
       banner('dm-llm', 'info', () => `DM → LLM: ${trigger}`)
     }
     const head = el('div', 'head')
     head.append(el('span', '', t().dmTitle), el('span', 'model', 'clef'))
-    const parts: HTMLElement[] = [head]
-    if (!current) parts.push(el('div', 'empty', t().dmEmpty))
-    else parts.push(dmCard(current))
+    const parts: HTMLElement[] = [head, dmCard(current)]
     if (earlier.length) parts.push(el('div', 'section', t().dmEarlier))
     for (const d of earlier.slice(0, 5)) {
       const [choice, p] = d.top[0] ?? ['', 0]
-      const row = el('div', `past ${d.outcome ?? ''}`)
+      const row = el('div', `past ${d.outcome}`)
       row.append(
         el('span', 'trigger', d.trigger.join(' · ')),
-        el(
-          'span',
-          'choice',
-          d.outcome === 'error' ? t().dmOutcome.error : `${optionName(choice)} ${Math.round(p * 100)}%`,
-        ),
+        el('span', 'choice', `${optionName(choice)} ${Math.round(p * 100)}%`),
       )
       parts.push(row)
     }

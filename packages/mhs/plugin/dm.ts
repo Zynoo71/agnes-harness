@@ -16,6 +16,8 @@ type Message = RequestBody['messages'][number]
 const ACTIONS = ['call_device', 'set_device']
 /** At most this many DM steps in a row; then the LLM looks again. */
 const MAX_DM_STEPS = 3
+/** An action the DM is less sure of than this goes to the LLM: in tests such picks were mostly wrong. */
+const MIN_SURE = 0.2
 
 /** The parts of core's replacement context this Operation reads. */
 export interface InferenceContext {
@@ -108,13 +110,12 @@ export function dmOperation(link: () => DmLink | undefined) {
       }
       const [, p] = picked.top[0] as [string, number]
       const how = `sure ${Math.round(p * 100)}% among ${picked.options}, ${(picked.ms / 1000).toFixed(1)} s`
-      const action = picked.action
-      // Nothing to do after a wake-up ends the turn; within a task the LLM decides when it is done.
-      // Only the LLM judges that nothing needs doing; the DM only acts or hands over.
+      // Only the LLM judges that nothing needs doing; the DM only acts, when sure enough, or hands over.
+      const action = p >= MIN_SURE ? picked.action : undefined
       const outcome = action ? 'did' : 'llm'
       dm.log(`DM ${picked.choice} (${how}) for ${conversation}`)
       dm.report({
-        conversation: conversation,
+        conversation,
         happened: moment.happened,
         choice: picked.choice,
         outcome,

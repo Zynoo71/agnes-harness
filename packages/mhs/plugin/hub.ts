@@ -184,15 +184,17 @@ export const hub = {
         on,
         report: (d) =>
           north.publish({
-            ...(d.device ? { device: d.device } : {}),
+            ...('device' in d && d.device ? { device: d.device } : {}),
             type: 'dm',
             level: 'info',
             text:
-              d.outcome === 'did'
-                ? `DM chose ${d.choice}.`
-                : d.outcome === 'nothing'
-                  ? 'DM chose to do nothing.'
-                  : 'DM handed the step to the LLM.',
+              d.outcome === 'error'
+                ? `DM could not decide: ${d.error}`
+                : d.outcome === 'did'
+                  ? `DM chose ${d.choice}.`
+                  : d.outcome === 'nothing'
+                    ? 'DM chose to do nothing.'
+                    : 'DM handed the step to the LLM.',
             data: { ...d },
           }),
         log,

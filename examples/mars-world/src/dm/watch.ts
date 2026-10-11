@@ -15,8 +15,9 @@ export interface Decision {
   /** Whether a wake-up from AgnesHub (what devices reported) started the step. */
   woken: boolean
   choice: string
-  /** did: the step was the action; nothing: the turn ended; llm: the LLM took the step. */
-  outcome: 'did' | 'nothing' | 'llm'
+  /** did: the step was the action; nothing: the turn ended; llm: the LLM took the step; error: the model could not decide, so the LLM took it. */
+  outcome: 'did' | 'nothing' | 'llm' | 'error'
+  error?: string
   /** The likeliest options with their probabilities, most likely first. */
   top: [string, number][]
   /** How many options it chose among. */
@@ -71,12 +72,13 @@ export class DmWatch {
         .split('\n')
         .filter(Boolean)
         .slice(0, 4),
-      choice: String(d.choice),
+      choice: String(d.choice ?? ''),
       outcome: d.outcome as Decision['outcome'],
       top: (d.top as [string, number][]) ?? [],
-      options: Number(d.options),
+      options: Number(d.options ?? 0),
       confidence: typeof d.confidence === 'number' ? d.confidence : undefined,
-      ms: Number(d.ms),
+      ms: Number(d.ms ?? 0),
+      ...(typeof d.error === 'string' ? { error: d.error } : {}),
     })
     this.decisions.splice(KEEP)
     this.version++

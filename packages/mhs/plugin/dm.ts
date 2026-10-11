@@ -35,7 +35,7 @@ export interface DmLink {
   /** Whether the DM may take steps in this conversation. */
   on(conversation: string): boolean
   /** Tells pages of a decision, as a `dm` hub event. */
-  report(decision: Decision): void
+  report(decision: Decision | DecisionError): void
   log(line: string): void
 }
 
@@ -44,14 +44,22 @@ export interface Decision {
   conversation: string
   /** What the step answered: tool results or a wake-up. */
   happened: string
-  choice: string
   /** did: the step is the action; nothing: the turn ends; llm: the LLM takes the step. */
   outcome: 'did' | 'nothing' | 'llm'
+  choice: string
   device?: string
   top: [string, number][]
   options: number
   confidence: number | undefined
   ms: number
+}
+
+/** The model could not decide; the LLM takes the step. */
+export interface DecisionError {
+  conversation: string
+  happened: string
+  outcome: 'error'
+  error: string
 }
 
 /** What a DM step's card shows; never in the conversation, where the LLM would copy it. */
@@ -94,7 +102,9 @@ export function dmOperation(link: () => DmLink | undefined) {
       try {
         picked = await dm.model.decide(conversation, moment)
       } catch (e) {
-        dm.log(`DM could not decide: ${(e as Error).message}`)
+        const error = (e as Error).message
+        dm.log(`DM could not decide: ${error}`)
+        dm.report({ conversation, happened: moment.happened, outcome: 'error', error })
         return llm()
       }
       const [, p] = picked.top[0] as [string, number]

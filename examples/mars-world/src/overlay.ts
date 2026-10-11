@@ -40,10 +40,12 @@ const TEXT = {
     timeHead: 'Skip to',
     conditionsHead: 'Conditions',
     dmTitle: 'DM · decision model',
-    dmOutcome: { did: 'did it', nothing: 'no action, turn ended', llm: 'the LLM takes this step' } as Record<
-      string,
-      string
-    >,
+    dmOutcome: {
+      did: 'did it',
+      nothing: 'no action, turn ended',
+      llm: 'the LLM takes this step',
+      error: 'could not decide; the LLM takes this step',
+    } as Record<string, string>,
     dmSaw: 'What happened',
     dmChose: (n: number, s: string) => `chose among ${n} actions in ${s} s`,
     dmConfidence: 'Sure',
@@ -150,7 +152,12 @@ const TEXT = {
     timeHead: '跳到',
     conditionsHead: '状况',
     dmTitle: 'DM · 决策模型',
-    dmOutcome: { did: '已执行', nothing: '不动，本轮结束', llm: '这一步交给 LLM' } as Record<string, string>,
+    dmOutcome: {
+      did: '已执行',
+      nothing: '不动，本轮结束',
+      llm: '这一步交给 LLM',
+      error: '没能决定，这一步交给 LLM',
+    } as Record<string, string>,
     dmSaw: '发生了什么',
     dmChose: (n: number, s: string) => `${s} 秒内从 ${n} 个动作里选出`,
     dmConfidence: '把握',
@@ -711,7 +718,8 @@ export function buildOverlay(options: {
     const card = el('div', `card ${d.outcome}`)
     card.append(el('div', 'label', t().dmSaw))
     for (const line of d.trigger) card.append(el('div', 'trigger', line))
-    card.append(el('div', 'status', t().dmChose(d.options, (d.ms / 1000).toFixed(1))))
+    if (d.outcome !== 'error')
+      card.append(el('div', 'status', t().dmChose(d.options, (d.ms / 1000).toFixed(1))))
     // How sure it is of its choice: the chosen action's probability, with the model's own confidence
     // (computed over all the options, so it runs low among dozens) beside it.
     const sure = d.top[0]?.[1]
@@ -738,7 +746,7 @@ export function buildOverlay(options: {
       )
       card.append(row)
     })
-    card.append(el('div', 'result', t().dmOutcome[d.outcome] ?? ''))
+    card.append(el('div', 'result', `${t().dmOutcome[d.outcome] ?? ''}${d.error ? `: ${d.error}` : ''}`))
     return card
   }
   const drawDm = (force = false) => {

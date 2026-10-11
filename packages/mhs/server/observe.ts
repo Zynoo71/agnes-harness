@@ -80,6 +80,11 @@ export class Observer {
     return changed
   }
 
+  /** Forgets a device's source alert levels: a new Nerve channel starts with no values. */
+  forget(device: string): void {
+    for (const key of [...this.levels.keys()]) if (key.startsWith(`${device}/`)) this.levels.delete(key)
+  }
+
   private onPose(device: string, data: Record<string, unknown>, time: number): void {
     const pose: PoseItem = {
       time,
@@ -119,7 +124,8 @@ export class Observer {
       const fields = (source as { fields?: Record<string, Field> }).fields ?? {}
       const latest = this.south.latest(info.id, source.id)?.msg.data as Record<string, unknown> | undefined
       for (const [name, field] of Object.entries(fields)) {
-        const level = this.levels.get(`${info.id}/${source.id}/${name}`)
+        // Levels count only for values on the current Nerve channel.
+        const level = latest && name in latest ? this.levels.get(`${info.id}/${source.id}/${name}`) : undefined
         if (level && level !== 'ok') out.push({ name, field, value: latest?.[name], level })
       }
     }

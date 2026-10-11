@@ -284,6 +284,7 @@ export class North extends EventEmitter {
     this.wss.on('connection', (ws) => this.accept(ws))
     south.on('online', (info: DeviceInfo) => {
       this.known.set(info.id, info)
+      this.observer.forget(info.id)
       if (this.maps.declare(info.description.maps ?? []))
         this.broadcast('hub/world', { worlds: this.worlds() })
       for (const key of [...this.applied.keys()]) if (key.startsWith(`${info.id}/`)) this.applied.delete(key)

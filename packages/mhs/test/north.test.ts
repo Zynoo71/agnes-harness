@@ -518,6 +518,19 @@ describe('health and position (N3)', () => {
     )
   })
 
+  it('forgets source alerts when the device comes back', async () => {
+    const client = await Client.open(base)
+    const first = await robot()
+    first.nerve.send(data('motors', 0, { temperature: 72 }))
+    await until(() => south.latest('robot-01', 'motors') !== undefined)
+    first.device.ws.close()
+    first.nerve.ws.close()
+    await until(() => south.devices().length === 0)
+    await robot()
+    const { result } = await client.request('hub/read', { device: 'robot-01' })
+    expect(result.health.reasons).toEqual(['battery 15 % (warn 20)'])
+  })
+
   it('judges position trust from ok, the error, odometry and age', async () => {
     const client = await Client.open(base)
     const { nerve } = await scout()

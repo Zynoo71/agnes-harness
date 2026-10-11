@@ -432,6 +432,7 @@ const overlay = buildOverlay({
             } catch {}
           },
           decisions: () => dm?.decisions ?? [],
+          version: () => (dm?.version ?? 0) + (dm ? 0 : -1),
         },
       }
     : {}),

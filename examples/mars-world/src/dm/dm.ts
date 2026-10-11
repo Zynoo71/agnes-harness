@@ -19,14 +19,21 @@ import {
 
 type Json = Record<string, unknown>
 
+/** One decision as it goes: asked, then acting on the choice, then done. Pages draw it live. */
 export interface Decision {
   time: number
   trigger: string[]
-  /** The three most likely options with their probabilities. */
+  stage: 'deciding' | 'acting' | 'done'
+  /** How many options it chose among. */
+  options: number
+  /** The likeliest options with their probabilities, most likely first. */
   top: [string, number][]
-  outcome: 'did' | 'nothing' | 'llm' | 'error'
+  /** The model's own certainty, from the probabilities. */
+  confidence: number | undefined
+  outcome: 'did' | 'nothing' | 'llm' | 'error' | undefined
   /** What came of it: the action's result, whether the LLM was woken, or the error. */
   detail: string
+  /** How long the model took to choose. */
   ms: number
 }
 
@@ -39,10 +46,13 @@ const MAX_ACTIONS = 3
 const DONE_MS = 600_000
 const KEEP_CANDIDATES = 12
 const KEEP_DECISIONS = 20
+/** Options a page shows per decision. */
+const SHOWN = 6
 
 export class DM {
   readonly decisions: Decision[] = []
-  onChange: () => void = () => undefined
+  /** Goes up whenever a decision changes, for pages that redraw. */
+  version = 0
   private ws: WebSocket | undefined
   private next = 0
   private readonly replies = new Map<string, (m: Json) => void>()
@@ -186,21 +196,31 @@ export class DM {
     const state = `${this.scene}\n\nWhat just happened:\n${lines.join('\n')}${this.nowText(lines)}${
       done.length ? `\n\nWhat you already did:\n${done.join('\n')}` : ''
     }`
-    const t = performance.now()
-    const record = (outcome: Decision['outcome'], top: [string, number][], detail: string) => {
-      this.decisions.unshift({
-        time: Date.now(),
-        trigger: lines,
-        top,
-        outcome,
-        detail,
-        ms: Math.round(performance.now() - t),
-      })
-      this.decisions.splice(KEEP_DECISIONS)
-      this.log(`DM ${outcome}: ${top.map(([k, p]) => `${k} ${p.toFixed(2)}`).join(' | ')} — ${detail}`)
-      this.onChange()
+    const d: Decision = {
+      time: Date.now(),
+      trigger: lines,
+      stage: 'deciding',
+      options: Object.keys(criteria).length,
+      top: [],
+      confidence: undefined,
+      outcome: undefined,
+      detail: '',
+      ms: 0,
     }
-    let top: [string, number][]
+    this.decisions.unshift(d)
+    this.decisions.splice(KEEP_DECISIONS)
+    this.version++
+    const end = (outcome: NonNullable<Decision['outcome']>, detail: string) => {
+      Object.assign(d, { stage: 'done', outcome, detail })
+      this.version++
+      this.log(
+        `DM ${outcome}: ${d.top
+          .slice(0, 3)
+          .map(([k, p]) => `${k} ${p.toFixed(2)}`)
+          .join(' | ')} — ${detail}`,
+      )
+    }
+    const t = performance.now()
     try {
       const res = await fetch('/dm', {
         method: 'POST',
@@ -213,43 +233,53 @@ export class DM {
         }),
       })
       const answer = (await res.json()) as {
-        answers?: { q?: { probabilities: Record<string, number> } }
+        answers?: { q?: { probabilities: Record<string, number>; confidence?: number } }
         error?: unknown
       }
-      const probabilities = answer.answers?.q?.probabilities
-      if (!probabilities) throw new Error(JSON.stringify(answer.error ?? answer).slice(0, 200))
-      top = Object.entries(probabilities)
+      const q = answer.answers?.q
+      if (!q?.probabilities) throw new Error(JSON.stringify(answer.error ?? answer).slice(0, 200))
+      d.top = Object.entries(q.probabilities)
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
+        .slice(0, SHOWN)
+      d.confidence = q.confidence
+      d.ms = Math.round(performance.now() - t)
     } catch (e) {
-      record('error', [], String(e))
+      d.ms = Math.round(performance.now() - t)
+      end('error', String(e))
       return false
     }
-    const [choice, p] = top[0] as [string, number]
-    const options = top.map(([k, q]) => `${k} ${q.toFixed(2)}`).join(', ')
+    const [choice, p] = d.top[0] as [string, number]
+    const options = d.top
+      .slice(0, 3)
+      .map(([k, q]) => `${k} ${q.toFixed(2)}`)
+      .join(', ')
     if (choice === NOTHING) {
-      record('nothing', top, 'nothing to do')
+      end('nothing', 'nothing to do')
       return false
     }
     if (choice === ASK_LLM) {
       if (!this.act) {
-        record('llm', top, 'would hand it to the LLM')
+        end('llm', 'would hand it to the LLM')
         return false
       }
+      d.stage = 'acting'
+      this.version++
       const { woken } = (await this.request('hub/brief', {
         text: `${lines.join(' ')} Handed to you (DM options: ${options}).`,
         wake: true,
       }).catch(() => ({ woken: false }))) as { woken: boolean }
-      record('llm', top, woken ? 'the LLM is woken' : 'no LLM conversation on duty')
+      end('llm', woken ? 'the LLM is woken' : 'no LLM conversation on duty')
       return false
     }
     const action = actions.get(choice) as Action
     if (!this.act) {
-      record('did', top, 'would do it (not acting)')
+      end('did', 'would do it (not acting)')
       return false
     }
+    d.stage = 'acting'
+    this.version++
     const result = await this.perform(action)
-    record('did', top, result)
+    end('did', result)
     void this.request('hub/brief', {
       text: `did ${choice} (${p.toFixed(2)}) after: ${lines.join(' ')} Result: ${result}`,
     }).catch(() => undefined)

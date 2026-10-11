@@ -44,6 +44,15 @@ const TEXT = {
     dmNoKey: 'Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN for the dev server to use the DM',
     dmEmpty: 'Waiting for something a device reports by itself.',
     dmOutcome: { did: 'did', nothing: 'no action', llm: '→ LLM', error: 'error' } as Record<string, string>,
+    dmSaw: 'What happened',
+    dmDeciding: (n: number) => `choosing among ${n} actions…`,
+    dmChose: (n: number, s: string) => `chose among ${n} actions in ${s} s`,
+    dmConfidence: 'Confidence',
+    dmActing: 'doing it…',
+    dmHanding: 'handing it to the LLM…',
+    dmNothing: 'do nothing',
+    dmAskLlm: 'hand it to the LLM',
+    dmEarlier: 'Earlier',
     nowBtn: 'Start one now',
     startBtn: 'Start',
     endBtn: 'End',
@@ -147,6 +156,15 @@ const TEXT = {
     dmNoKey: '给 dev server 设 CLOUDFLARE_ACCOUNT_ID 和 CLOUDFLARE_API_TOKEN 后才能用 DM',
     dmEmpty: '等设备自己报出来的事。',
     dmOutcome: { did: '执行', nothing: '不动', llm: '→ LLM', error: '出错' } as Record<string, string>,
+    dmSaw: '发生了什么',
+    dmDeciding: (n: number) => `正在 ${n} 个动作里选…`,
+    dmChose: (n: number, s: string) => `${s} 秒内从 ${n} 个动作里选出`,
+    dmConfidence: '置信度',
+    dmActing: '执行中…',
+    dmHanding: '正在交给 LLM…',
+    dmNothing: '不动',
+    dmAskLlm: '交给 LLM',
+    dmEarlier: '之前',
     nowBtn: '马上来一个',
     startBtn: '触发',
     endBtn: '结束',
@@ -311,7 +329,7 @@ export function buildOverlay(options: {
   lang: Lang
   showHelp: boolean
   /** The mode switch: the DM's decisions while it is on; `ready` once POST /dm can answer. */
-  dm?: { ready(): boolean; on(): boolean; set(on: boolean): void; decisions(): Decision[] }
+  dm?: { ready(): boolean; on(): boolean; set(on: boolean): void; decisions(): Decision[]; version(): number }
 }): {
   stats(text: string): void
   toggleEvents(): void
@@ -692,9 +710,52 @@ export function buildOverlay(options: {
     drawMail()
   }
 
-  // The DM panel: its latest decisions, each with the three likeliest options; a hand-over to the
-  // LLM also gets a banner.
-  let dmShown: Decision | undefined
+  // The DM panel: the latest decision as it goes (what happened, the likeliest actions with their
+  // probabilities, the choice and its confidence, what came of it), then the earlier ones in a line
+  // each. A hand-over to the LLM also gets a banner.
+  let dmVersion = -1
+  let dmBanner: Decision | undefined
+  const optionName = (option: string) =>
+    option === 'nothing' ? t().dmNothing : option === 'ask_llm' ? t().dmAskLlm : option
+  const dmCard = (d: Decision) => {
+    const card = el('div', `card ${d.stage} ${d.outcome ?? ''}`)
+    card.append(el('div', 'label', t().dmSaw))
+    for (const line of d.trigger) card.append(el('div', 'trigger', line))
+    card.append(
+      el(
+        'div',
+        'status',
+        d.stage === 'deciding' ? t().dmDeciding(d.options) : t().dmChose(d.options, (d.ms / 1000).toFixed(1)),
+      ),
+    )
+    if (d.confidence !== undefined) {
+      const gauge = el('div', 'confidence')
+      const track = el('span', 'track')
+      const fill = el('i')
+      fill.style.width = `${Math.round(d.confidence * 100)}%`
+      track.append(fill)
+      gauge.append(el('span', '', t().dmConfidence), track, el('b', '', `${Math.round(d.confidence * 100)}%`))
+      card.append(gauge)
+    }
+    d.top.forEach(([option, p], i) => {
+      const chosen = i === 0 && d.stage !== 'deciding'
+      const row = el('div', `option${chosen ? ' chosen' : ''}`)
+      const fill = el('i')
+      fill.style.width = `${Math.max(1, Math.round(p * 100))}%`
+      row.append(
+        el('span', 'mark', chosen ? (d.stage === 'acting' ? '▶' : '✓') : ''),
+        el('span', 'name', optionName(option)),
+        el('b', '', `${Math.round(p * 100)}%`),
+        fill,
+      )
+      card.append(row)
+    })
+    if (d.stage === 'acting')
+      card.append(el('div', 'result', d.top[0]?.[0] === 'ask_llm' ? t().dmHanding : t().dmActing))
+    if (d.stage === 'done' && d.outcome !== 'nothing')
+      card.append(el('div', 'result', `${t().dmOutcome[d.outcome ?? 'error']}: ${d.detail}`))
+    return card
+  }
   const drawDm = (force = false) => {
     if (!dm) return
     const on = dm.on()
@@ -703,36 +764,34 @@ export function buildOverlay(options: {
     buttons.dm.disabled = !dm.ready()
     buttons.dm.title = dm.ready() ? t().dmMode : t().dmNoKey
     dmPanel.hidden = !on
-    const list = dm.decisions()
-    if (!on || (!force && list[0] === dmShown)) return
-    const fresh = list[0] !== dmShown
-    dmShown = list[0]
-    if (fresh && dmShown?.outcome === 'llm') {
-      const trigger = dmShown.trigger.join(' · ')
+    if (!on || (!force && dm.version() === dmVersion)) return
+    dmVersion = dm.version()
+    const [current, ...earlier] = dm.decisions()
+    if (current?.outcome === 'llm' && dmBanner !== current) {
+      dmBanner = current
+      const trigger = current.trigger.join(' · ')
       banner('dm-llm', 'info', () => `DM → LLM: ${trigger}`)
     }
-    const rows = list.slice(0, 6).map((d) => {
-      const row = el('div', `decision ${d.outcome}`)
-      const head = el('div', 'what')
-      head.append(
+    const head = el('div', 'head')
+    head.append(el('span', '', t().dmTitle), el('span', 'model', 'clef'))
+    const parts: HTMLElement[] = [head]
+    if (!current) parts.push(el('div', 'empty', t().dmEmpty))
+    else parts.push(dmCard(current))
+    if (earlier.length) parts.push(el('div', 'section', t().dmEarlier))
+    for (const d of earlier.slice(0, 5)) {
+      const [choice, p] = d.top[0] ?? ['', 0]
+      const row = el('div', `past ${d.outcome ?? ''}`)
+      row.append(
         el('span', 'trigger', d.trigger.join(' · ')),
-        el('span', 'outcome', `${t().dmOutcome[d.outcome]} · ${(d.ms / 1000).toFixed(1)} s`),
+        el(
+          'span',
+          'choice',
+          d.outcome === 'error' ? t().dmOutcome.error : `${optionName(choice)} ${Math.round(p * 100)}%`,
+        ),
       )
-      row.append(head)
-      for (const [option, p] of d.top) {
-        const bar = el('div', 'option')
-        const fill = el('i')
-        fill.style.width = `${Math.round(p * 100)}%`
-        bar.append(el('span', '', option), el('b', '', p.toFixed(2)), fill)
-        row.append(bar)
-      }
-      if (d.outcome !== 'nothing') row.append(el('div', 'detail', d.detail))
-      return row
-    })
-    dmPanel.replaceChildren(
-      el('div', 'head', t().dmTitle),
-      ...(rows.length ? rows : [el('div', 'empty', t().dmEmpty)]),
-    )
+      parts.push(row)
+    }
+    dmPanel.replaceChildren(...parts)
   }
 
   const refresh = () => {

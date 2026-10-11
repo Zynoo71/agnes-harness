@@ -1,6 +1,6 @@
 import type { MapDecl } from '../gen/ts/mhs-v1.js'
 import { isZone } from './maps.js'
-import { type Caller, type DeviceEntry, deviceText, type HubEvent, type North } from './north.js'
+import { type Caller, type DeviceEntry, deviceText, fromNow, type HubEvent, type North } from './north.js'
 import { summaryText } from './summary.js'
 
 /**
@@ -18,6 +18,9 @@ export const WAKE_MERGE_MS = 1000
 export const CONTEXT_LIMIT = 6000
 /** The maps and their places take at most this share of it, so devices always fit too. */
 const MAPS_SHARE = 0.5
+/** Briefs that wake no one stay in the snapshot this long, at most this many (section 15.4). */
+const NOTES_S = 600
+const NOTES_KEPT = 10
 
 type Json = Record<string, unknown>
 
@@ -48,6 +51,10 @@ export class Brain {
   private readonly watchOwners = new Map<string, string>()
   private readonly queued = new Map<string, string[]>()
   private readonly timers = new Map<string, NodeJS.Timeout>()
+  /** Briefs that wake no one, newest last, for the snapshot (section 15.4). */
+  private readonly notes: { time: number; text: string }[] = []
+  /** The conversation on duty: the last one that used a device tool. */
+  onDuty?: string
 
   constructor(
     private readonly north: North,
@@ -55,6 +62,7 @@ export class Brain {
     private readonly timing = { callWaitMs: CALL_WAIT_MS, mergeMs: WAKE_MERGE_MS },
   ) {
     north.on('event', (event: HubEvent) => this.onEvent(event))
+    north.brief = (caller, text, wake) => this.brief(caller, text, wake)
   }
 
   /** list_devices */
@@ -258,14 +266,31 @@ export class Brain {
     }
   }
 
+  /**
+   * hub/brief from another agent (section 15.4): `wake` wakes the conversation on duty with the
+   * text; otherwise the text goes into the next snapshots. Returns whether a conversation is woken.
+   */
+  brief(caller: Caller, text: string, wake: boolean): boolean {
+    const line = `${caller.name}: ${text}`
+    if (wake) {
+      if (!this.onDuty) return false
+      this.wake(this.onDuty, line)
+      return true
+    }
+    this.notes.push({ time: Date.now() / 1000, text: line })
+    this.notes.splice(0, this.notes.length - NOTES_KEPT)
+    return false
+  }
+
   /** The snapshot added at the start of every turn (section 15.2): maps and places first, then devices. */
   context(): string {
     const devices = this.north.devices()
     const head =
       'You can use the devices connected to AgnesHub with the device tools (list_devices, read_device, call_device, set_device, stop_device, watch_device, unwatch_device). Call devices by the ids below; their own tools go in call_device, with the arguments read_device lists. To wait for something on a device (a state, a reading, a window opening), set watch_device and end your turn; you are woken with a message when it happens. Never wait with other tools.'
     const maps = mapsText(this.north.maps.list(), CONTEXT_LIMIT * MAPS_SHARE)
-    if (devices.length === 0) return `${head}${maps}\nNo devices are connected right now.`
-    let text = `${head}${maps}${maps ? '\nDevices:' : ''}`
+    const notes = this.notesText()
+    if (devices.length === 0) return `${head}${notes}${maps}\nNo devices are connected right now.`
+    let text = `${head}${notes}${maps}${maps ? '\nDevices:' : ''}`
     for (const d of devices) {
       const line = `\n${deviceLine(d, false, this.north.maps.zoneName(d.position))}`
       if (bytes(text) + bytes(line) > CONTEXT_LIMIT - 40) {
@@ -275,6 +300,14 @@ export class Brain {
       text += line
     }
     return text
+  }
+
+  /** "Other agents reported:" with the briefs of the last 10 minutes, or nothing. */
+  private notesText(): string {
+    const now = Date.now() / 1000
+    const recent = this.notes.filter((n) => now - n.time < NOTES_S)
+    if (recent.length === 0) return ''
+    return `\nOther agents reported:${recent.map((n) => `\n- ${fromNow(n.time - now)}, ${n.text}`).join('')}`
   }
 
   /** Which device a call means: required, unless exactly one device is online. */

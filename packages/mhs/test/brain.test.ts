@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { WebSocket } from 'ws'
 import { Device } from '../device/device.js'
 import { Brain, CONTEXT_LIMIT, capabilities, mapsText } from '../server/brain.js'
 import { North } from '../server/north.js'
 import { South } from '../server/south.js'
 import { summaryText } from '../server/summary.js'
-import { until } from './fakes.js'
+import { type Msg, until } from './fakes.js'
 
 let south: South
 let north: North
@@ -184,6 +185,32 @@ describe('brain tools', () => {
       'conv-w',
       '[AgnesHub] mover-01: battery < 20 (charge before the battery runs out).',
     ])
+  })
+
+  it('wakes the conversation on duty with a brief, and keeps the others for the snapshot', async () => {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/hub`)
+    await new Promise((resolve) => ws.once('open', resolve))
+    let n = 0
+    const request = (method: string, params: Record<string, unknown>) =>
+      new Promise<Msg>((resolve) => {
+        const id = `r${++n}`
+        ws.on('message', (data) => {
+          const m = JSON.parse(data.toString())
+          if (m.id === id) resolve(m)
+        })
+        ws.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }))
+      })
+    await request('hub/hello', { role: 'agent', client: { name: 'DM' } })
+    // No conversation has used a device yet: nobody to wake.
+    expect((await request('hub/brief', { text: 'battery low', wake: true })).result).toEqual({ woken: false })
+    brain.onDuty = 'conv-d'
+    expect((await request('hub/brief', { text: 'battery low', wake: true })).result).toEqual({ woken: true })
+    await until(() => woken.length === 1)
+    expect(woken[0]).toEqual(['conv-d', '[AgnesHub] DM: battery low'])
+    expect((await request('hub/brief', { text: 'did mover-01 plan' })).result).toEqual({ woken: false })
+    expect(brain.context()).toContain('\nOther agents reported:\n- now, DM: did mover-01 plan')
+    expect((await request('hub/brief', { text: ' ' })).error.code).toBe(-32602)
+    ws.close()
   })
 
   it('puts the maps with their places first in every turn, and says where each device is', async () => {

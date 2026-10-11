@@ -469,7 +469,8 @@ Seven fixed tools, named verb + `device`. A device's own tools are not registere
 
 At the start of every turn, Agnes adds a snapshot from AgnesHub's memory:
 
-- **Maps first** (section 4.4): each map's id, name and extent, and its places, a landmark as its point and facing, a zone as its centre and size, each with its description. The snapshot says how to use them: to send a device to a place, call the device's own tool with the place's coordinates. The maps take at most half of the snapshot; places that do not fit are counted.
+- **Briefs from other agents** (section 15.4), when there are any, right after the opening lines.
+- **Then the maps** (section 4.4): each map's id, name and extent, and its places, a landmark as its point and facing, a zone as its centre and size, each with its description. The snapshot says how to use them: to send a device to a place, call the device's own tool with the place's coordinates. The maps take at most half of the snapshot; places that do not fit are counted.
 - **Then the devices**: for each its id, name, kind, whether it is available, its health and position summaries (with the map it is on and the zone it is in, by the zone's name and id), what it is doing, and its tools.
 
 ```
@@ -499,6 +500,19 @@ It takes well under a millisecond and is capped at 6000 bytes, since Agnes share
 - **Pictures.** `read_device` declares `returnsImages` in its tool metadata. Agnes sends a tool's pictures to the model only when the tool declares this and its result is closed-world, as every device tool's is.
 - **Merged.** Events for one conversation within 1 s are sent as one message.
 - Device events are not written into the conversation record; pages get them from `/ws/hub`, the brain through the hook and the wake-ups.
+
+### 15.4 Briefs from other agents
+
+An `agent` client that acts on devices by itself (a fast decision model, say) tells the brain what it did, and hands it what it cannot do:
+
+```json
+→ {"jsonrpc": "2.0", "id": "60", "method": "hub/brief", "params": {"text": "suit-01: Attention: o2_left 22 % (warn 25). Handed to you: ask_llm 0.79", "wake": true}}
+← {"jsonrpc": "2.0", "id": "60", "result": {"woken": true}}
+```
+
+- **`wake: true`** wakes the **conversation on duty**, the last one that used a device tool, with `[AgnesHub] <caller name>: <text>`, the same way as the events of section 15.3. Without a conversation on duty nothing is woken (`woken: false`).
+- **Without `wake`** the text goes into the snapshot of section 15.2, under `Other agents reported:`, with how long ago: at most the last 10 briefs, for 10 minutes. The brain is not interrupted for each, and knows what happened when it next thinks.
+- Without a brain in the process, briefs go nowhere.
 
 ## 16. Security
 
@@ -543,3 +557,4 @@ When a deployment needs them:
 | `hub/configure` | client → hub | request | 10 |
 | `hub/event` | hub → client | notification | 11 |
 | `hub/watch`, `hub/unwatch` | client → hub | request | 12 |
+| `hub/brief` | client → hub | request | 15.4 |

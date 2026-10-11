@@ -272,6 +272,11 @@ export class North extends EventEmitter {
   private readonly lastManual = new Map<string, number>()
   /** Every map devices declared (MOS 3.5), kept after they go. */
   readonly maps: Maps
+  /**
+   * Takes a `hub/brief` (section 15.4): set by the brain; returns whether a conversation is woken.
+   * Without a brain, briefs go nowhere.
+   */
+  brief?: (caller: Caller, text: string, wake: boolean) => boolean
 
   constructor(
     private readonly south: South,
@@ -1355,6 +1360,10 @@ export class North extends EventEmitter {
         if (typeof params.device !== 'string' || !isObject(params.values))
           throw new HubError(-32602, 'device and values are required')
         return this.set(params.device, params.values)
+      case 'hub/brief':
+        if (typeof params.text !== 'string' || !params.text.trim())
+          throw new HubError(-32602, 'text is required')
+        return { woken: this.brief?.(client.caller, params.text.trim(), params.wake === true) ?? false }
       default:
         throw new HubError(-32601, `unknown method ${method}`)
     }

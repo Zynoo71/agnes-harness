@@ -188,6 +188,7 @@ export function registerBrainTools(agnes: Extension, brain: Brain): (() => void)
       parameters: tool.parameters,
       meta: tool.meta,
       async execute(args, call) {
+        brain.onDuty = call.session.key
         try {
           return await reply(await tool.run(args, call), call)
         } catch (e) {

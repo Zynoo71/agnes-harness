@@ -159,6 +159,7 @@ export interface Alert {
   field: string
   level: 'warn' | 'bad'
   value: number
+  unit: string
 }
 
 /** Hears every call as it starts, makes progress and ends, and every alert as it is raised or cleared. */
@@ -171,6 +172,7 @@ interface AlertLine {
   warn?: number
   bad?: number
   below?: boolean
+  unit?: string | undefined
 }
 
 /**
@@ -222,7 +224,10 @@ export class WorldDevice extends Device {
     this.lines = Object.fromEntries(
       Object.entries(options.state ?? {})
         .filter(([, f]) => (f as { alert?: unknown }).alert)
-        .map(([k, f]) => [k, (f as { alert: AlertLine }).alert]),
+        .map(([k, f]) => {
+          const { alert, unit } = f as { alert: AlertLine; unit?: string }
+          return [k, { ...alert, unit }]
+        }),
     )
   }
 
@@ -283,7 +288,7 @@ export class WorldDevice extends Device {
       const was = this.alerts.get(field)
       if (level === was?.level) continue
       if (level) {
-        const alert: Alert = { device: this.id, field, level, value }
+        const alert: Alert = { device: this.id, field, level, value, unit: line.unit ?? '' }
         this.alerts.set(field, alert)
         for (const w of watchers.alert) w(alert, true)
       } else if (was) {

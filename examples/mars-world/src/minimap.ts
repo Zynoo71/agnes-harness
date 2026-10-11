@@ -39,7 +39,11 @@ const at = (x: number, z: number) => ({ cx: (x - VIEW.x0) * SCALE, cy: (VIEW.y1 
  * buildings, boulders and steep ground, and every device where it is now, redrawn a few times a
  * second. `M` toggles it; ?minimap=0 hides it.
  */
-export function buildMinimap(anchors: Map<string, THREE.Object3D>, view: THREE.Camera): HTMLCanvasElement {
+export function buildMinimap(
+  anchors: Map<string, THREE.Object3D>,
+  view: THREE.Camera,
+  words: () => { title: string; axes: string },
+): HTMLCanvasElement {
   const dpr = Math.min(devicePixelRatio, 2)
   const canvas = document.createElement('canvas')
   canvas.width = W * dpr
@@ -64,6 +68,17 @@ export function buildMinimap(anchors: Map<string, THREE.Object3D>, view: THREE.C
     g.clearRect(0, 0, canvas.width, canvas.height)
     g.drawImage(background, 0, 0)
     g.setTransform(dpr, 0, 0, dpr, 0, 0)
+    // The frame: which way is north and east, in the map frame the poses use.
+    const { title, axes } = words()
+    g.fillStyle = TEXT
+    g.font = '600 10px ui-sans-serif, system-ui, sans-serif'
+    g.textAlign = 'right'
+    g.textBaseline = 'top'
+    g.fillText(title, W - 6, 5)
+    g.font = '9px ui-monospace, "SF Mono", Menlo, monospace'
+    g.fillStyle = MUTED
+    g.fillText(axes, W - 6, 18)
+    g.textAlign = 'left'
     // Where the view looks from, as a small wedge.
     view.getWorldPosition(p)
     const eye = at(p.x, p.z)
@@ -132,8 +147,8 @@ export function buildMinimap(anchors: Map<string, THREE.Object3D>, view: THREE.C
       g.fillText(label, sx + 2, sy + 0.5)
     }
   }
+  // The first draw comes with the first tick, once the page's words are set up.
   setInterval(draw, 250)
-  draw()
   addEventListener('keydown', (e) => {
     if (e.key === 'm') {
       canvas.hidden = !canvas.hidden
@@ -216,14 +231,5 @@ function drawBackground(dpr: number): HTMLCanvasElement {
       g.fillRect(cx, cy, f.w * SCALE, f.d * SCALE)
     }
   }
-  // The frame: which way is north and east, in the map frame the poses use.
-  g.fillStyle = TEXT
-  g.font = '600 10px ui-sans-serif, system-ui, sans-serif'
-  g.textAlign = 'right'
-  g.textBaseline = 'top'
-  g.fillText('base map · m', W - 6, 5)
-  g.font = '9px ui-monospace, "SF Mono", Menlo, monospace'
-  g.fillStyle = MUTED
-  g.fillText('x → east, y ↑ north', W - 6, 18)
   return canvas
 }

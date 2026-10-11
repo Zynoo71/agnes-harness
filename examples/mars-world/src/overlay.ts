@@ -59,6 +59,13 @@ const TEXT = {
       meteorite: 'A new unusual rock in the west field or the east dunes.',
     } as Record<EventKind, string>,
     names: {} as Record<string, string>,
+    fields: {} as Record<string, string>,
+    already: (kind: string) => `a ${kind.toLowerCase()} is already happening`,
+    notOnFoot: 'the astronaut is not out on foot',
+    auto: 'Auto',
+    map: { title: 'base map · m', axes: 'x → east, y ↑ north' },
+    views: {} as Record<string, string>,
+    quality: {} as Record<string, string>,
     close: 'Close',
     helpBody: `
 <h2>Agnes Base</h2>
@@ -146,6 +153,48 @@ const TEXT = {
       'comms-01': '通信天线',
       'cam-base': '基地相机',
     } as Record<string, string>,
+    fields: {
+      bank_temperature: '电池组温度',
+      battery: '电量',
+      battery_temperature: '电池温度',
+      body_temperature: '体温',
+      co2: 'CO₂',
+      cpu: 'CPU',
+      dust: '积灰',
+      electronics_temperature: '电子设备温度',
+      engine_temperature: '发动机温度',
+      heart_rate: '心率',
+      motor_temperature: '电机温度',
+      o2: '氧气',
+      o2_left: '剩余氧气',
+      pressure: '气压',
+      propellant: '推进剂',
+      spo2: '血氧',
+      storage: '存储',
+      strength: '信号强度',
+      tank_pressure: '储罐压力',
+      temperature: '温度',
+      wind: '风速',
+    } as Record<string, string>,
+    already: (kind: string) => `${kind}已经在进行`,
+    notOnFoot: '宇航员不在舱外步行',
+    auto: '自动',
+    map: { title: '基地地图 · 米', axes: 'x → 东，y ↑ 北' },
+    views: {
+      overview: '总览',
+      dock: '停靠站和实验室',
+      pad: '飞行器停机坪',
+      airlock: '气闸',
+      field: '野外作业点',
+      power: '电力',
+      flag: 'Agnes 旗帜',
+      comms: '通信和气象',
+      hopper: '跟随飞行器',
+      monolith: '跟随 Monolith',
+      rover: '跟随火星车',
+      suit: '跟随宇航员',
+    } as Record<string, string>,
+    quality: { balanced: '均衡', high: '高画质', low: '低画质' } as Record<string, string>,
     close: '关闭',
     helpBody: `
 <h2>Agnes 基地</h2>
@@ -200,10 +249,10 @@ interface Live {
   director: Director
 }
 
-/** A line of the activity list: a call, an alert or an event. */
+/** A line of the activity list: a call, an alert or an event, drawn again when the language changes. */
 interface Line {
   el: HTMLElement
-  at: number
+  draw(): void
 }
 
 /**
@@ -219,11 +268,20 @@ export function buildOverlay(options: {
   eventsMode: 'auto' | 'manual' | 'off'
   lang: Lang
   showHelp: boolean
-}): { stats(text: string): void; toggleEvents(): void; toggleHelp(): void; lang(): Lang } {
+}): {
+  stats(text: string): void
+  toggleEvents(): void
+  toggleHelp(): void
+  lang(): Lang
+  view(name: string, label: string, auto: boolean): string
+  quality(name: string): string
+  mapWords(): { title: string; axes: string }
+} {
   const { clock, live, tags } = options
   let lang: Lang = options.lang
   const t = () => TEXT[lang]
-  const name = (id: string, fallback: string) => t().names[id] ?? fallback
+  const name = (id: string, fallback = id) => t().names[id] ?? fallback
+  const fieldName = (field: string) => t().fields[field] ?? field.replaceAll('_', ' ')
 
   const brand = document.getElementById('brand') as HTMLElement
   const bar = document.getElementById('bar') as HTMLElement
@@ -255,45 +313,55 @@ export function buildOverlay(options: {
     return { ...tag, act, tool, who, fill, title: tag.el.querySelector('b') as HTMLElement }
   })
 
-  // The activity list: the latest six lines, the newest at the bottom.
+  // The activity list: the latest six lines, the newest at the bottom. Each line keeps the Mars time
+  // it was written at and draws its words in the language of the moment.
   const lines: Line[] = []
-  const lineFor = new Map<Activity, HTMLElement>()
-  const push = (line: HTMLElement) => {
-    feed.appendChild(line)
-    lines.push({ el: line, at: performance.now() })
-    while (lines.length > 6) lines.shift()?.el.remove()
-    lines.forEach((l, i) => {
-      l.el.style.opacity = String(0.45 + (0.55 * (i + 1)) / lines.length)
-    })
-  }
   const time = () =>
     clock
       .label()
       .replace(/^Sol \d+ · /, '')
       .replace(' LMST', '')
-  const row = (kind: string, ...parts: (string | HTMLElement)[]) => {
-    const line = el('div', `line ${kind}`)
-    line.append(
-      el('span', 'when', time()),
-      ...parts.map((p) => (typeof p === 'string' ? el('span', '', p) : p)),
-    )
-    return line
+  const push = (kind: () => string, parts: () => (string | HTMLElement)[]): (() => void) => {
+    const line = el('div')
+    const when = time()
+    const draw = () => {
+      line.className = `line ${kind()}`
+      line.replaceChildren(
+        el('span', 'when', when),
+        ...parts().map((p) => (typeof p === 'string' ? el('span', '', p) : p)),
+      )
+    }
+    draw()
+    feed.appendChild(line)
+    lines.push({ el: line, draw })
+    while (lines.length > 6) lines.shift()?.el.remove()
+    lines.forEach((l, i) => {
+      l.el.style.opacity = String(0.45 + (0.55 * (i + 1)) / lines.length)
+    })
+    return draw
   }
-  const callText = (a: Activity) => {
-    const end = a.status
+  const statusWord = (a: Activity) =>
+    a.status === 'error' ? t().error : a.status === 'rejected' ? t().rejected : t().interrupted
+  const callText = (a: Activity) =>
+    a.status
       ? a.status === 'done'
         ? `✓ ${t().done} · ${Math.round(((a.ended ?? 0) - a.started) / 1000)} s`
-        : `✗ ${a.status === 'error' ? t().error : a.status === 'rejected' ? t().rejected : t().interrupted} · ${a.reason}${a.status === 'rejected' ? `: ${a.detail}` : ''}`
+        : `✗ ${statusWord(a)} · ${a.reason}${a.status === 'rejected' ? `: ${a.detail}` : ''}`
       : a.progress?.text
         ? `… ${a.progress.text}`
         : '…'
-    return end
+  const callLine = (a: Activity) => {
+    const draw = push(
+      () => `call ${a.status ?? 'running'}`,
+      () => [
+        el('b', 'dev', name(a.device)),
+        el('span', 'tool', a.tool + (a.caller ? ` ← ${a.caller}` : '')),
+        el('span', 'state', callText(a)),
+      ],
+    )
+    return draw
   }
-  const drawCall = (line: HTMLElement, a: Activity) => {
-    line.className = `line call ${a.status ?? 'running'}`
-    ;(line.querySelector('.state') as HTMLElement).textContent = callText(a)
-    line.title = a.detail ?? ''
-  }
+  const lineFor = new Map<Activity, () => void>()
 
   // Banners along the top: severe events and alarms stay while they last, the rest a few seconds.
   const banner = (key: string, level: 'info' | 'warn' | 'bad', text: () => string, until?: () => boolean) => {
@@ -317,58 +385,48 @@ export function buildOverlay(options: {
 
   if (live) {
     watchers.activity.push((a) => {
-      let line = lineFor.get(a)
-      if (!line) {
-        line = row(
-          'call',
-          el('b', 'dev', a.device),
-          el('span', 'tool', a.tool + (a.caller ? ` ← ${a.caller}` : '')),
-          el('span', 'state', ''),
-        )
-        lineFor.set(a, line)
-        push(line)
-      }
-      drawCall(line, a)
+      const draw = lineFor.get(a)
+      if (draw) draw()
+      else lineFor.set(a, callLine(a))
       if (a.status) {
         lineFor.delete(a)
         if (a.status === 'error' || a.status === 'rejected')
           banner(
             `fail-${a.device}`,
             'bad',
-            () => `${a.device} ${a.tool}: ${a.reason} — ${(a.detail ?? '').slice(0, 90)}`,
+            () =>
+              `${name(a.device)} ${a.tool}: ${statusWord(a)} · ${a.reason} — ${(a.detail ?? '').slice(0, 90)}`,
           )
       }
     })
     watchers.alert.push((a: Alert, raised: boolean) => {
-      const word = raised ? (a.level === 'bad' ? t().alertBad : t().alertWarn) : t().cleared
       push(
-        row(
-          `alert ${raised ? a.level : 'ok'}`,
-          el('b', 'dev', a.device),
-          el('span', '', `${a.field} ${a.value}`),
-          el('span', 'state', word),
-        ),
+        () => `alert ${raised ? a.level : 'ok'}`,
+        () => [
+          el('b', 'dev', name(a.device)),
+          el('span', '', `${fieldName(a.field)} ${a.value}${a.unit ? ` ${a.unit}` : ''}`),
+          el('span', 'state', raised ? (a.level === 'bad' ? t().alertBad : t().alertWarn) : t().cleared),
+        ],
       )
       if (raised && a.level === 'bad') {
         const dev = live.devices.find((d) => d.id === a.device)
         banner(
           `alert-${a.device}-${a.field}`,
           'bad',
-          () => `${a.device} · ${a.field} ${t().alertBad}`,
+          () => `${name(a.device)} · ${fieldName(a.field)} ${t().alertBad}`,
           () => dev?.alerts.get(a.field)?.level !== 'bad',
         )
       }
     })
     live.world.events?.listeners.push((h: Happening, phase) => {
-      const kind = t().kinds[h.kind]
       // Short events (a meteorite's fall, a dust devil) just happen; storms and leaks also end.
       if (phase === 'start' || CATALOG[h.kind].severe)
         push(
-          row(
-            `event ${phase}`,
-            el('b', 'dev', kind),
+          () => `event ${phase}`,
+          () => [
+            el('b', 'dev', t().kinds[h.kind]),
             el('span', '', phase === 'start' ? h.headline[lang] : t().over),
-          ),
+          ],
         )
       if (phase === 'start') {
         const severe = CATALOG[h.kind].severe
@@ -406,7 +464,14 @@ export function buildOverlay(options: {
     go.type = 'button'
     go.addEventListener('click', () => {
       const why = live?.director.start(kind)
-      if (why) push(row('alert warn', el('b', 'dev', t().kinds[kind]), el('span', '', why)))
+      if (why)
+        push(
+          () => 'alert warn',
+          () => [
+            el('b', 'dev', t().kinds[kind]),
+            el('span', '', why.endsWith('already happening') ? t().already(t().kinds[kind]) : t().notOnFoot),
+          ],
+        )
     })
     item.append(text, go)
     panelList.appendChild(item)
@@ -443,6 +508,7 @@ export function buildOverlay(options: {
     helpBody.innerHTML = t().helpBody
     closeHelp.textContent = t().close
     for (const tag of tagParts) tag.title.textContent = name(tag.id, tag.name)
+    for (const line of lines) line.draw()
   }
 
   const refresh = () => {
@@ -553,5 +619,8 @@ export function buildOverlay(options: {
     toggleEvents,
     toggleHelp,
     lang: () => lang,
+    view: (shot, label, auto) => `${auto ? `${t().auto} · ` : ''}${t().views[shot] ?? label}`,
+    quality: (name) => t().quality[name] ?? name,
+    mapWords: () => t().map,
   }
 }

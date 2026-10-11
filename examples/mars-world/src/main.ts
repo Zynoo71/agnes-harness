@@ -12,7 +12,7 @@ import { DETAIL_AREAS } from './details.js'
 import { buildDevices, DEVICES, MONOLITH } from './devices.js'
 import { buildDust } from './dust.js'
 import { buildEffects } from './effects.js'
-import type { EventKind } from './live/events.js'
+import type { EventKind, Headline } from './live/events.js'
 import { connectDevices } from './live/index.js'
 import { watchers } from './live/world.js'
 import { buildMinimap } from './minimap.js'
@@ -187,9 +187,11 @@ composer.addPass(new OutputPass())
 // Fixed viewpoints: keys 1–9 and 0, or ?shot=<name>.
 let shot = applyShot(camera, params.get('shot') ?? 'overview')
 /** A view the auto camera set up for an event in one place (a meteorite), not one of SHOTS. */
-let eventView = ''
+let eventView: Headline = { en: '', zh: '' }
 const shotLabel = () =>
-  `${auto ? 'Auto · ' : ''}${shot === 'event' ? eventView : (SHOTS.find((s) => s.name === shot)?.label ?? '')}`
+  shot === 'event'
+    ? overlay.view(shot, eventView[overlay.lang()], auto)
+    : overlay.view(shot, SHOTS.find((s) => s.name === shot)?.label ?? '', auto)
 /** Whether the view follows what happens (A); a view picked by hand holds it off for a while. */
 let auto = false
 let autoHeldUntil = 0
@@ -211,7 +213,7 @@ speech.hidden = true
 tags.appendChild(speech)
 const mouth = new THREE.Vector3()
 // The minimap in the top-right corner; M toggles it.
-const minimap = buildMinimap(devices.anchors, camera)
+const minimap = buildMinimap(devices.anchors, camera, () => overlay.mapWords())
 minimap.hidden = params.get('minimap') === '0'
 document.body.appendChild(minimap)
 addEventListener('keydown', (e) => {
@@ -302,7 +304,6 @@ let lastT = 0
 let fpsFrames = 0
 let fpsSince = performance.now()
 const hint = () => shotLabel()
-status.textContent = hint()
 // ?stats adds the draw calls, triangles and JavaScript time of an average frame to the status line
 // (averaged, since every tenth frame also redraws the shadow map).
 const STATS = params.has('stats')
@@ -342,7 +343,7 @@ renderer.setAnimationLoop(() => {
     const stats = STATS
       ? ` · ${Math.round(draws / fpsFrames)} draws · ${(triangles / fpsFrames / 1e6).toFixed(1)} M tris · ${(cpu / fpsFrames).toFixed(1)} ms js/frame`
       : ''
-    status.textContent = `${hint()} · ${Math.round((fpsFrames * 1000) / (now - fpsSince))} fps (${QUALITY})${stats}`
+    status.textContent = `${hint()} · ${Math.round((fpsFrames * 1000) / (now - fpsSince))} fps (${overlay.quality(QUALITY)})${stats}`
     cpu = 0
     draws = 0
     triangles = 0
@@ -456,7 +457,7 @@ if (live) {
       camera.fov = 50
       camera.updateProjectionMatrix()
       shot = 'event'
-      eventView = h.headline.en
+      eventView = h.headline
       autoSince = now
       return
     }

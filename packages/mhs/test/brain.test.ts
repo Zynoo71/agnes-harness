@@ -251,6 +251,9 @@ describe('brain tools', () => {
     expect(summaryText(ok, p, 'Yard')).toBe(
       'Installed at (2, 3) facing 90° on map site, in zone Yard (yard).',
     )
+    // Results after the first description leave the place of an installed device out.
+    expect(summaryText(ok, p, 'Yard', false)).toBe('')
+    expect(summaryText({ level: 'bad', reasons: ['jammed'] }, p, 'Yard', false)).toBe('Bad: jammed.')
   })
 
   it('keeps the maps to their share of the snapshot', () => {

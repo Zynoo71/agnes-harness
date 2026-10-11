@@ -166,9 +166,10 @@ export function position(input: PositionInput): Position | undefined {
 
 /**
  * "Attention: battery 15 % (warn 20)." and "At (1.2, -3) facing 40° on map office, in zone Lab (lab),
- * 0.3 s old.", the zone by its name and id, or by its id alone when it has no other name.
+ * 0.3 s old.", the zone by its name and id, or by its id alone when it has no other name. An
+ * installed device's place, which never changes, is left out when `installed` is false.
  */
-export function summaryText(h: Health, p: Position | undefined, zoneName?: string): string {
+export function summaryText(h: Health, p: Position | undefined, zoneName?: string, installed = true): string {
   const parts: string[] = []
   if (h.level !== 'ok') parts.push(`${h.level === 'bad' ? 'Bad' : 'Attention'}: ${h.reasons.join('; ')}.`)
   if (p) {
@@ -177,8 +178,9 @@ export function summaryText(h: Health, p: Position | undefined, zoneName?: strin
       p.x === undefined || p.y === undefined
         ? ''
         : `(${round(p.x, 2)}, ${round(p.y, 2)}) facing ${Math.round(p.yaw ?? 0)}°${p.map ? ` on map ${p.map}` : ''}${zone ? `, in zone ${zone}` : ''}`
-    if (p.fixed) parts.push(`Installed at ${at}.`)
-    else if (p.trust === 'trusted') parts.push(`At ${at}, ${p.age} s old.`)
+    if (p.fixed) {
+      if (installed) parts.push(`Installed at ${at}.`)
+    } else if (p.trust === 'trusted') parts.push(`At ${at}, ${p.age} s old.`)
     else if (p.trust === 'uncertain') parts.push(`Position uncertain: ${at}, ${p.reason}.`)
     else
       parts.push(

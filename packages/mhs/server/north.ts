@@ -412,7 +412,11 @@ export class North extends EventEmitter {
       state: entry.state,
       health: entry.health,
       items,
-      text: [deviceText(entry, this.maps.zoneName(entry.position)), ...items.map((i) => i.text)].join(' '),
+      // A read for sources leaves out an installed device's place, given with the device already.
+      text: [
+        deviceText(entry, this.maps.zoneName(entry.position), wanted.length === 0),
+        ...items.map((i) => i.text),
+      ].join(' '),
     }
     if (entry.position) result.position = entry.position
     return result
@@ -1533,13 +1537,14 @@ function valuesText(
 
 /**
  * One or two sentences about a device for a model: availability, problem, faults and state, with
- * the name of the zone it is in when its map gives one.
+ * the name of the zone it is in when its map gives one. `installed` false leaves out an installed
+ * device's place, which never changes.
  */
-export function deviceText(entry: DeviceEntry, zoneName?: string): string {
+export function deviceText(entry: DeviceEntry, zoneName?: string, installed = true): string {
   const where = entry.available ? 'available' : entry.online ? 'connected but not available' : 'offline'
   const { fields, values } = entry.state
   const parts = [`${entry.id} is ${where}.`]
-  const summary = summaryText(entry.health, entry.position, zoneName)
+  const summary = summaryText(entry.health, entry.position, zoneName, installed)
   if (summary) parts.push(summary)
   const state = valuesText(values, fields)
   if (state) parts.push(`State: ${state}.`)

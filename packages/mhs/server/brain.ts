@@ -160,7 +160,11 @@ export class Brain {
       const now = this.north.devices().find((d) => d.id === device)
       const { job: _, device: __, tool: ___, text: ____, ...outcome } = waited
       return {
-        text: [String(waited.text), took, now ? deviceText(now, this.north.maps.zoneName(now.position)) : '']
+        text: [
+          String(waited.text),
+          took,
+          now ? deviceText(now, this.north.maps.zoneName(now.position), false) : '',
+        ]
           .filter(Boolean)
           .join(' '),
         ...(waited.status === 'done' ? {} : { isError: true }),

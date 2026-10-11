@@ -17,6 +17,9 @@
   --mhs-line-2: var(--agnes-line-primary, rgb(194 198 216 / 60%));
   --mhs-accent: var(--agnes-text-emphasis, #3248af);
   --mhs-on-accent: #ffffff;
+  /* The DM's colour: what it does is told apart from the LLM's (accent) everywhere. */
+  --mhs-dm: #0f8a7a;
+  --mhs-on-dm: #ffffff;
   --mhs-ok: var(--mhs-accent);
   --mhs-good: var(--agnes-status-success-text, #15803d);
   --mhs-warn: var(--agnes-status-warning-text, #805e21);
@@ -56,6 +59,8 @@
   --mhs-accent-wash: color-mix(in srgb, var(--mhs-accent) 8%, transparent);
   --mhs-accent-tint: color-mix(in srgb, var(--mhs-accent) 16%, transparent);
   --mhs-accent-line: color-mix(in srgb, var(--mhs-accent) 40%, transparent);
+  --mhs-dm-wash: color-mix(in srgb, var(--mhs-dm) 8%, transparent);
+  --mhs-dm-line: color-mix(in srgb, var(--mhs-dm) 50%, transparent);
   color: var(--mhs-text);
   font: 13px / 1.5 var(--mhs-font);
   -webkit-font-smoothing: antialiased;
@@ -86,6 +91,8 @@
   --mhs-line: var(--agnes-line-primary, #393f49);
   --mhs-line-2: var(--agnes-line-primary, #393f49);
   --mhs-accent: var(--agnes-text-emphasis, #6983fc);
+  --mhs-dm: #2fc6b0;
+  --mhs-on-dm: #0b1f1c;
   --mhs-good: var(--agnes-status-success-text, #4ade80);
   --mhs-warn: var(--agnes-status-warning-text, #ffb547);
   --mhs-bad: var(--agnes-status-danger-text, #ff5c5c);
@@ -2022,11 +2029,40 @@ body.mhs-dragging {
   background: var(--mhs-accent-wash);
   color: var(--mhs-accent);
 }
-.mhs-root .mhs-tcard-dm {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--mhs-accent-wash);
+.mhs-root .mhs-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border: 1px solid var(--mhs-accent-line);
+  border-radius: 4px;
   color: var(--mhs-accent);
-  font: 600 11px var(--mhs-mono, var(--mhs-font));
+  font: 700 10.5px var(--mhs-mono);
+  letter-spacing: 0.04em;
   white-space: nowrap;
+}
+.mhs-root .mhs-by .mhs-by-icon {
+  width: 12px;
+  height: 12px;
+}
+.mhs-root .mhs-by em {
+  font-style: normal;
+  font-weight: 500;
+  letter-spacing: 0;
+  opacity: 0.85;
+}
+.mhs-root .mhs-by[data-by="dm"] {
+  border-color: var(--mhs-dm);
+  background: var(--mhs-dm);
+  color: var(--mhs-on-dm);
+}
+.mhs-root .mhs-tcard[data-by="dm"] {
+  border-color: var(--mhs-dm-line);
+  background: var(--mhs-dm-wash);
+}
+.mhs-root .mhs-tcard[data-by="dm"]:not([data-tone="bad"])::before {
+  background: var(--mhs-dm);
+}
+.mhs-root .mhs-tcard[data-by="dm"][data-tone="busy"]::before {
+  box-shadow: 0 0 6px var(--mhs-dm);
 }

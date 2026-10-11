@@ -3,6 +3,7 @@ import {
   alertOf,
   argsText,
   brainCalls,
+  dmNoteOf,
   keyFields,
   keysOf,
   previewImage,
@@ -13,7 +14,7 @@ import {
   worldExtent,
   worldMaps,
 } from '../plugin/client/src/core/describe.js'
-import type { Device, Field, Manual, Source, Tool } from '../plugin/client/src/core/types.js'
+import type { Device, Field, HubEvent, Manual, Source, Tool } from '../plugin/client/src/core/types.js'
 import { en } from '../plugin/client/src/i18n/en.js'
 import { setLocale, t, valueText, word } from '../plugin/client/src/i18n/i18n.js'
 import { zhCN } from '../plugin/client/src/i18n/zh-CN.js'
@@ -182,6 +183,39 @@ describe('what a page shows, from declarations only', () => {
     expect(keys.get('i')).toEqual(['z', 1])
     expect(keys.get('arrowup')).toEqual(['vx', 1])
     expect([...keys.values()].some(([id]) => id === 'j1')).toBe(false)
+  })
+})
+
+describe('who made a call', () => {
+  const dm = (time: number, data: Record<string, unknown>): HubEvent => ({
+    id: `e${time}`,
+    time,
+    type: 'dm',
+    level: 'info',
+    text: '',
+    data: { conversation: 'c1', model: 'jev', options: 65, ms: 980, top: [['x', 0.78]], ...data },
+  })
+  const call = {
+    name: 'call_device',
+    args: { device: 'habitat-01', tool: 'set_mode', args: { mode: 'storm_shelter' } },
+  }
+
+  it("matches a call to the DM's decision whatever the order of its arguments", () => {
+    const events = [dm(100, { outcome: 'did', call })]
+    const args = { args: { mode: 'storm_shelter' }, tool: 'set_mode', device: 'habitat-01' }
+    expect(dmNoteOf(events, 'call_device', args, 'c1', 0)).toEqual({
+      model: 'jev',
+      sure: 0.78,
+      options: 65,
+      ms: 980,
+    })
+  })
+
+  it('leaves the LLM its calls: other calls, other conversations, hand-overs and old decisions', () => {
+    const events = [dm(100, { outcome: 'did', call }), dm(110, { outcome: 'llm' })]
+    expect(dmNoteOf(events, 'call_device', { ...call.args, tool: 'stow' }, 'c1', 0)).toBeUndefined()
+    expect(dmNoteOf(events, 'call_device', call.args, 'c2', 0)).toBeUndefined()
+    expect(dmNoteOf(events, 'call_device', call.args, 'c1', 105)).toBeUndefined()
   })
 })
 

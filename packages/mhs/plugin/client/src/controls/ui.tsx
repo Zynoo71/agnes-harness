@@ -256,6 +256,19 @@ export function KindIcon(props: { kind: string; icon?: string | undefined }) {
   )
 }
 
+/** Who made a call: a bolt for the DM, a speech bubble for the LLM. */
+export function ByIcon(props: { by: 'llm' | 'dm' }) {
+  return (
+    <svg className="mhs-icon mhs-by-icon" viewBox="0 0 16 16" aria-hidden="true">
+      {props.by === 'dm' ? (
+        <path d="M9.5 1.5L3.5 9h4l-1 5.5 6-7.5h-4z" fill="currentColor" stroke="none" />
+      ) : (
+        <path d="M2.5 3h11v7.5H7l-3.5 3v-3h-1z" />
+      )}
+    </svg>
+  )
+}
+
 export function Chevron(props: { dir: 'left' | 'right' | 'down' | 'up' }) {
   const d = { left: 'M10 3L5 8l5 5', right: 'M6 3l5 5-5 5', down: 'M3 6l5 5 5-5', up: 'M3 10l5-5 5 5' }
   return (

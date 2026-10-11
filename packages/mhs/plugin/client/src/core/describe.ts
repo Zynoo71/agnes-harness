@@ -3,7 +3,7 @@
  * numbers, readable arguments. Only the protocol is used; no device, tool or field name is special.
  */
 import { t } from '../i18n/i18n.js'
-import type { Device, Field, Json, Manual, Param, Source, Tool, World } from './types.js'
+import type { Device, DmNote, Field, HubEvent, Json, Manual, Param, Source, Tool, World } from './types.js'
 
 type Pt = [number, number]
 
@@ -285,4 +285,50 @@ export function brainCalls<T extends { kind?: string; name?: string }>(nodes: re
   return nodes
     .filter((n) => n.kind === 'tool' && (BRAIN_TOOLS as readonly string[]).includes(String(n.name)))
     .reverse()
+}
+
+/**
+ * The DM's note for a call it made, from the newest matching `dm` event (hub-api.md section 15.5)
+ * since `since` (hub time, seconds): how a page tells the DM's calls from the LLM's.
+ */
+export function dmNoteOf(
+  events: HubEvent[],
+  name: string,
+  args: unknown,
+  conversation: string | undefined,
+  since: number,
+): DmNote | undefined {
+  const key = callKey(name, args)
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i] as HubEvent
+    if (e.time < since) break
+    const d = e.data
+    if (e.type !== 'dm' || d.outcome !== 'did' || (conversation && d.conversation !== conversation)) continue
+    const call = d.call as { name?: string; args?: unknown } | undefined
+    if (!call || callKey(String(call.name), call.args) !== key) continue
+    const top = (d.top as [string, number][] | undefined)?.[0]
+    return {
+      model: String(d.model ?? ''),
+      sure: top?.[1] ?? 0,
+      options: Number(d.options ?? 0),
+      ms: Number(d.ms ?? 0),
+    }
+  }
+  return undefined
+}
+
+/** A call as the DM's `dm` event names it: the tool and its arguments in canonical JSON. */
+export function callKey(name: string, args: unknown): string {
+  return `${name} ${canonical(args)}`
+}
+
+function canonical(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`
+  const obj = value as Json
+  return `{${Object.keys(obj)
+    .sort()
+    .filter((k) => obj[k] !== undefined)
+    .map((k) => `${JSON.stringify(k)}:${canonical(obj[k])}`)
+    .join(',')}}`
 }

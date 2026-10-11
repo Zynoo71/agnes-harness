@@ -16,9 +16,10 @@ export const en = {
   'state.warn': 'Attention',
   'state.bad': 'Fault',
   'state.off': 'Offline',
-  'card.dm': 'DM · {sure}% · {s} s',
+  'card.dm': '{model} {sure}% · {s} s',
   'card.dm.title':
-    'The decision model (DM) took this step without the LLM: it chose this action among {options}, {sure}% sure, in {s} s.',
+    'The decision model (DM, {model}) took this step without the LLM: it chose this action among {options}, {sure}% sure, in {s} s.',
+  'card.llm.title': 'The LLM made this call.',
   'dm.mode.on': 'DM + LLM',
   'dm.mode.off': 'LLM',
   'dm.mode.title':

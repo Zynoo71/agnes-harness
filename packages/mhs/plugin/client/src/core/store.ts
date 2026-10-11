@@ -7,10 +7,13 @@
  * Subscriptions are reference-counted (section 6.3): the first component that wants a source
  * subscribes, the highest rate wins, and the last one to leave unsubscribes 2 s later.
  */
+import { dmNoteOf } from './describe.js'
 import { type Conn, HubClient } from './hub.js'
-import type { Device, HubEvent, Item, JobResult, Json, World } from './types.js'
+import type { Device, DmNote, HubEvent, Item, JobResult, Json, World } from './types.js'
 
 const EVENTS_KEPT = 200
+/** A call the DM made is matched to its `dm` event this long after it. */
+const DM_CALL_S = 120
 const HISTORY_KEPT = 120
 const RELEASE_MS = 2000
 
@@ -194,6 +197,14 @@ export class Store {
 
   traffic(): { at: number; devices: Record<string, Traffic> } {
     return this.trafficNow
+  }
+
+  /**
+   * The DM's note for a call it made, from its `dm` event: a call with no result yet is told apart
+   * from the LLM's by it. The newest matching decision of the last two minutes wins.
+   */
+  dmCall(name: string, args: Json, conversation?: string): DmNote | undefined {
+    return dmNoteOf(this.events, name, args, conversation, Date.now() / 1000 - DM_CALL_S)
   }
 
   brainPulses(): BrainPulse[] {

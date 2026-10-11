@@ -189,6 +189,17 @@ export interface Item {
   history?: { time: number; data: unknown }[]
 }
 
+/** Who made a device call: the LLM, or the DM in its stead (hub-api.md section 15.5). */
+export type By = 'llm' | 'dm'
+
+/** What a page shows of a call the DM made. */
+export interface DmNote {
+  model: string
+  sure: number
+  options: number
+  ms: number
+}
+
 export interface HubEvent {
   id: string
   time: number

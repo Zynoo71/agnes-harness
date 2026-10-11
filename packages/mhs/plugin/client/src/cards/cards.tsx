@@ -5,12 +5,22 @@
  * Nothing here knows a particular device or device tool.
  */
 import { createContext, type ReactNode, useContext, useEffect, useState } from 'react'
-import { Bar, KindIcon } from '../controls/ui.js'
+import { Bar, ByIcon, KindIcon } from '../controls/ui.js'
 import { argsText, BRAIN_TOOLS, displayName, keyFields, untilText } from '../core/describe.js'
-import type { Device, DeviceState, Health, HubEvent, Json, Position, Tool } from '../core/types.js'
+import type {
+  By,
+  Device,
+  DeviceState,
+  DmNote,
+  Health,
+  HubEvent,
+  Json,
+  Position,
+  Tool,
+} from '../core/types.js'
 import { elapsed, t, valueText, word } from '../i18n/i18n.js'
 import { HealthText, PositionText } from '../layout/parts.js'
-import { useDevice, useEvents, useLocale, useNav, useNow } from '../react/hooks.js'
+import { useDevice, useEvents, useLocale, useNav, useNow, useStore } from '../react/hooks.js'
 import { FieldView } from '../widgets/fields.js'
 
 /** The workbench's tool node (protocol: the `tool` UI node). */
@@ -81,6 +91,21 @@ function useDetail(node: ToolNode): Json | undefined {
   return detail?.structured
 }
 
+/**
+ * Who made the call: the DM's note in the result decides once the result is in; until then the
+ * DM's `dm` events (hub-api.md section 15.5).
+ */
+function useBy(node: ToolNode): { by: By; dm?: DmNote } {
+  const store = useStore()
+  useEvents()
+  const detail = useDetail(node)
+  const done = detail?.dm as DmNote | undefined
+  if (done) return { by: 'dm', dm: done }
+  if (detail) return { by: 'llm' }
+  const live = store.dmCall(node.name, parse(node.argsPreview))
+  return live ? { by: 'dm', dm: live } : { by: 'llm' }
+}
+
 type Tone = 'busy' | 'ok' | 'bad' | 'off'
 
 function toneOf(node: ToolNode): Tone {
@@ -121,22 +146,26 @@ function Shell(props: {
   children?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
-  // A step the decision model took instead of the LLM.
-  const dm = useDetail(props.node)?.dm as { sure: number; options: number; ms: number } | undefined
+  const { by, dm } = useBy(props.node)
   const dmVars = dm && {
+    model: dm.model ?? '',
     sure: Math.round(dm.sure * 100),
     options: dm.options,
     s: (dm.ms / 1000).toFixed(1),
   }
   return (
-    <article className="mhs-tcard" data-tone={props.tone} data-tool={props.node.name}>
+    <article className="mhs-tcard" data-tone={props.tone} data-tool={props.node.name} data-by={by}>
       <header className="mhs-tcard-head">
         <span className="mhs-tcard-verb">{props.verb}</span>
-        {dmVars && (
-          <span className="mhs-tcard-dm" title={t('card.dm.title', dmVars)}>
-            {t('card.dm', dmVars)}
-          </span>
-        )}
+        <span
+          className="mhs-by"
+          data-by={by}
+          title={dmVars ? t('card.dm.title', dmVars) : t('card.llm.title')}
+        >
+          <ByIcon by={by} />
+          {by === 'dm' ? 'DM' : 'LLM'}
+          {dmVars && <em>{t('card.dm', dmVars)}</em>}
+        </span>
         <DeviceChip id={props.device} />
         {props.what && <span className="mhs-tcard-what">{props.what}</span>}
         <span className="mhs-grow" />

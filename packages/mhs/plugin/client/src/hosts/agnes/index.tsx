@@ -367,7 +367,16 @@ export function apply(ctx: Ctx, config?: { publicConfig?: Json }) {
   }
 
   /** The DM / LLM switch beside the model picker, for the open conversation. */
+  // The composer slot is outside the panel's providers.
   function DmSwitch() {
+    return (
+      <StoreContext.Provider value={store}>
+        <DmSwitchButton />
+      </StoreContext.Provider>
+    )
+  }
+
+  function DmSwitchButton() {
     const conversation = useSyncExternalStore(ctx.session.subscribe, () => ctx.session.sessionId)
     const mode = useDmMode(conversation)
     useLocale()

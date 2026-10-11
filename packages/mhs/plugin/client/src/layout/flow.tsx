@@ -526,7 +526,7 @@ function dmStatus(mode: { on: boolean; model?: string | undefined }, recent: Hub
     (((d.top as [string, number][] | undefined)?.[0]?.[1] as number | undefined) ?? 0) * 100,
   )
   if (d.outcome === 'error') return t('flow.dm.error')
-  if (d.outcome !== 'did') return t('flow.dm.handed', { sure })
+  if (d.outcome !== 'did') return d.choice === 'ask_llm' ? t('flow.dm.handed') : t('flow.dm.unsure', { sure })
   const call = d.call as { name?: string; args?: { device?: string; tool?: string } } | undefined
   const tool = call?.name === 'call_device' ? call.args?.tool : call?.name
   return `${sure}% · ${tool ?? d.choice} → ${call?.args?.device ?? d.device ?? ''}`

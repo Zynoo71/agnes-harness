@@ -1,6 +1,7 @@
 import type { Call } from '@agnes/mhs/device'
 import * as THREE from 'three'
 import { LAYOUT } from '../base.js'
+import { sunAt } from '../clock.js'
 import { placed } from './basemap.js'
 import { addCamera } from './camera.js'
 import { reading } from './place.js'
@@ -162,6 +163,40 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
       zoom = level
       report()
       return `zoom ${level}×`
+    },
+  )
+  dev.tool(
+    {
+      name: 'take_photo',
+      description:
+        'Take a full-size photo of what the camera sees now and keep it; comms-01 send can take it home with a report by its id.',
+      timeout: 10,
+      params: {},
+      ui: { label: 'Take photo' },
+    },
+    async () => {
+      const id = `photo-${world.photos.size + 1}`
+      const hour = world.clock.hour()
+      const { elevation, azimuth } = sunAt(hour)
+      // The sun is in the picture when it is above the horizon and inside the zoomed field of view;
+      // the camera's own azimuth is minus its pan (pan is positive to the left, azimuth clockwise).
+      const vfov = FOV / zoom
+      const hfov = THREE.MathUtils.radToDeg(
+        2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(vfov / 2)) * (16 / 9)),
+      )
+      const across = Math.abs(wrap(azimuth + pan))
+      const inFrame = elevation > -1 && across < hfov / 2 && Math.abs(elevation - tilt) < vfov / 2
+      world.photos.set(id, {
+        id,
+        by: dev.id,
+        jpeg: await world.snapshot(cam, 1280, 720),
+        at: world.clock.label(),
+        sun: { inFrame, elevation, azimuth },
+      })
+      return {
+        detail: `${id} taken at ${world.clock.label()}: pan ${Math.round(pan)}°, tilt ${Math.round(tilt)}°, zoom ${zoom}×`,
+        data: { photo: id },
+      }
     },
   )
   world.onReset(() => {

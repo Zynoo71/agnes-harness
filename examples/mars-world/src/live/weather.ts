@@ -1,10 +1,18 @@
 import { LAYOUT } from '../base.js'
+import { sunAt } from '../clock.js'
 import { WEATHER_TURN } from '../devices.js'
 import { placed } from './basemap.js'
 import { yawOf } from './route.js'
 import { every, type World, WorldDevice } from './world.js'
 
-/** The weather station: readings once a second, and a storm warning in its state. */
+/** The part of the sol by the local hour: the sun rises at 06:00 and sets at 18:00. */
+const daylight = (hour: number) =>
+  hour < 6 || hour >= 18 ? 'night' : hour < 7 ? 'dawn' : hour < 17 ? 'day' : 'dusk'
+
+/**
+ * The weather station: readings once a second, the sun's place, and in its state a storm warning,
+ * the part of the sol and when the sun next sets and rises.
+ */
 export function weatherStation(world: World, log: (line: string) => void): WorldDevice {
   const dev = new WorldDevice({
     id: 'weather-01',
@@ -20,10 +28,44 @@ export function weatherStation(world: World, log: (line: string) => void): World
         enum: ['none', 'watch', 'warning'],
         description: 'dust storm warning, from wind and dust',
       },
+      daylight: {
+        type: 'string',
+        enum: ['dawn', 'day', 'dusk', 'night'],
+        description: 'dawn 06:00–07:00, day, dusk 17:00–18:00 (the sun low in the west), night from 18:00',
+      },
+      sunset_at: { type: 'number', unit: 's', description: 'Unix time when the sun next sets' },
+      sunrise_at: { type: 'number', unit: 's', description: 'Unix time when the sun next rises' },
     },
   })
   dev.log = log
   dev.update({ storm_warning: 'none' })
+  const sun = dev.source('sun', 'values', 'local solar time and where the sun stands', {
+    hz: 1,
+    fields: {
+      local_hour: { type: 'number', min: 0, max: 24, description: 'hours since local midnight (LMST)' },
+      elevation: { type: 'number', unit: 'deg', min: -90, max: 90, description: 'above the horizon' },
+      azimuth: {
+        type: 'number',
+        unit: 'deg',
+        min: 0,
+        max: 360,
+        description: 'clockwise from north: 90 east at sunrise, 270 west at sunset',
+      },
+    },
+  })
+  /** Sun times move only when the clock is skipped; report them again only then. */
+  const sky = { sunset: 0, sunrise: 0 }
+  const reportSky = (hour: number) => {
+    const now = Date.now() / 1000
+    const sunset = Math.round(now + world.clock.secondsUntil(18))
+    const sunrise = Math.round(now + world.clock.secondsUntil(6))
+    const moved = Math.abs(sunset - sky.sunset) > 2 || Math.abs(sunrise - sky.sunrise) > 2
+    if (moved && Number.isFinite(sunset)) Object.assign(sky, { sunset, sunrise })
+    dev.update({
+      daylight: daylight(hour),
+      ...(moved && Number.isFinite(sunset) ? { sunset_at: sunset, sunrise_at: sunrise } : {}),
+    })
+  }
   const air = dev.source('air', 'values', 'wind, pressure, temperature, dust and radiation at the base', {
     hz: 1,
     default: true,
@@ -56,6 +98,15 @@ export function weatherStation(world: World, log: (line: string) => void): World
       const warning = wind > 25 || dust > 2.5 ? 'warning' : wind > 15 || dust > 1.2 ? 'watch' : 'none'
       world.weather = { wind, dust, storm: warning }
       dev.update({ storm_warning: warning })
+      reportSky(hour)
+      if (sun.wants()) {
+        const { elevation, azimuth } = sunAt(hour)
+        sun.send({
+          local_hour: Math.round(hour * 100) / 100,
+          elevation: Math.round(elevation * 10) / 10,
+          azimuth: Math.round(azimuth * 10) / 10,
+        })
+      }
       if (!air.wants()) return
       air.send({
         wind,

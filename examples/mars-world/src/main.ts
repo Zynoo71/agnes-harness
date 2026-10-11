@@ -378,7 +378,7 @@ const live = hub
 if (live) {
   live.world.effects = effects
   // Scripts (an evaluation, a test) reach the events and the director here: mars.director.next().
-  Object.assign(window, { mars: { events: live.world.events, director: live.director } })
+  Object.assign(window, { mars: { events: live.world.events, director: live.director, world: live.world } })
 }
 // What is drawn over the scene: the bar along the bottom, the activity list, banners, the controls
 // panel and the About card, in English or Chinese (?lang=zh, or the button; the page remembers).

@@ -1,6 +1,7 @@
+import { CallError } from '@agnes/mhs/device'
 import { LAYOUT } from '../base.js'
 import { placed } from './basemap.js'
-import { every, turnTo, type World, WorldDevice, wait } from './world.js'
+import { every, type Mail, type Photo, turnTo, type World, WorldDevice, wait } from './world.js'
 
 /** Where the dish points for each target: head rotation in radians. */
 const AIM = { earth: { x: -0.7, y: 2.4 }, orbiter: { x: -1.25, y: -0.6 } } as const
@@ -8,6 +9,38 @@ const AIM = { earth: { x: -0.7, y: 2.4 }, orbiter: { x: -1.25, y: -0.6 } } as co
 const PERIOD = 240
 const OPEN = 180
 const FIRST_OPEN = 120
+/** Seconds a report takes to reach Earth and the answer to come back: minutes on Mars, shortened. */
+const LIGHT_S = 10
+
+/** Mission Control's answer, from what really reached it. */
+function replyTo(photo: Photo | undefined): Mail['reply'] {
+  if (!photo) return { en: 'Report received. Thank you, Agnes Base.', zh: '报告收到了，谢谢 Agnes 基地。' }
+  const { inFrame, elevation, azimuth } = photo.sun
+  if (inFrame && elevation < 16 && azimuth < 180)
+    return {
+      en: 'Photo received: sunrise over Jezero, the sun low in the east. Beautiful, thank you.',
+      zh: '照片收到了：杰泽罗的日出，太阳低低地挂在东边。很美，谢谢。',
+    }
+  if (inFrame && elevation < 16)
+    return {
+      en: 'Photo received: a Martian sunset, blue around the sun. It is going on the wall. Thank you, Agnes Base!',
+      zh: '照片收到了：火星日落，太阳周围一圈蓝光。我们要把它挂到墙上。谢谢 Agnes 基地！',
+    }
+  if (inFrame)
+    return {
+      en: 'Photo received: the sun high over Jezero in a butterscotch sky. Thank you.',
+      zh: '照片收到了：奶油糖色天空里，杰泽罗上空高高的太阳。谢谢。',
+    }
+  if (elevation < -6)
+    return {
+      en: 'Photo received: night at the base, we can make out its lights. Thank you.',
+      zh: '照片收到了：基地的夜晚，看得到基地的灯。谢谢。',
+    }
+  return {
+    en: 'Photo received: the base and the plain around it. Thank you.',
+    zh: '照片收到了：基地和周围的平原。谢谢。',
+  }
+}
 
 /** The comms dish: points at Earth or an orbiter, and sends reports while Earth is in view. */
 export function comms(world: World, log: (line: string) => void): WorldDevice {
@@ -122,21 +155,38 @@ export function comms(world: World, log: (line: string) => void): WorldDevice {
   dev.tool(
     {
       name: 'send',
-      description: 'Send a report to Earth. Needs the dish pointed at Earth while the window is open.',
-      timeout: 30,
-      params: { report: { type: 'string', maxLength: 4000 } },
+      description: `Send a report to Earth, with a photo a camera took if given. Needs the dish pointed at Earth while the window is open. Mission Control's answer comes back in the result (the light time is shortened to ${LIGHT_S} s here).`,
+      timeout: 60,
+      params: {
+        report: { type: 'string', maxLength: 4000 },
+        photo: {
+          type: 'string',
+          description: 'id of a photo a camera took (cam-base take_photo), such as photo-1',
+        },
+      },
       required: ['report'],
       uses: ['dish'],
     },
-    async (call, { report: text }) => {
-      const steps = Math.max(3, Math.ceil((text as string).length / 400))
+    async (call, { report: text, photo: id }) => {
+      const photo = id === undefined ? undefined : world.photos.get(id as string)
+      if (id !== undefined && !photo)
+        throw new CallError('x_no_photo', `there is no ${id}; take one with cam-base take_photo first`)
+      const steps = Math.max(3, Math.ceil((text as string).length / 400)) + (photo ? 4 : 0)
       for (let i = 1; i <= steps; i++) {
         await wait(call, 600)
-        call.progress({ done: i, total: steps, text: 'sending' })
+        call.progress({ done: i, total: steps + 1, text: 'sending' })
       }
+      call.progress({ done: steps, total: steps + 1, text: 'on its way to Earth' })
+      await wait(call, LIGHT_S * 1000)
+      const mail: Mail = { report: text as string, photo, reply: replyTo(photo), at: world.clock.label() }
+      for (const listen of world.mailListeners) listen(mail)
       return {
-        detail: `sent ${(text as string).length} characters to Earth`,
-        data: { characters: (text as string).length },
+        detail: `sent ${(text as string).length} characters${photo ? ` and ${photo.id}` : ''} to Earth. Mission Control answered: "${mail.reply.en}"`,
+        data: {
+          characters: (text as string).length,
+          ...(photo ? { photo: photo.id } : {}),
+          reply: mail.reply.en,
+        },
       }
     },
   )

@@ -313,6 +313,26 @@ export interface Condition {
   apply(): void
 }
 
+/** A photo a camera took and keeps, for the dish to send home. */
+export interface Photo {
+  id: string
+  /** The camera device that took it. */
+  by: string
+  jpeg: Uint8Array
+  /** Mars time it was taken, `Sol 1 · 17:24 LMST`. */
+  at: string
+  /** The sun was in the picture, how high it stood and where (degrees; azimuth clockwise from north). */
+  sun: { inFrame: boolean; elevation: number; azimuth: number }
+}
+
+/** A report that reached Earth, and Mission Control's answer. */
+export interface Mail {
+  report: string
+  photo: Photo | undefined
+  reply: { en: string; zh: string }
+  at: string
+}
+
 /** What the live devices share: the scene, its truth, and the state that ties devices together. */
 export class World {
   /** The rover reports these; the lab reads them before it unloads. */
@@ -340,6 +360,10 @@ export class World {
   dustPanels: ((percent: number) => void) | undefined
   /** Set by the lab: takes a sample handed to it and queues it for analysis. */
   labReceive: ((sample: string) => void) | undefined
+  /** Photos the cameras took, by id (`photo-1`). */
+  readonly photos = new Map<string, Photo>()
+  /** Hear each report as it reaches Earth; the page shows it. */
+  readonly mailListeners: ((mail: Mail) => void)[] = []
   /** Conditions the devices offer the controls panel. */
   readonly conditions: Condition[] = []
   /** The weather station reports these; the hopper reads them before it flies. */
@@ -374,6 +398,7 @@ export class World {
     this.astronaut = 'working'
     this.airlock = { inner: 'open', outer: 'closed' }
     this.suitLeak = false
+    this.photos.clear()
     this.events?.reset()
     for (const [rock, scale] of this.rockScales) rock.object.scale.copy(scale)
     for (const reset of this.resets) reset()

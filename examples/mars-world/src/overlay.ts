@@ -1,9 +1,13 @@
-import { type MarsClock, START_HOURS, type TimeOfDay } from './clock.js'
+import type { MarsClock } from './clock.js'
 import type { Director } from './live/director.js'
 import { CATALOG, type EventKind, type Happening } from './live/events.js'
-import { type Activity, type Alert, type World, type WorldDevice, watchers } from './live/world.js'
+import { type Activity, type Alert, type Mail, type World, type WorldDevice, watchers } from './live/world.js'
 
 export type Lang = 'en' | 'zh'
+
+/** Hours the controls skip the clock to; 16:30 leaves half an hour to wait for dusk. */
+const SKIPS = { morning: 7.6, noon: 12, afternoon: 16.5, dusk: 17.2, night: 22 } as const
+type Skip = keyof typeof SKIPS
 
 /** Every line the page shows, in English and Chinese. */
 const TEXT = {
@@ -27,6 +31,10 @@ const TEXT = {
     reset: 'Reset',
     help: 'About',
     controls: 'Controls',
+    earthHead: 'Mission Control · Earth',
+    earthGot: 'received',
+    earthFeed: 'a report reached Earth',
+    earthFeedPhoto: (id: string) => `a report and ${id} reached Earth`,
     eventsHead: 'Events',
     timeHead: 'Skip to',
     conditionsHead: 'Conditions',
@@ -35,8 +43,8 @@ const TEXT = {
     endBtn: 'End',
     applyBtn: 'Apply',
     nextIn: (t: string) => `Next on its own in ${t}`,
-    hours: { morning: 'Morning', noon: 'Noon', sunset: 'Sunset', night: 'Night' } as Record<
-      TimeOfDay,
+    hours: { morning: 'Morning', noon: 'Noon', afternoon: '16:30', dusk: 'Dusk', night: 'Night' } as Record<
+      Skip,
       string
     >,
     params: { intensity: 'intensity', minutes: 'min', strength: 'dust %', area: '' } as Record<
@@ -88,6 +96,7 @@ const TEXT = {
 </ul>
 <h3>Ask the brain</h3>
 <ul>
+<li>Mission Control would like a photo of a Martian sunset: take one and send it home.</li>
 <li>Get the astronaut back inside before their oxygen runs low.</li>
 <li>A storm is coming: secure the base.</li>
 <li>Find the meteorite that just fell, bring a sample to the lab and send the result to Earth.</li>
@@ -120,6 +129,10 @@ const TEXT = {
     reset: '重置',
     help: '说明',
     controls: '控制台',
+    earthHead: '地面控制中心 · 地球',
+    earthGot: '收到',
+    earthFeed: '一份报告到达地球',
+    earthFeedPhoto: (id: string) => `一份报告和 ${id} 到达地球`,
     eventsHead: '事件',
     timeHead: '跳到',
     conditionsHead: '状况',
@@ -128,7 +141,10 @@ const TEXT = {
     endBtn: '结束',
     applyBtn: '设置',
     nextIn: (t: string) => `${t} 后自动来下一个`,
-    hours: { morning: '清晨', noon: '正午', sunset: '日落', night: '夜里' } as Record<TimeOfDay, string>,
+    hours: { morning: '清晨', noon: '正午', afternoon: '16:30', dusk: '黄昏', night: '夜里' } as Record<
+      Skip,
+      string
+    >,
     params: { intensity: '强度', minutes: '分钟', strength: '积灰 %', area: '' } as Record<string, string>,
     areas: { 'west field': '西边野外', 'east dunes': '东边沙丘' } as Record<string, string>,
     going: '正在进行',
@@ -221,6 +237,7 @@ const TEXT = {
 </ul>
 <h3>可以让大脑做</h3>
 <ul>
+<li>地面控制中心想要一张火星日落的照片：拍下来发回地球。</li>
 <li>在氧气见底之前把宇航员接回舱里。</li>
 <li>沙尘暴要来了：把基地收拾好。</li>
 <li>找到刚落下的陨石，把样品送到实验室，再把结果发回地球。</li>
@@ -303,6 +320,7 @@ export function buildOverlay(options: {
   const feed = document.getElementById('feed') as HTMLElement
   const panel = document.getElementById('events-panel') as HTMLElement
   const help = document.getElementById('help') as HTMLElement
+  const earth = document.getElementById('earth') as HTMLElement
   const status = document.getElementById('status') as HTMLElement
   const field = (id: string) => bar.querySelector(`#${id}`) as HTMLElement
   const buttons = {
@@ -432,6 +450,23 @@ export function buildOverlay(options: {
         )
       }
     })
+    // What reached Earth: a card with the photo, the report and Mission Control's answer.
+    live.world.mailListeners.push((m: Mail) => {
+      lastMail = m
+      if (photoUrl) URL.revokeObjectURL(photoUrl)
+      photoUrl = m.photo
+        ? URL.createObjectURL(new Blob([m.photo.jpeg as Uint8Array<ArrayBuffer>], { type: 'image/jpeg' }))
+        : undefined
+      drawMail()
+      earth.hidden = false
+      push(
+        () => 'event start',
+        () => [
+          el('b', 'dev', name('comms-01')),
+          el('span', '', m.photo ? t().earthFeedPhoto(m.photo.id) : t().earthFeed),
+        ],
+      )
+    })
     live.world.events?.listeners.push((h: Happening, phase) => {
       // Short events (a meteorite's fall, a dust devil) just happen; storms and leaks also end.
       if (phase === 'start' || CATALOG[h.kind].severe)
@@ -525,10 +560,10 @@ export function buildOverlay(options: {
   })
   const timeHead = section()
   const timeRow = el('div', 'row')
-  const hourButtons = (Object.keys(START_HOURS) as TimeOfDay[]).map((name) => {
+  const hourButtons = (Object.keys(SKIPS) as Skip[]).map((name) => {
     const b = el('button', 'small')
     b.type = 'button'
-    b.addEventListener('click', () => clock.skipTo(START_HOURS[name]))
+    b.addEventListener('click', () => clock.skipTo(SKIPS[name]))
     timeRow.appendChild(b)
     return { name, b }
   })
@@ -563,6 +598,33 @@ export function buildOverlay(options: {
     conditionsHead,
     conditionList,
   )
+
+  let lastMail: Mail | undefined
+  let photoUrl: string | undefined
+  const drawMail = () => {
+    const m = lastMail
+    if (!m) return
+    const close = el('button', 'close', '×')
+    close.type = 'button'
+    close.addEventListener('click', () => {
+      earth.hidden = true
+    })
+    const head = el('div', 'head')
+    head.append(
+      el('b', '', t().earthHead),
+      el('span', '', `${t().earthGot} ${m.at.replace(' LMST', '')}`),
+      close,
+    )
+    const parts: HTMLElement[] = [head]
+    if (photoUrl) {
+      const img = el('img')
+      img.src = photoUrl
+      parts.push(img)
+    }
+    parts.push(el('p', 'report', m.report.length > 280 ? `${m.report.slice(0, 280)}…` : m.report))
+    parts.push(el('p', 'reply', m.reply[lang]))
+    earth.replaceChildren(...parts)
+  }
 
   const closeHelp = el('button', 'close')
   closeHelp.type = 'button'
@@ -608,6 +670,7 @@ export function buildOverlay(options: {
     closeHelp.textContent = t().close
     for (const tag of tagParts) tag.title.textContent = name(tag.id, tag.name)
     for (const line of lines) line.draw()
+    drawMail()
   }
 
   const refresh = () => {

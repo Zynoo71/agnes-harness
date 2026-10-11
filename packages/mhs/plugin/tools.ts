@@ -3,7 +3,7 @@
  * section 15). The types below are the parts of Agnes's extension API this plugin uses.
  */
 import { type TSchema, Type } from '@sinclair/typebox'
-import { type Answer, type Brain, CONTEXT_LIMIT } from '../server/brain.js'
+import { type Answer, type Brain, CONTEXT_LIMIT, DM, LLM } from '../server/brain.js'
 import { callKey, dmNotes } from './dm.js'
 
 type Json = Record<string, unknown>
@@ -102,7 +102,8 @@ export function registerBrainTools(agnes: Extension, brain: Brain): (() => void)
     description: string
     parameters: TSchema
     meta: ToolDef['meta']
-    run: (args: Json, call: ToolCall) => Promise<Answer> | Answer
+    /** `byDm`: the DM made this call in the LLM's stead. */
+    run: (args: Json, call: ToolCall, byDm: boolean) => Promise<Answer> | Answer
   }[] = [
     {
       name: 'list_devices',
@@ -133,12 +134,13 @@ export function registerBrainTools(agnes: Extension, brain: Brain): (() => void)
         ),
       }),
       meta: ACTS,
-      run: (args, call) =>
+      run: (args, call, byDm) =>
         brain.callDevice(
           args as { device?: string; tool: string; args?: Json },
           call.session.key,
           call.signal,
           call.session.toolUseId,
+          byDm ? DM : LLM,
         ),
     },
     {
@@ -192,10 +194,11 @@ export function registerBrainTools(agnes: Extension, brain: Brain): (() => void)
         brain.onDuty = call.session.key
         // A call the DM made carries its note to the card, never to the model.
         const dm = dmNotes.get(call.session.key)
-        if (dm?.call === callKey(tool.name, args)) dmNotes.delete(call.session.key)
+        const byDm = dm?.call === callKey(tool.name, args)
+        if (byDm) dmNotes.delete(call.session.key)
         try {
-          const answer = await tool.run(args, call)
-          if (dm?.call === callKey(tool.name, args)) answer.data = { ...answer.data, dm: dm.note }
+          const answer = await tool.run(args, call, byDm)
+          if (byDm && dm) answer.data = { ...answer.data, dm: dm.note }
           return await reply(answer, call)
         } catch (e) {
           return {

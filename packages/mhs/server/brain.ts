@@ -9,7 +9,10 @@ import { summaryText } from './summary.js'
  * wake which conversation. The plugin wires these into Agnes.
  */
 
-export const BRAIN: Caller = { name: 'brain', level: 2 }
+/** The caller AgnesHub records for the LLM's device calls and watches. */
+export const LLM: Caller = { name: 'LLM', level: 2 }
+/** The caller for a call the DM made in the LLM's stead (plugin/dm.ts). */
+export const DM: Caller = { name: 'DM', level: 2 }
 /** How long call_device waits before it returns `running` (section 15.1). */
 export const CALL_WAIT_MS = 50_000
 /** Events for one conversation within this window are delivered as one message (section 15.3). */
@@ -125,6 +128,7 @@ export class Brain {
     conversation: string,
     signal?: AbortSignal,
     ref?: string,
+    by: Caller = LLM,
   ): Promise<Answer> {
     const device = this.pick(args.device)
     if (typeof device !== 'string') return device
@@ -134,7 +138,7 @@ export class Brain {
     })
     const started = Date.now() / 1000
     const reply = await this.north.call(
-      BRAIN,
+      by,
       {
         device,
         tool: args.tool,
@@ -231,7 +235,7 @@ export class Brain {
     const device = this.pick(args.device)
     if (typeof device !== 'string') return device
     const watch = this.north.watch(
-      BRAIN,
+      LLM,
       {
         device,
         until: args.until,

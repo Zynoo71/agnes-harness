@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { WebSocket } from 'ws'
 import { Device } from '../device/device.js'
-import { Brain, CONTEXT_LIMIT, capabilities, mapsText } from '../server/brain.js'
+import { Brain, CONTEXT_LIMIT, capabilities, DM, mapsText } from '../server/brain.js'
 import { North } from '../server/north.js'
 import { South } from '../server/south.js'
 import { summaryText } from '../server/summary.js'
@@ -148,10 +148,23 @@ describe('brain tools', () => {
     expect(running.data).toMatchObject({ job: 'j2', status: 'running' })
     // Pages find the conversation step a job belongs to by its ref.
     expect(north.devices()[0]?.jobs).toMatchObject([
-      { job: 'j2', tool: 'move', caller: 'brain', state: 'running', arguments: { x: 1 }, ref: 'toolu-7' },
+      { job: 'j2', tool: 'move', caller: 'LLM', state: 'running', arguments: { x: 1 }, ref: 'toolu-7' },
     ])
     await until(() => woken.length === 1, 3000)
     expect(woken[0]).toEqual(['conv-b', '[AgnesHub] mover-01: moved 1 m.'])
+  })
+
+  it('records a call the DM made with the DM as its caller', async () => {
+    steps = 6
+    await brain.callDevice(
+      { device: 'mover-01', tool: 'move', args: { x: 1 } },
+      'c',
+      undefined,
+      'toolu-9',
+      DM,
+    )
+    expect(north.devices()[0]?.jobs).toMatchObject([{ tool: 'move', caller: 'DM', ref: 'toolu-9' }])
+    await until(() => woken.length === 1, 3000)
   })
 
   it('gives the model the data a tool returns, such as a planned route', async () => {

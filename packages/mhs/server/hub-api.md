@@ -381,6 +381,7 @@ A source switched off by hand stays off whatever the demand. Rates are not set h
 | `position` | A device's position trust changes | `trust`, `reason` |
 | `paused`, `resumed` | A job is paused or resumed | `job`, `by`, `reason` |
 | `watch` | A watch matched or timed out; to its owner only (section 12) | `watch`, `matched`, `item` |
+| `dm` | The DM decided a step of a conversation (section 15.5) | see section 15.5 |
 
 Devices never send events. AgnesHub derives them from results, state and data.
 
@@ -464,6 +465,7 @@ Seven fixed tools, named verb + `device`. A device's own tools are not registere
 
 - **Which device.** `device` is required except in `list_devices` and `stop_device`, and may be left out only while a single device is online. There is no default device.
 - **Names come from the devices.** The brain calls devices by the `name` and `kind` they report; nothing in AgnesHub maps nicknames to devices. When a request could mean more than one device, the brain asks the user.
+- **Callers.** The brain's jobs and watches carry the caller name `LLM`; a call the DM made in its stead (section 15.5) carries `DM`. Pages show who called a device by this name.
 
 ### 15.2 The `context` hook
 
@@ -514,6 +516,32 @@ An `agent` client that acts on devices by itself (a fast decision model, say) te
 - **Without `wake`** the text goes into the snapshot of section 15.2, under `Other agents reported:`, with how long ago: at most the last 10 briefs, for 10 minutes. The brain is not interrupted for each, and knows what happened when it next thinks.
 - Without a brain in the process, briefs go nowhere.
 
+### 15.5 The DM
+
+The DM is a decision model that takes some steps of the brain's loop in the LLM's place: after the results of `call_device` or `set_device`, or in a turn that a device report woke, it picks one fixed device action, and the step is that action's call. When it is less than 20 % sure, or picks `ask_llm`, the LLM takes the step. A step a person started always goes to the LLM, and only the LLM judges that nothing needs doing.
+
+```json
+→ {"jsonrpc": "2.0", "id": "70", "method": "hub/dm", "params": {"conversation": "c1", "on": true}}
+← {"jsonrpc": "2.0", "id": "70", "result": {"ready": true, "on": true}}
+```
+
+- **`hub/dm`** switches the DM for one conversation; without `on` it only reports. `ready` is false when no decision model is configured.
+- **Device reports.** While the DM is on for the conversation on duty, an alert or a read-only enumerated state that changed with no job running wakes that conversation, merged within 1 s, so the DM can take it first.
+- **`dm` event**, one per decision, `level` `info`:
+
+| `data` field | Meaning |
+|---|---|
+| `conversation` | The conversation the step belongs to |
+| `happened` | What the step answered: tool results or the wake-up text |
+| `outcome` | `did` (the step is the action), `llm` (the LLM takes the step) or `error` (the model could not decide; the LLM takes the step) |
+| `choice` | The chosen option: an action's id or `ask_llm` |
+| `device`, `call` | With `did`: the device, and the step's tool call `{name, args}`, so a page can tell the DM's calls in the conversation from the LLM's |
+| `top`, `options`, `confidence`, `ms` | The likeliest options with their probabilities, how many there were, the model's own confidence, and how long it took |
+| `model` | The decision model: `jev` or `clef` |
+| `error` | With `error`: why |
+
+- **Cards.** The result of a call the DM made carries `dm: {model, sure, options, ms}` in its structured data; the model never sees it.
+
 ## 16. Security
 
 The AgnesHub API has **no authentication and no encryption**. Any client can claim any role, including `ui`, which can steer devices by hand.
@@ -558,3 +586,4 @@ When a deployment needs them:
 | `hub/event` | hub → client | notification | 11 |
 | `hub/watch`, `hub/unwatch` | client → hub | request | 12 |
 | `hub/brief` | client → hub | request | 15.4 |
+| `hub/dm` | client → hub | request | 15.5 |

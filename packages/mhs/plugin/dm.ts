@@ -49,6 +49,8 @@ export interface Decision {
   outcome: 'did' | 'llm'
   choice: string
   device?: string
+  /** The step's tool call, when the DM took it: pages match it to the conversation's call. */
+  call?: { name: string; args: Record<string, unknown> }
   top: [string, number][]
   options: number
   confidence: number | undefined
@@ -65,6 +67,8 @@ export interface DecisionError {
 
 /** What a DM step's card shows; never in the conversation, where the LLM would copy it. */
 export interface DmNote {
+  /** The decision model: jev, clef. */
+  model: string
   sure: number
   options: number
   ms: number
@@ -114,12 +118,17 @@ export function dmOperation(link: () => DmLink | undefined) {
       const action = p >= MIN_SURE ? picked.action : undefined
       const outcome = action ? 'did' : 'llm'
       hub.log(`DM ${picked.choice} (${how}) for ${conversation}`)
+      const call: Decision['call'] =
+        action &&
+        ('values' in action
+          ? { name: 'set_device', args: { device: action.device, values: action.values } }
+          : { name: 'call_device', args: { device: action.device, tool: action.tool, args: action.args } })
       hub.report({
         conversation,
         happened: moment.happened,
         choice: picked.choice,
         outcome,
-        ...(action ? { device: action.device } : {}),
+        ...(action && call ? { device: action.device, call } : {}),
         top: picked.top,
         options: picked.options,
         confidence: picked.confidence,
@@ -127,16 +136,12 @@ export function dmOperation(link: () => DmLink | undefined) {
       })
       const target = { route: request.route, model: request.model }
       const parser = (ctx.session.d.contractForModel?.(target) ?? ctx.session.d.contract).parser_version
-      if (action) {
+      if (call) {
         hub.dm.did(conversation, picked.choice)
-        const call =
-          'values' in action
-            ? { name: 'set_device', args: { device: action.device, values: action.values } }
-            : { name: 'call_device', args: { device: action.device, tool: action.tool, args: action.args } }
         streak.set(conversation, (moment.woken ? 0 : (streak.get(conversation) ?? 0)) + 1)
         dmNotes.set(conversation, {
           call: callKey(call.name, call.args),
-          note: { sure: p, options: picked.options, ms: picked.ms },
+          note: { model: hub.dm.model.name, sure: p, options: picked.options, ms: picked.ms },
         })
         return step(request, parser, call)
       }

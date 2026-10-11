@@ -4,6 +4,7 @@
  */
 import { type TSchema, Type } from '@sinclair/typebox'
 import { type Answer, type Brain, CONTEXT_LIMIT } from '../server/brain.js'
+import { callKey, dmNotes } from './dm.js'
 
 type Json = Record<string, unknown>
 
@@ -189,8 +190,13 @@ export function registerBrainTools(agnes: Extension, brain: Brain): (() => void)
       meta: tool.meta,
       async execute(args, call) {
         brain.onDuty = call.session.key
+        // A call the DM made carries its note to the card, never to the model.
+        const dm = dmNotes.get(call.session.key)
+        if (dm?.call === callKey(tool.name, args)) dmNotes.delete(call.session.key)
         try {
-          return await reply(await tool.run(args, call), call)
+          const answer = await tool.run(args, call)
+          if (dm?.call === callKey(tool.name, args)) answer.data = { ...answer.data, dm: dm.note }
+          return await reply(answer, call)
         } catch (e) {
           return {
             content: [{ type: 'text', text: `${tool.name} failed: ${(e as Error).message}` }],

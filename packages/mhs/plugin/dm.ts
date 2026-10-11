@@ -17,8 +17,6 @@ type Message = RequestBody['messages'][number]
 const ACTIONS = ['call_device', 'set_device']
 /** At most this many DM steps in a row; then the LLM looks again. */
 const MAX_DM_STEPS = 3
-/** Every DM step's text starts with this, so the LLM and the person see who acted. */
-const MARK = 'DM '
 
 /** The parts of core's replacement context this Operation reads. */
 export interface InferenceContext {
@@ -56,7 +54,25 @@ export interface Decision {
   ms: number
 }
 
+/** What a DM step's card shows; never in the conversation, where the LLM would copy it. */
+export interface DmNote {
+  sure: number
+  options: number
+  ms: number
+}
+
+/**
+ * Per conversation, the DM's call about to run and its note, for the tool to add to its result's
+ * structured facts (the card's DM badge).
+ */
+export const dmNotes = new Map<string, { call: string; note: DmNote }>()
+
+/** The key a call is matched by: the tool and its arguments. */
+export const callKey = (name: string, args: unknown) => `${name} ${canonicalJson(args)}`
+
 export function dmOperation(link: () => DmLink | undefined) {
+  /** Per conversation, how many DM steps came in a row. */
+  const streak = new Map<string, number>()
   return {
     name: 'mhs:dm',
     slot: { replace: 'Inference' as const },
@@ -66,24 +82,29 @@ export function dmOperation(link: () => DmLink | undefined) {
     async replace(ctx: InferenceContext): Promise<AsyncIterable<InferenceEvent>> {
       const { request, options } = ctx.input
       const dm = link()
-      if (!dm?.on(request.sessionKey) || !options.toolNames.includes('call_device')) return ctx.next()
+      const conversation = request.sessionKey
+      const llm = () => {
+        streak.delete(conversation)
+        return ctx.next()
+      }
+      if (!dm?.on(conversation) || !options.toolNames.includes('call_device')) return llm()
       const moment = momentOf(request.messages)
-      if (!moment) return ctx.next()
+      if (!moment || (!moment.woken && (streak.get(conversation) ?? 0) >= MAX_DM_STEPS)) return llm()
       let picked: Awaited<ReturnType<DecisionModel['decide']>>
       try {
-        picked = await dm.model.decide(request.sessionKey, moment)
+        picked = await dm.model.decide(conversation, moment)
       } catch (e) {
         dm.log(`DM could not decide: ${(e as Error).message}`)
-        return ctx.next()
+        return llm()
       }
       const [, p] = picked.top[0] as [string, number]
       const how = `sure ${Math.round(p * 100)}% among ${picked.options}, ${(picked.ms / 1000).toFixed(1)} s`
       const action = picked.action
       // Nothing to do after a wake-up ends the turn; within a task the LLM decides when it is done.
       const outcome = action ? 'did' : picked.choice === NOTHING && moment.woken ? 'nothing' : 'llm'
-      dm.log(`DM ${picked.choice} (${how}) for ${request.sessionKey}`)
+      dm.log(`DM ${picked.choice} (${how}) for ${conversation}`)
       dm.report({
-        conversation: request.sessionKey,
+        conversation: conversation,
         happened: moment.happened,
         choice: picked.choice,
         outcome,
@@ -96,14 +117,20 @@ export function dmOperation(link: () => DmLink | undefined) {
       const target = { route: request.route, model: request.model }
       const parser = (ctx.session.d.contractForModel?.(target) ?? ctx.session.d.contract).parser_version
       if (action) {
-        dm.model.did(request.sessionKey, picked.choice)
+        dm.model.did(conversation, picked.choice)
         const call =
           'values' in action
             ? { name: 'set_device', args: { device: action.device, values: action.values } }
             : { name: 'call_device', args: { device: action.device, tool: action.tool, args: action.args } }
-        return step(request, parser, `${MARK}chose ${picked.choice} (${how}).`, call)
+        streak.set(conversation, (moment.woken ? 0 : (streak.get(conversation) ?? 0)) + 1)
+        dmNotes.set(conversation, {
+          call: callKey(call.name, call.args),
+          note: { sure: p, options: picked.options, ms: picked.ms },
+        })
+        return step(request, parser, call)
       }
-      if (outcome === 'nothing') return step(request, parser, `${MARK}chose to do nothing (${how}).`)
+      streak.delete(conversation)
+      if (outcome === 'nothing') return step(request, parser)
       return ctx.next()
     },
   }
@@ -111,7 +138,7 @@ export function dmOperation(link: () => DmLink | undefined) {
 
 /**
  * The step the DM may take, read from the request: the results of a device action, to carry the
- * task on (after at most MAX_DM_STEPS of its own in a row), or a wake-up from AgnesHub. Undefined
+ * task on, or a wake-up from AgnesHub. Undefined
  * when the person spoke last or the LLM was reading devices: then the LLM is making its plan.
  * `woken` is true only for a turn a wake-up started; a wake-up within a task leaves the end of the
  * task to the LLM.
@@ -132,7 +159,6 @@ export function momentOf(messages: Message[]): (Moment & { woken: boolean }) | u
   const asked = instruction ? { instruction: textOf(instruction.content) } : {}
   if (results.length && last?.role === 'assistant') {
     if (!last.toolCalls?.every((c) => ACTIONS.includes(c.name))) return undefined
-    if (dmSteps(messages.slice(0, i + 1)) >= MAX_DM_STEPS) return undefined
     const said = textOf(last.content)
     return { ...asked, ...(said ? { said } : {}), happened: results.join('\n'), woken: false }
   }
@@ -144,18 +170,6 @@ export function momentOf(messages: Message[]): (Moment & { woken: boolean }) | u
     return { ...asked, happened: textOf(last.content), woken: before?.role !== 'tool_result' }
   }
   return undefined
-}
-
-/** DM steps at the end of the conversation, each an assistant message and its results. */
-function dmSteps(messages: Message[]): number {
-  let n = 0
-  for (const m of [...messages].reverse()) {
-    if (m.role === 'assistant') {
-      if (!textOf(m.content).startsWith(MARK)) break
-      n++
-    } else if (m.role === 'user' && !isNote(textOf(m.content))) break
-  }
-  return n
 }
 
 const textOf = (content: { type: string; text?: string }[]) =>
@@ -171,7 +185,6 @@ const isWake = (text: string) => text.includes('[AgnesHub]')
 async function* step(
   request: RequestBody,
   parserVersion: string,
-  text: string,
   call?: { name: string; args: Record<string, unknown> },
 ): AsyncIterable<InferenceEvent> {
   yield {
@@ -187,7 +200,8 @@ async function* step(
       transforms: [{ event: 'sent_hash', ext: 'unreported' }],
     },
   }
-  yield { type: 'text_delta', delta: text }
+  // A step without a call ends the turn, and an empty one would read as a failed answer.
+  if (!call) yield { type: 'text_delta', delta: 'Nothing to do.' }
   if (call)
     yield {
       type: 'toolcall_end',

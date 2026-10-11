@@ -121,10 +121,22 @@ function Shell(props: {
   children?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
+  // A step the decision model took instead of the LLM.
+  const dm = useDetail(props.node)?.dm as { sure: number; options: number; ms: number } | undefined
+  const dmVars = dm && {
+    sure: Math.round(dm.sure * 100),
+    options: dm.options,
+    s: (dm.ms / 1000).toFixed(1),
+  }
   return (
     <article className="mhs-tcard" data-tone={props.tone} data-tool={props.node.name}>
       <header className="mhs-tcard-head">
         <span className="mhs-tcard-verb">{props.verb}</span>
+        {dmVars && (
+          <span className="mhs-tcard-dm" title={t('card.dm.title', dmVars)}>
+            {t('card.dm', dmVars)}
+          </span>
+        )}
         <DeviceChip id={props.device} />
         {props.what && <span className="mhs-tcard-what">{props.what}</span>}
         <span className="mhs-grow" />

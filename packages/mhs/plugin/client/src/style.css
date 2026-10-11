@@ -2022,3 +2022,11 @@ body.mhs-dragging {
   background: var(--mhs-accent-wash);
   color: var(--mhs-accent);
 }
+.mhs-root .mhs-tcard-dm {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--mhs-accent-wash);
+  color: var(--mhs-accent);
+  font: 600 11px var(--mhs-mono, var(--mhs-font));
+  white-space: nowrap;
+}

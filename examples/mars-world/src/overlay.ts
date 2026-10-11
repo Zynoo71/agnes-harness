@@ -48,7 +48,7 @@ const TEXT = {
     dmSaw: 'What happened',
     dmChose: (n: number, s: string) => `chose among ${n} actions in ${s} s`,
     dmConfidence: 'Sure',
-    dmModelConfidence: (n: number) => `clef confidence ${n}%`,
+    dmModelConfidence: (n: number, model: string) => `${model} confidence ${n}%`,
     dmAskLlm: 'hand it to the LLM',
     dmEarlier: 'Earlier',
     nowBtn: 'Start one now',
@@ -158,7 +158,7 @@ const TEXT = {
     dmSaw: '发生了什么',
     dmChose: (n: number, s: string) => `${s} 秒内从 ${n} 个动作里选出`,
     dmConfidence: '把握',
-    dmModelConfidence: (n: number) => `clef 置信度 ${n}%`,
+    dmModelConfidence: (n: number, model: string) => `${model} 置信度 ${n}%`,
     dmAskLlm: '交给 LLM',
     dmEarlier: '之前',
     nowBtn: '马上来一个',
@@ -726,7 +726,7 @@ export function buildOverlay(options: {
       track.append(fill)
       gauge.append(el('span', '', t().dmConfidence), track, el('b', '', `${Math.round(sure * 100)}%`))
       if (d.confidence !== undefined)
-        gauge.append(el('span', 'model', t().dmModelConfidence(Math.round(d.confidence * 100))))
+        gauge.append(el('span', 'model', t().dmModelConfidence(Math.round(d.confidence * 100), d.model)))
       card.append(gauge)
     }
     d.top.forEach(([option, p], i) => {
@@ -756,7 +756,7 @@ export function buildOverlay(options: {
       banner('dm-llm', 'info', () => `DM → LLM: ${trigger}`)
     }
     const head = el('div', 'head')
-    head.append(el('span', '', t().dmTitle), el('span', 'model', 'clef'))
+    head.append(el('span', '', t().dmTitle), el('span', 'model', current.model))
     const parts: HTMLElement[] = [head, dmCard(current)]
     if (earlier.length) parts.push(el('div', 'section', t().dmEarlier))
     for (const d of earlier.slice(0, 5)) {

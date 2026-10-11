@@ -1,19 +1,14 @@
+import type { DecisionModel } from './dm-models.js'
 import { type Action, buildOptions, type Candidate, type DeviceEntry, idsIn } from './dm-options.js'
 import type { HubEvent, North } from './north.js'
 
 /**
- * The decision model (DM): a small model that picks one fixed device action, so a step of the
+ * The DM: a decision model (dm-models.ts) that picks one fixed device action, so a step of the
  * Agnes loop can go without the LLM. It knows the devices and the run-time ids from AgnesHub; the
  * plugin asks it at the steps the DM may take (plugin/dm.ts). Independent of Agnes.
  */
 
 type Json = Record<string, unknown>
-
-/** A System One request: the state in words and one Choice question. */
-export type Ask = (body: { state: string; questions: Json }) => Promise<{
-  answers?: { q?: { probabilities?: Record<string, number>; confidence?: number } }
-  error?: unknown
-}>
 
 /** What the DM is told about the step it decides. */
 export interface Moment {
@@ -39,22 +34,6 @@ export interface Choice {
   ms: number
 }
 
-/** Cloudflare's clef, the DM's model: a 27B decision model on Workers AI. */
-export function clef(account: string, token: string, model = 'clef'): Ask {
-  return async (body) => {
-    const res = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/cloudflare/${model}`,
-      {
-        method: 'POST',
-        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ model, ...body }),
-      },
-    )
-    const json = (await res.json()) as { result?: Awaited<ReturnType<Ask>>; errors?: unknown }
-    return res.ok && json.result ? json.result : { error: json.errors ?? json }
-  }
-}
-
 /** State changes this soon after a job on the device ended count as the job's doing. */
 const AFTER_JOB_MS = 3000
 /** What devices report within this window is told as one. */
@@ -65,7 +44,7 @@ const DONE_KEPT = 10
 const KEEP_CANDIDATES = 12
 const TEXT_MAX = 800
 
-export class DecisionModel {
+export class Dm {
   private readonly candidates = new Map<string, Candidate[]>()
   /** Per conversation, what the DM did, newest last. */
   private readonly done = new Map<string, { time: number; text: string }[]>()
@@ -79,7 +58,7 @@ export class DecisionModel {
   constructor(
     private readonly north: North,
     private readonly scene: string,
-    private readonly ask: Ask,
+    readonly model: DecisionModel,
     /** Gets what devices report by themselves (an alert, a state that changed with no job), merged. */
     private readonly notice: (lines: string[]) => void = () => undefined,
   ) {
@@ -109,12 +88,7 @@ export class DecisionModel {
       .filter(Boolean)
       .join('\n\n')
     const t = performance.now()
-    const answer = await this.ask({
-      state,
-      questions: { q: { type: 'choice', instructions: 'Pick the one action to take right now.', criteria } },
-    })
-    const q = answer.answers?.q
-    if (!q?.probabilities) throw new Error(JSON.stringify(answer.error ?? answer).slice(0, 200))
+    const q = await this.model.rank(state, criteria, 'Pick the one action to take right now.')
     const top = Object.entries(q.probabilities).sort((a, b) => b[1] - a[1])
     const choice = (top[0] as [string, number])[0]
     const action = actions.get(choice)

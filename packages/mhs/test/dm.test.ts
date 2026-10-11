@@ -2,10 +2,15 @@ import { EventEmitter } from 'node:events'
 import type { RequestBody } from '@agnes/protocol'
 import { describe, expect, it, vi } from 'vitest'
 import { momentOf } from '../plugin/dm.js'
-import { DecisionModel } from '../server/dm.js'
+import { Dm } from '../server/dm.js'
+import type { DecisionModel } from '../server/dm-models.js'
 import type { North } from '../server/north.js'
 
 type Message = RequestBody['messages'][number]
+const fake = (probabilities: Record<string, number>): DecisionModel => ({
+  name: 'fake',
+  rank: async () => ({ probabilities }),
+})
 const user = (text: string): Message => ({ role: 'user', content: [{ type: 'text', text }] })
 const said = (text: string, tool = 'call_device'): Message => ({
   role: 'assistant',
@@ -53,7 +58,7 @@ describe('the DM in the loop', () => {
       ],
     }) as unknown as North
     const notice = vi.fn()
-    new DecisionModel(north, 'scene', async () => ({}), notice)
+    new Dm(north, 'scene', fake({ ask_llm: 1 }), notice)
     north.emit('state', 'weather-01', { storm: 'clear' })
     north.emit('state', 'weather-01', { storm: 'watch' })
     north.emit('event', {
@@ -72,5 +77,21 @@ describe('the DM in the loop', () => {
     await vi.advanceTimersByTimeAsync(1000)
     expect(notice).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
+  })
+
+  it('asks its decision model and takes the likeliest option', async () => {
+    const north = Object.assign(new EventEmitter(), { devices: () => [] }) as unknown as North
+    const model = fake({ ask_llm: 0.7, other: 0.3 })
+    const rank = vi.spyOn(model, 'rank')
+    const picked = await new Dm(north, 'scene', model).decide('c1', { happened: 'storm warning' })
+    expect(rank.mock.calls[0]?.[0]).toContain('storm warning')
+    expect(picked).toMatchObject({
+      choice: 'ask_llm',
+      top: [
+        ['ask_llm', 0.7],
+        ['other', 0.3],
+      ],
+    })
+    expect(picked.action).toBeUndefined()
   })
 })

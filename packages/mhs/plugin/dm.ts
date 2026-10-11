@@ -8,7 +8,7 @@
 
 import { createHash } from 'node:crypto'
 import type { InferenceEvent, RequestBody } from '@agnes/protocol'
-import type { DecisionModel, Moment } from '../server/dm.js'
+import type { Dm, Moment } from '../server/dm.js'
 
 type Message = RequestBody['messages'][number]
 
@@ -32,7 +32,7 @@ export interface InferenceContext {
 }
 
 export interface DmLink {
-  model: DecisionModel
+  dm: Dm
   /** Whether the DM may take steps in this conversation. */
   on(conversation: string): boolean
   /** Tells pages of a decision, as a `dm` hub event. */
@@ -90,22 +90,22 @@ export function dmOperation(link: () => DmLink | undefined) {
     run: async () => ({}),
     async replace(ctx: InferenceContext): Promise<AsyncIterable<InferenceEvent>> {
       const { request, options } = ctx.input
-      const dm = link()
+      const hub = link()
       const conversation = request.sessionKey
       const llm = () => {
         streak.delete(conversation)
         return ctx.next()
       }
-      if (!dm?.on(conversation) || !options.toolNames.includes('call_device')) return llm()
+      if (!hub?.on(conversation) || !options.toolNames.includes('call_device')) return llm()
       const moment = momentOf(request.messages)
       if (!moment || (!moment.woken && (streak.get(conversation) ?? 0) >= MAX_DM_STEPS)) return llm()
-      let picked: Awaited<ReturnType<DecisionModel['decide']>>
+      let picked: Awaited<ReturnType<Dm['decide']>>
       try {
-        picked = await dm.model.decide(conversation, moment)
+        picked = await hub.dm.decide(conversation, moment)
       } catch (e) {
         const error = (e as Error).message
-        dm.log(`DM could not decide: ${error}`)
-        dm.report({ conversation, happened: moment.happened, outcome: 'error', error })
+        hub.log(`DM could not decide: ${error}`)
+        hub.report({ conversation, happened: moment.happened, outcome: 'error', error })
         return llm()
       }
       const [, p] = picked.top[0] as [string, number]
@@ -113,8 +113,8 @@ export function dmOperation(link: () => DmLink | undefined) {
       // Only the LLM judges that nothing needs doing; the DM only acts, when sure enough, or hands over.
       const action = p >= MIN_SURE ? picked.action : undefined
       const outcome = action ? 'did' : 'llm'
-      dm.log(`DM ${picked.choice} (${how}) for ${conversation}`)
-      dm.report({
+      hub.log(`DM ${picked.choice} (${how}) for ${conversation}`)
+      hub.report({
         conversation,
         happened: moment.happened,
         choice: picked.choice,
@@ -128,7 +128,7 @@ export function dmOperation(link: () => DmLink | undefined) {
       const target = { route: request.route, model: request.model }
       const parser = (ctx.session.d.contractForModel?.(target) ?? ctx.session.d.contract).parser_version
       if (action) {
-        dm.model.did(conversation, picked.choice)
+        hub.dm.did(conversation, picked.choice)
         const call =
           'values' in action
             ? { name: 'set_device', args: { device: action.device, values: action.values } }

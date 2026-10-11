@@ -15,6 +15,8 @@ export interface Decision {
   /** Whether a wake-up from AgnesHub (what devices reported) started the step. */
   woken: boolean
   choice: string
+  /** The decision model that chose: jev or clef. */
+  model: string
   /** did: the step was the action; llm: the LLM took the step; error: the model could not decide, so the LLM took it. */
   outcome: 'did' | 'llm' | 'error'
   error?: string
@@ -68,11 +70,12 @@ export class DmWatch {
       time,
       woken: happened.includes('[AgnesHub]'),
       trigger: happened
-        .replace(/^[^]*?\[AgnesHub\]\s*/, '')
+        .replace(/^[\s\S]*?\[AgnesHub\]\s*/, '')
         .split('\n')
         .filter(Boolean)
         .slice(0, 4),
       choice: String(d.choice ?? ''),
+      model: String(d.model ?? 'DM'),
       outcome: d.outcome as Decision['outcome'],
       top: (d.top as [string, number][]) ?? [],
       options: Number(d.options ?? 0),

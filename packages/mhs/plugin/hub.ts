@@ -8,10 +8,10 @@
  * AGNES_HUB_LISTEN  host:port to listen on, default 127.0.0.1:4180 (loopback only unless configured)
  * AGNES_HUB_DATA    data directory, default <AGH_HOME or ~/.agh>/hub; it keeps maps.json, the maps
  *                   devices declared
- * CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN
- *                   Cloudflare's clef as the decision model (plugin/dm.ts), switched per conversation
- *                   with hub/dm; AGNES_DM=on has it on where it was never switched; AGNES_DM_SCENE
- *                   names a file that tells it about the place
+ * TYPESAFE_API_KEY  TypeSafe's Jev as the decision model (plugin/dm.ts); or, with AGNES_DM_MODEL=clef,
+ *                   Cloudflare's clef (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN). Switched per
+ *                   conversation with hub/dm; AGNES_DM=on has it on where it was never switched;
+ *                   AGNES_DM_SCENE names a file that tells it about the place
  */
 import { mkdirSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -20,7 +20,8 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { AGH_DIR } from '@agnes/protocol'
 import { Brain } from '../server/brain.js'
-import { clef, DecisionModel } from '../server/dm.js'
+import { Dm } from '../server/dm.js'
+import { ClefModel, type DecisionModel, JevModel } from '../server/dm-models.js'
 import { North } from '../server/north.js'
 import { South } from '../server/south.js'
 import { wake } from './daemon.js'
@@ -164,15 +165,22 @@ export const hub = {
       wake(home, session, text).catch((e: Error) => log(`could not wake ${session}: ${e.message}`)),
     )
     const disposers = registerBrainTools(agnes, brain)
-    const account = env.CLOUDFLARE_ACCOUNT_ID
-    const token = env.CLOUDFLARE_API_TOKEN
-    if (account && token) {
+    const { CLOUDFLARE_ACCOUNT_ID: account, CLOUDFLARE_API_TOKEN: token, TYPESAFE_API_KEY: key } = env
+    const model: DecisionModel | undefined =
+      env.AGNES_DM_MODEL === 'clef'
+        ? account && token
+          ? new ClefModel(account, token)
+          : undefined
+        : key
+          ? new JevModel(key)
+          : undefined
+    if (model) {
       const scene = env.AGNES_DM_SCENE ? readFileSync(env.AGNES_DM_SCENE, 'utf8').trim() : DEFAULT_SCENE
       // Per conversation, as switched with hub/dm; AGNES_DM=on turns it on where it was never switched.
       const switched = new Map<string, boolean>()
       const on = (conversation: string) => switched.get(conversation) ?? env.AGNES_DM === 'on'
       // What devices report by themselves wakes the conversation on duty, where the DM takes it first.
-      const model = new DecisionModel(north, scene, clef(account, token), (lines) => {
+      const dm = new Dm(north, scene, model, (lines) => {
         if (brain.onDuty && on(brain.onDuty)) brain.wakeOnDuty(lines.join('\n'))
       })
       north.dm = (conversation, value) => {
@@ -180,7 +188,7 @@ export const hub = {
         return { ready: true, on: on(conversation) }
       }
       dmLink = {
-        model,
+        dm,
         on,
         report: (d) =>
           north.publish({
@@ -193,13 +201,13 @@ export const hub = {
                 : d.outcome === 'did'
                   ? `DM chose ${d.choice}.`
                   : 'DM handed the step to the LLM.',
-            data: { ...d },
+            data: { ...d, model: model.name },
           }),
         log,
       }
-      log('the decision model (clef) is ready')
+      log(`the DM (${model.name}) is ready`)
       ctx.effect(() => () => {
-        model.stop()
+        dm.stop()
         delete north.dm
         dmLink = undefined
       })

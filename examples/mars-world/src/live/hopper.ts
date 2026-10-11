@@ -2,6 +2,7 @@ import { type Call, CallError } from '@agnes/mhs/device'
 import * as THREE from 'three'
 import { LAYOUT } from '../base.js'
 import { OBSTACLES } from '../terrain.js'
+import { PLACE_PARAM, pointOf } from './basemap.js'
 import { addCamera } from './camera.js'
 import { addPlace, reading } from './place.js'
 import { burn, flightTimeLeft, maxAltitude, ROCKET } from './rocket.js'
@@ -388,9 +389,10 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'fly_to',
       description:
-        'Fly to a point on the base map and hover over it, at the current altitude or a new one. Reports progress as the distance left.',
+        'Fly to a place on the base map, or to a point, and hover over it, at the current altitude or a new one. Reports progress as the distance left.',
       timeout: 60,
       params: {
+        place: PLACE_PARAM,
         x: { type: 'number', minimum: -150, maximum: 150, description: 'metres east of the habitat' },
         y: { type: 'number', minimum: -150, maximum: 150, description: 'metres north of the habitat' },
         alt: {
@@ -400,14 +402,14 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
           description: 'new altitude above the ground, metres; at most max_altitude',
         },
       },
-      required: ['x', 'y'],
       uses: ['engine'],
       motion: true,
       pausable: true,
       ui: { label: 'Fly to' },
     },
-    (call, { x, y, alt }) =>
+    (call, { alt, ...args }) =>
       flight(async () => {
+        const { x, y } = pointOf(args)
         if (alt !== undefined) await climb(call, alt)
         await flyTo(call, fromMap(x, y), 'flying')
         return `hovering over (${round(x, 1)}, ${round(y, 1)}) at ${altitude()} m`
@@ -463,7 +465,7 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
         const rocks = found.filter((f) => f.label === 'unusual rock')
         const boulders = found.filter((f) => f.label === 'boulder')
         const people = found.filter((f) => f.label === 'astronaut')
-        const data: Record<string, unknown> = { area, found }
+        const data: Record<string, unknown> = { area, found, targets: rocks.map((r) => r.id) }
         const parts = [
           rocks.length
             ? rocks.map((r) => `unusual rock ${r.id} at (${r.x}, ${r.y})`).join(', ')

@@ -4,6 +4,7 @@ import { LAYOUT } from '../base.js'
 import { MONOLITH } from '../devices.js'
 import { UNFOLD_S } from '../monolith.js'
 import { OBSTACLES } from '../terrain.js'
+import { PLACE_PARAM, pointOf } from './basemap.js'
 import { addCamera } from './camera.js'
 import { MAP_AREA } from './map.js'
 import { addPlace, reading } from './place.js'
@@ -407,9 +408,10 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   dev.tool(
     {
       name: 'go_to',
-      description: `Go to a point on the base map (x east, y north, metres), finding its way around buildings, boulders and machines; to as near as it can get when the point itself is blocked. gait walk (${GAIT.walk.speed} m/s) goes anywhere; roll (${GAIT.roll.speed} m/s) only over open ground, ${MONO.clearance.roll} m clear of everything, and not while carrying. Stops by itself before a boulder, a machine or a person in its way.`,
+      description: `Go to a place on the base map, or to a point (x east, y north, metres), finding its way around buildings, boulders and machines; to as near as it can get when the point itself is blocked. gait walk (${GAIT.walk.speed} m/s) goes anywhere; roll (${GAIT.roll.speed} m/s) only over open ground, ${MONO.clearance.roll} m clear of everything, and not while carrying. Stops by itself before a boulder, a machine or a person in its way.`,
       timeout: 300,
       params: {
+        place: PLACE_PARAM,
         x: {
           type: 'number',
           minimum: MAP_AREA.x0,
@@ -429,14 +431,14 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
           description: 'walk, or roll as a wheel',
         },
       },
-      required: ['x', 'y'],
       uses: ['slabs'],
       motion: true,
       pausable: true,
       ui: { label: 'Go to' },
     },
-    (call, { x, y, gait }) =>
+    (call, { gait, ...args }) =>
       motion(call, gait, async () => {
+        const { x, y } = pointOf(args)
         if (gait === 'roll' && load)
           throw new CallError('x_carrying', `it cannot roll while it carries ${load.id}; walk (gait walk)`)
         const to = fromMap(x, y)

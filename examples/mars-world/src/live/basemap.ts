@@ -1,3 +1,4 @@
+import { CallError } from '@agnes/mhs/device'
 import { LAYOUT } from '../base.js'
 import { MAP_AREA } from './map.js'
 import { toMap } from './route.js'
@@ -99,4 +100,27 @@ export const BASE_MAP = {
       description: 'The buildings, the dock and the pads.',
     },
   ],
+}
+
+/** A tool parameter naming a place on the base map, as an alternative to x and y. */
+export const PLACE_PARAM = {
+  type: 'string',
+  enum: BASE_MAP.places.map((p) => p.id),
+  description: 'a place on the base map, instead of x and y',
+}
+
+/** The point a move goes to: a place's point (a zone's centre), or x and y. */
+export function pointOf({ place, x, y }: { place?: unknown; x?: unknown; y?: unknown }): {
+  x: number
+  y: number
+} {
+  const p = BASE_MAP.places.find((q) => q.id === place)
+  if (p && 'at' in p && p.at) return { x: p.at[0], y: p.at[1] }
+  if (p && 'points' in p && p.points) {
+    const xs = p.points.map((q) => q[0] as number)
+    const ys = p.points.map((q) => q[1] as number)
+    return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 }
+  }
+  if (typeof x === 'number' && typeof y === 'number') return { x, y }
+  throw new CallError('x_no_point', 'give place, or both x and y')
 }

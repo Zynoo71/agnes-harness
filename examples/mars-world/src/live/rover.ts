@@ -2,6 +2,7 @@ import { type Call, CallError } from '@agnes/mhs/device'
 import * as THREE from 'three'
 import { LAYOUT } from '../base.js'
 import { OBSTACLES } from '../terrain.js'
+import { PLACE_PARAM, pointOf } from './basemap.js'
 import { addCamera } from './camera.js'
 import { castRay } from './map.js'
 import { addPlace, reading } from './place.js'
@@ -292,18 +293,19 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'drive_to',
       description:
-        'Drive straight to a point on the base map (x east, y north, metres). Stops by itself before a boulder or a person in the way.',
+        'Drive straight to a place on the base map, or to a point (x east, y north, metres). Stops by itself before a boulder or a person in the way.',
       timeout: 260,
       params: {
+        place: PLACE_PARAM,
         x: { type: 'number', minimum: -150, maximum: 150 },
         y: { type: 'number', minimum: -150, maximum: 150 },
       },
-      required: ['x', 'y'],
       uses: ['chassis'],
       motion: true,
       pausable: true,
     },
-    async (call, { x, y }) => {
+    async (call, args) => {
+      const { x, y } = pointOf(args)
       await drive(call, [fromMap(x, y)])
       return `arrived ${where()}`
     },

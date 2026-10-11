@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { LAYOUT } from '../src/base.js'
-import { BASE_MAP, placed } from '../src/live/basemap.js'
+import { BASE_MAP, placed, pointOf } from '../src/live/basemap.js'
 
 type Place = { id: string; at?: [number, number]; points?: [number, number][] }
 
@@ -56,5 +56,15 @@ describe('base map declaration', () => {
     }
     for (const [x, z] of [LAYOUT.field, [-46, 44] as const])
       expect(inside(zone('west-field'), x, -z)).toBe(true)
+  })
+})
+
+describe('pointOf', () => {
+  it('goes to a landmark, a zone centre, or x and y, and wants one of them', () => {
+    const airlock = (BASE_MAP.places as Place[]).find((p) => p.id === 'airlock')?.at as [number, number]
+    expect(pointOf({ place: 'airlock' })).toEqual({ x: airlock[0], y: airlock[1] })
+    expect(pointOf({ place: 'east-dunes' })).toEqual({ x: 69, y: 0 })
+    expect(pointOf({ x: 3, y: -4 })).toEqual({ x: 3, y: -4 })
+    expect(() => pointOf({ x: 3 })).toThrow('give place, or both x and y')
   })
 })

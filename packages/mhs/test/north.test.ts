@@ -518,6 +518,16 @@ describe('health and position (N3)', () => {
     )
   })
 
+  it('counts a source alert only while its reading is fresh', async () => {
+    const client = await Client.open(base)
+    const { nerve } = await robot()
+    // A reading taken 20 s ago: past the alert line, but it says nothing about now.
+    nerve.send({ ...data('motors', 0, { temperature: 72 }), t: deviceNow() - 20 })
+    await until(() => south.latest('robot-01', 'motors') !== undefined)
+    const { result } = await client.request('hub/read', { device: 'robot-01' })
+    expect(result.health.reasons).toEqual(['battery 15 % (warn 20)'])
+  })
+
   it('forgets source alerts when the device comes back', async () => {
     const client = await Client.open(base)
     const first = await robot()

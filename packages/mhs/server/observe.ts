@@ -111,8 +111,12 @@ export class Observer {
     this.poses.set(device, pose)
   }
 
-  /** Every field past its alert level: state fields and fields of values sources. */
-  alerts(info: DeviceInfo): FieldAlert[] {
+  /**
+   * Every field past its alert level: state fields, and fields of values sources read in the last
+   * WINDOW_S at hub time `now`. State is kept, but data flows only while someone wants it, so an
+   * older reading says nothing about now.
+   */
+  alerts(info: DeviceInfo, now: number): FieldAlert[] {
     const out: FieldAlert[] = []
     const state = this.south.state(info.id)
     const stateFields = (info.description.state ?? {}) as Record<string, Field>
@@ -123,9 +127,11 @@ export class Observer {
     for (const source of info.description.sources ?? []) {
       const fields = (source as { fields?: Record<string, Field> }).fields ?? {}
       const latest = this.south.latest(info.id, source.id)?.msg.data as Record<string, unknown> | undefined
+      const newest = this.streams.get(`${info.id}/${source.id}`)?.newest
+      const fresh = latest !== undefined && newest !== undefined && now - newest <= WINDOW_S
       for (const [name, field] of Object.entries(fields)) {
-        // Levels count only for values on the current Nerve channel.
-        const level = latest && name in latest ? this.levels.get(`${info.id}/${source.id}/${name}`) : undefined
+        // Levels count only for fresh values on the current Nerve channel.
+        const level = fresh && name in latest ? this.levels.get(`${info.id}/${source.id}/${name}`) : undefined
         if (level && level !== 'ok') out.push({ name, field, value: latest?.[name], level })
       }
     }
@@ -146,7 +152,7 @@ export class Observer {
       available,
       problem: values.problem,
       faults: values.faults,
-      alerts: this.alerts(info),
+      alerts: this.alerts(info, now),
       flows,
       rtt: this.south.rtt(info.id),
       now,

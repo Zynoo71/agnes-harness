@@ -6,6 +6,7 @@
   "exports": {
     ".": "./index.ts",
     "./device": "./device/device.ts",
+    "./dm-options": "./server/dm-options.ts",
     "./gen/*": "./gen/ts/*.ts"
   },
   "scripts": {

@@ -8,17 +8,22 @@
  * AGNES_HUB_LISTEN  host:port to listen on, default 127.0.0.1:4180 (loopback only unless configured)
  * AGNES_HUB_DATA    data directory, default <AGH_HOME or ~/.agh>/hub; it keeps maps.json, the maps
  *                   devices declared
+ * AGNES_DM          `on` lets the decision model take steps (plugin/dm.ts), with Cloudflare's clef
+ *                   (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN) and the scene in the file named by
+ *                   AGNES_DM_SCENE
  */
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import type { RequestListener } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { AGH_DIR } from '@agnes/protocol'
 import { Brain } from '../server/brain.js'
+import { clef, DecisionModel } from '../server/dm.js'
 import { North } from '../server/north.js'
 import { South } from '../server/south.js'
 import { wake } from './daemon.js'
+import { type DmLink, dmOperation } from './dm.js'
 import { type Extension, registerBrainTools } from './tools.js'
 
 // Not 4190: that is ManageSieve's port, which the Fetch standard blocks, so Node's built-in fetch and
@@ -135,6 +140,15 @@ export const presets = {
   },
 }
 
+const DEFAULT_SCENE =
+  'You are the duty decision maker for the devices connected to AgnesHub. You act alone only when one fixed action from the list is clearly right; anything else goes to the LLM operator (ask_llm). If nothing needs doing, choose nothing.'
+
+/** The decision model of the loaded hub, for the Operation the host builds at assembly. */
+let dmLink: DmLink | undefined
+
+/** Operations for the Agnes kernel: the DM's stand-in for a step's model call. */
+export const operations = { dm: () => dmOperation(() => dmLink) }
+
 export const hub = {
   inject: ['extension'],
   apply(ctx: PluginContext) {
@@ -149,6 +163,16 @@ export const hub = {
       wake(home, session, text).catch((e: Error) => log(`could not wake ${session}: ${e.message}`)),
     )
     const disposers = registerBrainTools(agnes, brain)
+    const account = env.CLOUDFLARE_ACCOUNT_ID
+    const token = env.CLOUDFLARE_API_TOKEN
+    if (env.AGNES_DM === 'on' && account && token) {
+      const scene = env.AGNES_DM_SCENE ? readFileSync(env.AGNES_DM_SCENE, 'utf8').trim() : DEFAULT_SCENE
+      dmLink = { model: new DecisionModel(north, scene, clef(account, token)), on: () => true, log }
+      log('the decision model (clef) takes steps')
+      ctx.effect(() => () => {
+        dmLink = undefined
+      })
+    }
     ctx.effect(() => () => {
       for (const dispose of disposers) dispose()
     })

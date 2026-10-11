@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ASK_LLM, buildOptions, type DeviceEntry, idsIn, NOTHING } from '../src/dm/options.js'
+import { ASK_LLM, buildOptions, type DeviceEntry, idsIn, NOTHING } from '../server/dm-options.js'
 
 const rover: DeviceEntry = {
   id: 'rover-01',

@@ -6,7 +6,7 @@ import {
   type DeviceEntry,
   idsIn,
   NOTHING,
-} from './options.js'
+} from '@agnes/mhs/dm-options'
 
 /**
  * The decision model (DM) of the DM + LLM mode (rosorin docs/dm-mode-design.md): an AgnesHub agent

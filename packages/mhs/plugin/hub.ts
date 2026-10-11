@@ -120,6 +120,21 @@ export function startHub(
   return { hub, north, ready, stop }
 }
 
+/**
+ * Recipes a profile can choose for its sessions. `device-operator` is the standard recipe without
+ * the coding persona, environment and doctrine and without the model-callable compaction tool: a
+ * session that only operates devices gets its bearings from the per-turn device snapshot instead.
+ * Nothing changes for a profile that does not choose it.
+ */
+export const presets = {
+  'device-operator': {
+    name: 'device-operator',
+    extends: 'standard',
+    model: { prompt_sections: [] },
+    compaction: { agent_callable: false },
+  },
+}
+
 export const hub = {
   inject: ['extension'],
   apply(ctx: PluginContext) {

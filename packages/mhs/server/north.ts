@@ -414,7 +414,9 @@ export class North extends EventEmitter {
       items,
       // A read for sources leaves out an installed device's place, given with the device already.
       text: [
-        deviceText(entry, this.maps.zoneName(entry.position), wanted.length === 0),
+        deviceText(entry, this.maps.zoneName(entry.position), wanted.length === 0, (t) =>
+          this.south.hubTime(entry.id, t),
+        ),
         ...items.map((i) => i.text),
       ].join(' '),
     }
@@ -575,7 +577,7 @@ export class North extends EventEmitter {
     this.count(entry.id, 'mhs_down')
     const result = await this.south.set(entry.id, values)
     const fields = entry.state.fields
-    const applied = valuesText(result.values, fields)
+    const applied = valuesText(result.values, fields, {}, (t) => this.south.hubTime(entry.id, t))
     const refused = Object.entries(result.refused ?? {}).map(([name, why]) => `${name} ${why}`)
     const parts = [applied ? `${entry.id}: ${applied}.` : `${entry.id}: nothing changed.`]
     if (result.notes?.length) parts.push(`${result.notes.join('; ')}.`)
@@ -741,6 +743,11 @@ export class North extends EventEmitter {
     return item
   }
 
+  /** A time on a device's clock in hub time (MOS section 10). */
+  hubTime(device: string, t: number): number {
+    return this.south.hubTime(device, t)
+  }
+
   private timeOf(device: string, latest: Latest): number {
     return this.south.hubTime(device, latest.msg.t)
   }
@@ -781,7 +788,7 @@ export class North extends EventEmitter {
       if (binaryFrame) item.bin = true
       else item.b64 = binary.toString('base64')
     }
-    item.text = itemText(device, source, item)
+    item.text = itemText(device, source, item, (t) => this.south.hubTime(device, t))
     return item
   }
 
@@ -1513,7 +1520,15 @@ function sniff(binary: Buffer): string | undefined {
   return undefined
 }
 
-function show(value: unknown, field: Field | undefined): string {
+/** A device clock reading in hub time; the identity when the device's clock offset is not known. */
+type ToHub = (t: number) => number
+
+/** Seconds above this in a field with unit s are a point in time (Unix time, after 2001), not a duration. */
+const UNIX_TIME_S = 1e9
+
+function show(value: unknown, field: Field | undefined, toHub: ToHub): string {
+  if (typeof value === 'number' && field?.unit === 's' && value > UNIX_TIME_S)
+    return fromNow(toHub(value) - now())
   const text =
     typeof value === 'number'
       ? String(round(value, 2))
@@ -1523,36 +1538,54 @@ function show(value: unknown, field: Field | undefined): string {
   return field?.unit ? `${text} ${field.unit}` : text
 }
 
+/** "in 2 min 5 s", "1 h 10 min ago", "now": a model reads this, not a Unix time. */
+export function fromNow(seconds: number): string {
+  const s = Math.round(Math.abs(seconds))
+  if (s < 1) return 'now'
+  const [d, h, m] = [Math.floor(s / 86400), Math.floor(s / 3600) % 24, Math.floor(s / 60) % 60]
+  const span = d > 0 ? `${d} d ${h} h` : h > 0 ? `${h} h ${m} min` : m > 0 ? `${m} min ${s % 60} s` : `${s} s`
+  return seconds > 0 ? `in ${span}` : `${span} ago`
+}
+
 /** "mode driving, battery 64 % (warn)" from values and their declarations. */
 function valuesText(
   values: Record<string, unknown>,
   fields: Record<string, Field>,
   alerts: Record<string, string> = {},
+  toHub: ToHub = (t) => t,
 ): string {
   return Object.entries(values)
     .filter(([name, value]) => name !== 'problem' && name !== 'faults' && value !== null)
-    .map(([name, value]) => `${name} ${show(value, fields[name])}${alerts[name] ? ` (${alerts[name]})` : ''}`)
+    .map(
+      ([name, value]) =>
+        `${name} ${show(value, fields[name], toHub)}${alerts[name] ? ` (${alerts[name]})` : ''}`,
+    )
     .join(', ')
 }
 
 /**
  * One or two sentences about a device for a model: availability, problem, faults and state, with
  * the name of the zone it is in when its map gives one. `installed` false leaves out an installed
- * device's place, which never changes.
+ * device's place, which never changes. `toHub` puts the device's times on the hub's clock.
  */
-export function deviceText(entry: DeviceEntry, zoneName?: string, installed = true): string {
+export function deviceText(
+  entry: DeviceEntry,
+  zoneName?: string,
+  installed = true,
+  toHub: ToHub = (t) => t,
+): string {
   const where = entry.available ? 'available' : entry.online ? 'connected but not available' : 'offline'
   const { fields, values } = entry.state
   const parts = [`${entry.id} is ${where}.`]
   const summary = summaryText(entry.health, entry.position, zoneName, installed)
   if (summary) parts.push(summary)
-  const state = valuesText(values, fields)
+  const state = valuesText(values, fields, {}, toHub)
   if (state) parts.push(`State: ${state}.`)
   return parts.join(' ')
 }
 
 /** One sentence about an item for a model. */
-export function itemText(device: string, source: Source, item: Item): string {
+export function itemText(device: string, source: Source, item: Item, toHub: ToHub = (t) => t): string {
   const age = item.age === undefined ? '' : `, ${item.age} s old`
   const data = item.data as Json
   switch (source.kind) {
@@ -1561,7 +1594,7 @@ export function itemText(device: string, source: Source, item: Item): string {
       return `${device} ${source.id}: picture ${data.w}x${data.h}${age}.`
     case 'values':
     case 'switch':
-      return `${device} ${source.id}: ${valuesText(data, (source as { fields?: Record<string, Field> }).fields ?? {})}${age}.`
+      return `${device} ${source.id}: ${valuesText(data, (source as { fields?: Record<string, Field> }).fields ?? {}, {}, toHub)}${age}.`
     case 'detections': {
       const found = (data.items as { label: string; conf: number; dist?: number; bearing?: number }[]) ?? []
       if (found.length === 0) return `${device} ${source.id}: nothing detected${age}.`

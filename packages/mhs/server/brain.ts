@@ -163,7 +163,11 @@ export class Brain {
         text: [
           String(waited.text),
           took,
-          now ? deviceText(now, this.north.maps.zoneName(now.position), false) : '',
+          now
+            ? deviceText(now, this.north.maps.zoneName(now.position), false, (t) =>
+                this.north.hubTime(device, t),
+              )
+            : '',
         ]
           .filter(Boolean)
           .join(' '),

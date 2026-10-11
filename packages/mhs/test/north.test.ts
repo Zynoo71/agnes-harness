@@ -6,7 +6,7 @@ import { WebSocket } from 'ws'
 import { Device } from '../device/device.js'
 import { Store } from '../plugin/client/src/core/store.js'
 import { Maps, zoneAt } from '../server/maps.js'
-import { North, resultText } from '../server/north.js'
+import { deviceText, fromNow, North, resultText } from '../server/north.js'
 import { South } from '../server/south.js'
 import { FakeDevice, FakeNerve, type Msg, until } from './fakes.js'
 
@@ -903,6 +903,35 @@ describe('result text', () => {
     expect(
       resultText('cam-1', 'look_at', { status: 'failed', reason: 'device', detail: 'motor stalled' }),
     ).toBe('cam-1: look_at failed (device): motor stalled.')
+  })
+
+  it('gives a Unix time in seconds as time from now, on the hub clock', () => {
+    expect([fromNow(0.4), fromNow(42), fromNow(125), fromNow(-4210), fromNow(93_600)]).toEqual([
+      'now',
+      'in 42 s',
+      'in 2 min 5 s',
+      '1 h 10 min ago',
+      'in 1 d 2 h',
+    ])
+    const entry = {
+      id: 'dish-1',
+      kind: 'antenna',
+      online: true,
+      available: true,
+      since: 0,
+      sources: [],
+      health: { level: 'ok', reasons: [] },
+      state: {
+        fields: { changes_at: { type: 'number', unit: 's' }, slew: { type: 'number', unit: 's' } },
+        values: { changes_at: Date.now() / 1000 + 300, slew: 12 },
+        updated: null,
+        alerts: {},
+      },
+    } as unknown as Parameters<typeof deviceText>[0]
+    // The device's clock runs 60 s ahead of the hub's.
+    expect(deviceText(entry, undefined, true, (t) => t - 60)).toBe(
+      'dish-1 is available. State: changes_at in 4 min 0 s, slew 12 s.',
+    )
   })
 })
 

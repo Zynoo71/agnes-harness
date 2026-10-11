@@ -57,7 +57,7 @@ What it does not do:
 - Identifiers, units, frames and text follow MHS section 3. Angles are degrees.
 - All times are Unix seconds **on AgnesHub's clock**. Device timestamps are converted with the clock synchronization of MOS section 10.
 - Messages are JSON-RPC 2.0, one per WebSocket text frame, with string request ids. Receivers ignore fields they do not know.
-- **Text for models.** Results, rejections, read results and events carry `text`: one or two plain English sentences written by AgnesHub for a language model, stating what happened and the current situation. Pages that show data to people may ignore it.
+- **Text for models.** Results, rejections, read results and events carry `text`: one or two plain English sentences written by AgnesHub for a language model, stating what happened and the current situation. A value in seconds that is a Unix time (a field with unit `s` above 10⁹) reads as time from now on the hub's clock, `changes_at in 4 min 0 s`. Pages that show data to people may ignore it.
 
 Errors use the JSON-RPC codes of MHS 3.2, plus:
 

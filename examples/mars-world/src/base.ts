@@ -281,8 +281,25 @@ function garage(): THREE.Group {
 /** Panel tilt of the solar array in use, in degrees; stowed panels stand nearly on edge. */
 export const PANEL_TILT = { deployed: 24, stowed: 80 }
 
-/** The solar array of the power system: rows of panels tilted to the south, one instanced mesh. */
-function solarField(): { group: THREE.Group; tilt(deg: number): void } {
+/**
+ * The solar array's rows, south of its centre in metres: two blocks of two rows with an aisle
+ * between them wide enough for the rover, so every panel is beside a way it can drive.
+ */
+const SOLAR_ROWS = [-5, -1.6, 5.4, 8.8]
+/** The solar array's panels in world coordinates (x east, z south), six to a row, row 0 the northernmost. */
+export const SOLAR_PANELS: { x: number; z: number; row: number; col: number }[] = []
+for (const [row, dz] of SOLAR_ROWS.entries())
+  for (let col = 0; col < 6; col++)
+    SOLAR_PANELS.push({ x: LAYOUT.solar[0] - 7.5 + col * 3, z: LAYOUT.solar[1] + dz, row, col })
+
+/** The dust a panel shows: a film from dark to Mars tan; panels cleaner than `shown` show none. */
+const DUST = { color: new THREE.Color(0xb27c50), clean: new THREE.Color(0x1a2640), shown: 0.12, full: 0.6 }
+
+/**
+ * The solar array of the power system: rows of panels tilted to the south, one instanced mesh, and
+ * over each panel a film of dust as thick as it is dusty.
+ */
+function solarField(): { group: THREE.Group; tilt(deg: number): void; soil(levels: number[]): void } {
   const g = new THREE.Group()
   const cells = canvasTexture(512, (c, s) => {
     c.fillStyle = '#0d1a33'
@@ -303,7 +320,6 @@ function solarField(): { group: THREE.Group; tilt(deg: number): void } {
     }
   })
   const frame = metal()
-  const [cx, cz] = LAYOUT.solar
   const panels = new THREE.InstancedMesh(
     new THREE.BoxGeometry(2.6, 0.06, 1.5),
     std(0xffffff, 0.22, 0.5, { map: cells }),
@@ -313,28 +329,54 @@ function solarField(): { group: THREE.Group; tilt(deg: number): void } {
   panels.receiveShadow = true
   g.add(panels)
   const mounts: THREE.Vector3[] = []
-  for (let row = 0; row < 4; row++)
-    for (let col = 0; col < 6; col++) {
-      const x = cx - 7.5 + col * 3
-      const z = cz - 5 + row * 3.4
-      const unit = new THREE.Group()
-      onGround(unit, x, z)
-      unit.add(part(new THREE.CylinderGeometry(0.06, 0.08, 1.1, 8), frame, 0, 0.55, 0))
-      unit.add(part(new THREE.BoxGeometry(0.12, 0.12, 0.3), frame, 0, 1.1, 0))
-      g.add(unit)
-      mounts.push(new THREE.Vector3(x, unit.position.y + 1.15, z))
-    }
+  for (const { x, z } of SOLAR_PANELS) {
+    const unit = new THREE.Group()
+    onGround(unit, x, z)
+    unit.add(part(new THREE.CylinderGeometry(0.06, 0.08, 1.1, 8), frame, 0, 0.55, 0))
+    unit.add(part(new THREE.BoxGeometry(0.12, 0.12, 0.3), frame, 0, 1.1, 0))
+    g.add(unit)
+    mounts.push(new THREE.Vector3(x, unit.position.y + 1.15, z))
+  }
   const m = new THREE.Matrix4()
   const q = new THREE.Quaternion()
   const one = new THREE.Vector3(1, 1, 1)
+  const film = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(2.56, 0.02, 1.46),
+    new THREE.MeshStandardMaterial({ roughness: 1, transparent: true, opacity: 0.9 }),
+    24,
+  )
+  film.receiveShadow = true
+  g.add(film)
+  const levels = SOLAR_PANELS.map(() => 0)
+  const lift = new THREE.Vector3()
+  const at2 = new THREE.Vector3()
+  const size = new THREE.Vector3()
+  const tint = new THREE.Color()
+  const draw = () => {
+    for (const [i, at] of mounts.entries()) {
+      panels.setMatrixAt(i, m.compose(at, q, one))
+      const level = levels[i] ?? 0
+      const k = THREE.MathUtils.clamp((level - DUST.shown) / (DUST.full - DUST.shown), 0, 1)
+      lift.set(0, 0.045, 0).applyQuaternion(q)
+      size.setScalar(level > DUST.shown ? 1 : 0)
+      film.setMatrixAt(i, m.compose(at2.copy(at).add(lift), q, size))
+      film.setColorAt(i, tint.copy(DUST.clean).lerp(DUST.color, k))
+    }
+    panels.instanceMatrix.needsUpdate = film.instanceMatrix.needsUpdate = true
+    if (film.instanceColor) film.instanceColor.needsUpdate = true
+    panels.computeBoundingSphere()
+    film.computeBoundingSphere()
+  }
   const tilt = (deg: number) => {
     q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), THREE.MathUtils.degToRad(deg))
-    for (const [i, at] of mounts.entries()) panels.setMatrixAt(i, m.compose(at, q, one))
-    panels.instanceMatrix.needsUpdate = true
-    panels.computeBoundingSphere()
+    draw()
+  }
+  const soil = (next: number[]) => {
+    for (const [i, v] of next.entries()) levels[i] = v
+    draw()
   }
   tilt(PANEL_TILT.deployed)
-  return { group: g, tilt }
+  return { group: g, tilt, soil }
 }
 
 /** The rover dock: a marked bay south of the garage, with a charging post on its east side. */
@@ -415,7 +457,7 @@ function batteryBank(): THREE.Group {
 
 /**
  * The rocket hopper's pad: a slab of sintered regolith scorched by the engine, with a ring to land
- * in, and the propellant service unit at its south edge, hosed to the pad.
+ * in, and the propellant service unit at its east edge, hosed to the pad.
  */
 function hopperPad(): THREE.Group {
   const g = new THREE.Group()
@@ -464,8 +506,8 @@ function hopperPad(): THREE.Group {
   )
   // The service unit makes propellant from the oxygen plant's output and fills the hopper's tanks.
   const unit = new THREE.Group()
-  unit.position.set(0, 0, 3.6)
-  unit.rotation.y = Math.PI / 2
+  unit.position.set(3.6, 0, 0)
+  unit.rotation.y = Math.PI
   unit.add(part(new THREE.BoxGeometry(0.7, 1.0, 0.9), hullMaterial(1, 1), 0, 0.5, 0))
   unit.add(part(new THREE.BoxGeometry(0.72, 0.12, 0.92), std(0xd2671f, 0.55, 0.1), 0, 0.82, 0))
   unit.add(part(new THREE.BoxGeometry(0.04, 0.12, 0.26), glow(0x46ff7a, 4), -0.37, 0.62, 0))
@@ -542,6 +584,8 @@ export interface Base {
   windows: THREE.MeshStandardMaterial
   /** Tilts every solar panel, in degrees. */
   tiltPanels(deg: number): void
+  /** Shows each panel's dust (SOLAR_PANELS order), 0 clean to 1 covered. */
+  soilPanels(levels: number[]): void
   update(t: number): void
 }
 
@@ -549,8 +593,11 @@ export interface Base {
  * What blocks the way at the base, in world coordinates (x east, z south), for the base map:
  * buildings, masts, the oxygen plant, cargo. Pads and the dock are open ground.
  */
-/** The solar field: open ground under panels on posts, so it blocks the way but casts no contact shade. */
-const SOLAR_FIELD: Footprint = { x: 21, z: 20.1, w: 18.6, d: 12 }
+/** The solar field's two blocks: open ground under panels on posts, so they block the way but cast no contact shade. */
+const SOLAR_FIELDS: Footprint[] = [
+  { x: 21, z: 16.7, w: 18.6, d: 5.2 },
+  { x: 21, z: 27.1, w: 18.6, d: 5.2 },
+]
 
 export const FOOTPRINTS: Footprint[] = [
   { x: 0, z: 0, r: 9.6 },
@@ -558,7 +605,7 @@ export const FOOTPRINTS: Footprint[] = [
   { x: 9, z: -2, w: 4.6, d: 2.4 },
   { x: 18.5, z: -2, w: 16.4, d: 7.2 },
   { x: -17, z: 1, w: 8.8, d: 10.2 },
-  SOLAR_FIELD,
+  ...SOLAR_FIELDS,
   { x: 11.5, z: 20, w: 5.6, d: 2.6 },
   { x: -24, z: 15.5, w: 4.4, d: 7 },
   { x: -19.2, z: 15.5, w: 0.6, d: 4.5 },
@@ -567,7 +614,7 @@ export const FOOTPRINTS: Footprint[] = [
   { x: -4.5, z: -15, r: 0.5 },
   { x: -4, z: 28, r: 0.4 },
   { x: -6.5, z: 12, r: 0.4 },
-  { x: 27, z: 11.6, w: 1, d: 0.8 },
+  { x: 30.6, z: 8, w: 0.8, d: 1 },
   { x: -4.9, z: 13.4, w: 3.4, d: 0.4 },
   ...DETAIL_FOOTPRINTS.map((f) => ({ x: f.x, z: f.z, w: f.w, d: f.d })),
   ...DETAIL_POSTS.map(([x, z]) => ({ x, z, r: 0.4 })),
@@ -575,7 +622,7 @@ export const FOOTPRINTS: Footprint[] = [
 
 /** What stands on the ground and darkens it where it meets it: the footprints but the solar field and posts. */
 export const GROUND_CONTACTS = FOOTPRINTS.filter(
-  (f) => f !== SOLAR_FIELD && ('r' in f ? f.r >= 1 : f.w * f.d >= 2),
+  (f) => !SOLAR_FIELDS.includes(f) && ('r' in f ? f.r >= 1 : f.w * f.d >= 2),
 )
 
 export function buildBase(): Base {
@@ -627,6 +674,7 @@ export function buildBase(): Base {
     door: lock.door,
     windows: windows as THREE.MeshStandardMaterial,
     tiltPanels: solar.tilt,
+    soilPanels: solar.soil,
     update(t) {
       ;(beacon.material as THREE.MeshStandardMaterial).emissiveIntensity = Math.sin(t * 3) > 0.6 ? 8 : 0.2
       flag.update(t)

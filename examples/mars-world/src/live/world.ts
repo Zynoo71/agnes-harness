@@ -363,6 +363,8 @@ export class World {
   earthWindow: (() => { open: boolean; changes: number }) | undefined
   /** Set by the power system: dust settles on the panels, in percent of their light. */
   dustPanels: ((percent: number) => void) | undefined
+  /** Set by the power system: whether the array is deployed, and a panel brushed clean (gives the mean dust). */
+  solar: { deployed(): boolean; clean(panel: number): number } | undefined
   /** Set by the lab: takes a sample handed to it and queues it for analysis. */
   labReceive: ((sample: string) => void) | undefined
   /** Photos the cameras took, by id (`photo-1`). */

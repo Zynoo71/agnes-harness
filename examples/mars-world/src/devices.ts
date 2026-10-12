@@ -307,6 +307,7 @@ export interface Parts {
   door: THREE.Object3D
   windows: THREE.MeshStandardMaterial
   tiltPanels(deg: number): void
+  soilPanels(levels: number[]): void
 }
 
 export interface Devices {
@@ -391,6 +392,7 @@ export async function buildDevices(base: Base): Promise<Devices> {
     door: base.door,
     windows: base.windows,
     tiltPanels: base.tiltPanels,
+    soilPanels: base.soilPanels,
   }
   let lastT = 0
   const was = hopper.group.position.clone()

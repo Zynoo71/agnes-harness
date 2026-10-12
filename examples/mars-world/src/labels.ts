@@ -8,7 +8,7 @@ import type { Lang } from './overlay.js'
 const TOOLS: Record<string, [en: string, zh: string]> = {
   analyze: ['Analyze', '分析样品'],
   carry: ['Carry', '搬运'],
-  clean_array: ['Clean array', '清洁太阳能板'],
+  clean_panels: ['Clean panels', '清洁太阳能板'],
   close_outer: ['Close outer door', '关外舱门'],
   collect_sample: ['Collect sample', '采样'],
   cycle_in: ['Cycle in', '进舱循环'],

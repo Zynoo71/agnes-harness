@@ -1440,7 +1440,11 @@ function untilProblem(entry: DeviceEntry, until: Json): string | undefined {
   }
   if (typeof until.source === 'string') {
     const source = entry.sources.find((s) => s.id === until.source)
-    if (!source) return `${entry.id} has no source ${until.source}`
+    if (!source)
+      // Often the field is a state field; say so, so the next try is right.
+      return typeof until.field === 'string' && until.field in entry.state.fields
+        ? `${entry.id} has no source ${until.source}; ${until.field} is a state field: use {"state": "${until.field}", ...}`
+        : `${entry.id} has no source ${until.source}`
     if (typeof until.field === 'string') {
       if ((source.kind !== 'values' && source.kind !== 'switch') || ops.length === 0)
         return 'a field watch needs a values or switch source and a comparison'

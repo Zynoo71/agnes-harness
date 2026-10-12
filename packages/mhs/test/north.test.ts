@@ -648,6 +648,9 @@ describe('watch (N3)', () => {
     const bad = async (until: Msg) =>
       (await client.request('hub/watch', { device: 'robot-01', until })).error?.message
     expect(await bad({ state: 'speed', lt: 1 })).toBe('robot-01 has no state field speed')
+    expect(await bad({ source: 'state', field: 'battery', lt: 5 })).toBe(
+      'robot-01 has no source state; battery is a state field: use {"state": "battery", ...}',
+    )
     expect(await bad({ source: 'front', has: 'person' })).toBe('front is not a detections source')
     expect(await bad({ source: 'motors', field: 'temperature °C', gt: 70 })).toBe(
       'motors has no field temperature °C; its fields are temperature',

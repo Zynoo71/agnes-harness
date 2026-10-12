@@ -106,7 +106,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
       if (service.guest === 'left' || service.guest === 'leaving')
         throw new CallError('x_gone', 'the guest has left')
       if (service.guest === 'following')
-        throw new CallError('busy', 'the guest is already being led to a table')
+        throw new CallError('x_seating', 'the guest is already being led to a table')
       if (service.table === t.id) return `the guest is already seated at ${t.id}`
       const status = service.status(t.id)
       if (status !== 'free')

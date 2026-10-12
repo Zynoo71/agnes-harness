@@ -2,7 +2,7 @@ import { type Call, CallError, type Device } from '@agnes/mhs/device'
 import type * as THREE from 'three'
 import { rotY } from '../shapes.js'
 import { fromMap, type Point, planNear, round, toMap } from './route.js'
-import { Body, every, turnTo, type World } from './world.js'
+import { Body, every, turnTo, type World, wait } from './world.js'
 
 /**
  * Moving about the floor: a robot plans its way on the floor map around the furniture and the
@@ -113,22 +113,37 @@ export class Robot {
     this.homing = { stop, done }
   }
 
-  /** Plans a way to (x, y) around furniture and the others, drives it, and faces `yaw` if given. */
+  /**
+   * Plans a way to (x, y) around furniture and the others, drives it, and faces `yaw` if given. When
+   * another robot is in the way, it waits up to 10 s for it to move on.
+   */
   async goTo(call: Call, to: { x: number; y: number; yaw?: number }, step?: () => void): Promise<void> {
-    const others = this.world
-      .things()
-      .filter((t) => t.id !== this.options.id)
-      .map((t) => ({ ...t, r: t.r + this.options.radius }))
-    const plan = planNear(
-      this.world.planGrid(),
-      this.body.at,
-      fromMap(to.x, to.y),
-      others,
-      this.options.radius,
-      1.5,
-    )
+    const route = () => {
+      const others = this.world
+        .things()
+        .filter((t) => t.id !== this.options.id)
+        .map((t) => ({ ...t, r: t.r + this.options.radius }))
+        // One already overlapping this robot would wall it in; drive out of it instead.
+        .filter((t) => Math.hypot(t.x - this.body.at.x, t.z - this.body.at.z) > t.r)
+      return planNear(
+        this.world.planGrid(),
+        this.body.at,
+        fromMap(to.x, to.y),
+        others,
+        this.options.radius,
+        1.5,
+      )
+    }
+    let plan = route()
+    for (let i = 0; !plan && i < 5; i++) {
+      await wait(call, 2000)
+      plan = route()
+    }
     if (!plan)
-      throw new CallError('blocked', `no way from ${this.where()} to (${round(to.x, 1)}, ${round(to.y, 1)})`)
+      throw new CallError(
+        'unreachable',
+        `no way from ${this.where()} to (${round(to.x, 1)}, ${round(to.y, 1)})`,
+      )
     for (const p of plan.path)
       await this.body.go(call, p, {
         speed: this.options.speed,

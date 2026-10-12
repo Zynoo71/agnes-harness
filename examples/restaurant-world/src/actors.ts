@@ -1,5 +1,15 @@
 import * as THREE from 'three'
-import { ARM_BASE, BACK_OF_HOUSE_Y, BAR_X, BARTENDER, DOOR, FIXTURES, HOMES, PRIVATE_ROOM } from './layout.js'
+import {
+  ARM_BASE,
+  BACK_OF_HOUSE_Y,
+  BAR_X,
+  BARTENDER,
+  DOOR,
+  FIXTURES,
+  HOMES,
+  PRIVATE_ROOM,
+  PRIVATE_SPEAKER,
+} from './layout.js'
 import type { Look } from './menu.js'
 import { box, cylinder, drawn, mat, place } from './shapes.js'
 
@@ -644,12 +654,28 @@ export function puddle(): THREE.Group {
   return g
 }
 
-/** Effects the kitchen and the room switch on: fire under the wok, steam over the stove, music notes. */
+/** Effects the kitchen and the rooms switch on: fire under the wok, steam over the stove, music notes in the dining room and in the private room. */
 export interface Effects {
   fire: THREE.Group
   steam: THREE.Group
   notes: THREE.Group
+  privateNotes: THREE.Group
   update(t: number): void
+}
+
+/** Four glowing music notes, risen and drifted by `update`. */
+function musicNotes(): THREE.Group {
+  const notes = new THREE.Group()
+  const ink = mat(0x000000, { emissive: 0xffd36e, emissiveIntensity: 1.6 })
+  for (let k = 0; k < 4; k++) {
+    const note = new THREE.Group()
+    note.add(at(sphere(0.06, ink, 10), 0, 0, 0))
+    note.add(at(box(0.015, 0.22, 0.015, ink), 0.05, 0.11, 0))
+    note.add(at(box(0.08, 0.02, 0.015, ink), 0.09, 0.21, 0))
+    notes.add(at(note, k * 0.4, k * 0.3, 0))
+  }
+  notes.visible = false
+  return notes
 }
 
 export function buildEffects(): Effects {
@@ -669,20 +695,13 @@ export function buildEffects(): Effects {
   for (let k = 0; k < 6; k++)
     steam.add(at(sphere(0.09, puff, 10), (k % 3) * 0.12 - 0.12, k * 0.12, (k % 2) * 0.1))
   steam.visible = false
-  const notes = new THREE.Group()
-  const ink = mat(0x000000, { emissive: 0xffd36e, emissiveIntensity: 1.6 })
-  for (let k = 0; k < 4; k++) {
-    const note = new THREE.Group()
-    note.add(at(sphere(0.06, ink, 10), 0, 0, 0))
-    note.add(at(box(0.015, 0.22, 0.015, ink), 0.05, 0.11, 0))
-    note.add(at(box(0.08, 0.02, 0.015, ink), 0.09, 0.21, 0))
-    notes.add(at(note, k * 0.4, k * 0.3, 0))
-  }
-  notes.visible = false
+  const notes = musicNotes()
+  const privateNotes = musicNotes()
   return {
     fire,
     steam,
     notes,
+    privateNotes,
     update(t) {
       if (fire.visible)
         fire.children.forEach((c, k) => {
@@ -694,12 +713,13 @@ export function buildEffects(): Effects {
           c.position.y = phase * 0.8
           c.scale.setScalar(0.6 + phase)
         })
-      if (notes.visible)
-        notes.children.forEach((c, k) => {
-          const phase = (t * 0.35 + k / 4) % 1
-          c.position.set(k * 0.4 - 0.6 + Math.sin(t + k) * 0.15, phase * 1.1, phase * 1.2)
-          c.visible = phase < 0.9
-        })
+      for (const group of [notes, privateNotes])
+        if (group.visible)
+          group.children.forEach((c, k) => {
+            const phase = (t * 0.35 + k / 4) % 1
+            c.position.set(k * 0.4 - 0.6 + Math.sin(t + k) * 0.15, phase * 1.1, phase * 1.2)
+            c.visible = phase < 0.9
+          })
     },
   }
 }
@@ -773,6 +793,7 @@ export function buildActors(): Actors {
   group.add(place(effects.steam, FIXTURES.stove.x + 0.1, FIXTURES.stove.y, 1.4))
   // Music notes rise from the speaker on the low wall and drift out over the dining room.
   group.add(place(effects.notes, BAR_X - 1.5, BACK_OF_HOUSE_Y - 0.2, 1.75))
+  group.add(place(effects.privateNotes, PRIVATE_SPEAKER.x, PRIVATE_SPEAKER.y - 0.2, 1.75))
   const door = slidingDoor(group, [g.object, h.object, r.object, c.object])
   let last = 0
   return {

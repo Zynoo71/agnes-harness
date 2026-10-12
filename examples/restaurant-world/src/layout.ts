@@ -20,6 +20,8 @@ export const DOOR = { x0: 10, x1: 12 } as const
  * walls are cut low like the near ones, and a sliding door in its west wall opens on the dining room.
  */
 export const PRIVATE_ROOM = { x0: 16.55, x1: 22, y0: 3.9, y1: 8.8, door: { y0: 5.65, y1: 7.05 } } as const
+/** The private room's speaker, on its north wall near the east end. */
+export const PRIVATE_SPEAKER = { x: PRIVATE_ROOM.x1 - 0.7, y: PRIVATE_ROOM.y1 } as const
 /** How far the street reaches south of the room. */
 export const STREET_D = 4.5
 

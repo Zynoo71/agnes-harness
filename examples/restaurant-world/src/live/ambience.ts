@@ -1,39 +1,60 @@
 import { CallError } from '@agnes/mhs/device'
-import { ROOM } from '../layout.js'
+import type * as THREE from 'three'
+import { PRIVATE_ROOM, ROOM } from '../layout.js'
 import { placed } from './floormap.js'
 import { reading } from './readings.js'
-import { every, type World, WorldDevice, wait } from './world.js'
+import { type Air, every, type World, WorldDevice, wait } from './world.js'
 
 export const LIGHT_SCENES = ['bright', 'warm', 'dim', 'party'] as const
 export const TRACKS = ['off', 'guzheng', 'jazz', 'pop', 'birthday'] as const
 
+/** One room's lights, music and air: the dining room's (room-01) or the private room's (room-02). */
+interface Space {
+  id: string
+  name: string
+  model: string
+  /** The room in words: "the dining room". */
+  room: string
+  at: { x: number; y: number }
+  air: Air
+  /** How a fresh page has it. */
+  start: Omit<Air, 'air'>
+  light: (scene: string) => void
+  notes: THREE.Object3D
+  /** The dining room also reports whether it is day or evening outside. */
+  outside?: () => string
+}
+
 /**
- * The room: its lights, its music and its air conditioning. Lighting scenes and music change what
+ * A room: its lights, its music and its air conditioning. Lighting scenes and music change what
  * the page shows; the air drifts toward the set temperature, a degree every half minute or so.
  */
-export function ambience(world: World, log: (line: string) => void): WorldDevice {
-  const { ambience: a } = world
-  let acOn = true
+function roomDevice(world: World, log: (line: string) => void, s: Space) {
+  const a = s.air
+  const control = { acOn: true }
   const dev = new WorldDevice({
-    id: 'room-01',
+    id: s.id,
     kind: 'environment',
-    name: 'Room',
-    model: 'Agnes Restaurant lights, music and air',
+    name: s.name,
+    model: s.model,
     localization: 'fixed',
-    placement: placed(ROOM.w / 2, ROOM.d / 2, 90),
+    placement: placed(s.at.x, s.at.y, 90),
     profile: {
-      notes:
-        'The dining room’s lights (bright, warm, dim, party: coloured and slowly changing), its music (guzheng, jazz, pop, the birthday song, or off) and its air conditioning.',
+      notes: `${s.room[0]?.toUpperCase()}${s.room.slice(1)}’s lights (bright, warm, dim, party: coloured and slowly changing), its music (guzheng, jazz, pop, the birthday song, or off) and its air conditioning.`,
     },
     resources: { lights: 'queue', music: 'queue', air: 'queue' },
     state: {
       lights: { type: 'string', enum: [...LIGHT_SCENES] },
-      outside: {
-        type: 'string',
-        enum: ['day', 'evening'],
-        description:
-          'daylight through the windows; in the evening the dining room is darker, and bright lights make up for it',
-      },
+      ...(s.outside
+        ? {
+            outside: {
+              type: 'string',
+              enum: ['day', 'evening'],
+              description:
+                'daylight through the windows; in the evening the dining room is darker, and bright lights make up for it',
+            },
+          }
+        : {}),
       music: { type: 'string', enum: [...TRACKS] },
       volume: { type: 'integer', min: 0, max: 10, writable: true, description: 'music volume' },
       set_temperature: {
@@ -51,7 +72,7 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
         role: 'temperature',
         of: 'air',
         alert: { warn: 27, bad: 30 },
-        description: 'the dining room’s air now',
+        description: `${s.room}’s air now`,
       },
     },
   })
@@ -59,7 +80,7 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
   const report = () =>
     dev.update({
       lights: a.lights,
-      outside: a.outside,
+      ...(s.outside ? { outside: s.outside() } : {}),
       music: a.music,
       volume: a.volume,
       set_temperature: a.temperature,
@@ -70,7 +91,7 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
     if (name === 'volume') a.volume = Number(value)
     return value
   }
-  const curves = dev.source('air', 'values', 'the dining room’s air', {
+  const curves = dev.source('air', 'values', `${s.room}’s air`, {
     hz: 0.5,
     default: true,
     fields: {
@@ -81,7 +102,7 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
   every(
     2000,
     () => {
-      const want = acOn ? a.temperature : 30
+      const want = control.acOn ? a.temperature : 30
       a.air += Math.sign(want - a.air) * Math.min(Math.abs(want - a.air), 0.07)
       if (curves.wants()) curves.send({ temperature: reading(a.air, 0.05, 2), humidity: reading(48, 0.5) })
     },
@@ -92,8 +113,7 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
   dev.tool(
     {
       name: 'set_lights',
-      description:
-        'Change the dining room’s lights: bright, warm (the usual), dim (cosy, candle-like), or party (coloured, changing).',
+      description: `Change ${s.room}’s lights: bright, warm (the usual), dim (cosy, candle-like), or party (coloured, changing).`,
       timeout: 10,
       params: { scene: { type: 'string', enum: [...LIGHT_SCENES] } },
       required: ['scene'],
@@ -101,7 +121,7 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
       ui: { label: 'Lights' },
     },
     async (call, { scene }) => {
-      world.light(String(scene))
+      s.light(String(scene))
       await wait(call, 1500)
       a.lights = String(scene)
       report()
@@ -111,7 +131,7 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
   dev.tool(
     {
       name: 'play_music',
-      description: 'Play music in the dining room, or stop it (off). Volume is a setting, 0 to 10.',
+      description: `Play music in ${s.room}, or stop it (off). Volume is a setting, 0 to 10.`,
       timeout: 10,
       params: {
         track: {
@@ -129,7 +149,7 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
       await wait(call, 500)
       a.music = String(track)
       if (typeof volume === 'number') a.volume = volume
-      world.actors.effects.notes.visible = a.music !== 'off'
+      s.notes.visible = a.music !== 'off'
       report()
       return a.music === 'off' ? 'music off' : `playing ${track} at volume ${a.volume}`
     },
@@ -145,23 +165,51 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
       ui: { label: 'Temperature' },
     },
     async (call, { celsius }) => {
-      if (!acOn) throw new CallError('x_ac_off', 'the air conditioning is off; it cannot be set')
+      if (!control.acOn) throw new CallError('x_ac_off', 'the air conditioning is off; it cannot be set')
       await wait(call, 800)
       a.temperature = Number(celsius)
       report()
       return `air conditioning set to ${celsius} °C; the room is ${Math.round(a.air * 10) / 10} °C now`
     },
   )
+  world.onReset(() => {
+    Object.assign(a, s.start)
+    a.air = s.start.temperature
+    control.acOn = true
+    s.light(s.start.lights)
+    s.notes.visible = s.start.music !== 'off'
+    report()
+  })
+  s.light(s.start.lights)
+  s.notes.visible = s.start.music !== 'off'
+  return { dev, report, control }
+}
+
+/** The dining room's lights, music and air, and whether it is day or evening outside. */
+export function ambience(world: World, log: (line: string) => void): WorldDevice {
+  const { ambience: a } = world
+  const { dev, report, control } = roomDevice(world, log, {
+    id: 'room-01',
+    name: 'Room',
+    model: 'Agnes Restaurant lights, music and air',
+    room: 'the dining room',
+    at: { x: ROOM.w / 2, y: ROOM.d / 2 },
+    air: a,
+    start: { lights: 'warm', music: 'guzheng', volume: 4, temperature: 24 },
+    light: (scene) => world.light(scene),
+    notes: world.actors.effects.notes,
+    outside: () => world.outside,
+  })
   world.conditions.push({
     device: dev.id,
     en: 'The room gets hot (air conditioning fails, then recovers)',
     zh: '屋里变热（空调故障，之后恢复）',
     apply: () => {
-      acOn = false
+      control.acOn = false
       a.air = Math.max(a.air, 27.2)
       report()
       setTimeout(() => {
-        acOn = true
+        control.acOn = true
       }, 60000)
     },
   })
@@ -170,18 +218,29 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
     en: 'Evening falls: the dining room gets darker',
     zh: '天黑了，屋里暗下来',
     apply: () => {
-      a.outside = 'evening'
+      world.outside = 'evening'
       report()
     },
   })
   world.onReset(() => {
-    Object.assign(a, { lights: 'warm', outside: 'day', music: 'guzheng', volume: 4, temperature: 24 })
-    a.air = 24
-    acOn = true
-    world.light('warm')
-    world.actors.effects.notes.visible = true
+    world.outside = 'day'
     report()
   })
-  world.actors.effects.notes.visible = true
   return dev
+}
+
+/** The private room's own lights, music and air. */
+export function privateAmbience(world: World, log: (line: string) => void): WorldDevice {
+  const P = PRIVATE_ROOM
+  return roomDevice(world, log, {
+    id: 'room-02',
+    name: 'Private room',
+    model: 'Agnes Restaurant private room',
+    room: 'the private room',
+    at: { x: (P.x0 + P.x1) / 2, y: (P.y0 + P.y1) / 2 },
+    air: world.privateRoom,
+    start: { lights: 'warm', music: 'off', volume: 4, temperature: 24 },
+    light: (scene) => world.lightPrivate(scene),
+    notes: world.actors.effects.privateNotes,
+  }).dev
 }

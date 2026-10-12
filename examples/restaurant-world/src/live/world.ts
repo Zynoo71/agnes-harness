@@ -315,6 +315,15 @@ export interface Condition {
   apply(): void
 }
 
+/** A room's lights, music and set temperature, and its air's temperature now. */
+export interface Air {
+  lights: string
+  music: string
+  volume: number
+  temperature: number
+  air: number
+}
+
 /** What the live devices share: the scene, its truth, and the state that ties devices together. */
 export class World {
   /** Conditions the devices offer the controls panel. */
@@ -330,9 +339,14 @@ export class World {
   readonly service = new Service()
   /** What the host robot says, in a bubble over it until `until` (ms, performance.now). */
   speech = { text: '', until: 0 }
-  /** The room's lights, music and set temperature, as room-01 set them, and the air's temperature now; `light` applies a lighting scene. */
-  ambience = { lights: 'warm', outside: 'day', music: 'guzheng', volume: 4, temperature: 24, air: 24 }
+  /** The dining room's lights, music and set temperature, as room-01 set them, and its air now; `light` applies a lighting scene. */
+  ambience: Air = { lights: 'warm', music: 'guzheng', volume: 4, temperature: 24, air: 24 }
+  /** Daylight through the windows, or evening. */
+  outside = 'day'
   light: (scene: string) => void = () => undefined
+  /** The private room's, as room-02 set them; `lightPrivate` applies its lighting scene. */
+  privateRoom: Air = { lights: 'warm', music: 'off', volume: 4, temperature: 24, air: 24 }
+  lightPrivate: (scene: string) => void = () => undefined
 
   constructor(
     readonly renderer: THREE.WebGLRenderer,

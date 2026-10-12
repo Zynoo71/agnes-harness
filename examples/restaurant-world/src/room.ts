@@ -12,6 +12,7 @@ import {
   HOMES,
   PLANTS,
   PRIVATE_ROOM,
+  PRIVATE_SPEAKER,
   privateWalls,
   ROOM,
   STREET_D,
@@ -506,16 +507,7 @@ function lowWall(group: THREE.Group) {
   for (let k = 0; k < 5; k++)
     group.add(place(box(0.08, 0.12, 0.005, M.ticket), F.pass.x - 1.2 + k * 0.5, F.pass.y - 0.1, 1.68))
   // The dining room's speaker, on the low wall over the supplies cabinet, facing the guests.
-  const speaker = { x: BAR_X - 1.5, h: LOW_H + 0.3 }
-  group.add(place(box(0.42, 0.6, 0.3, M.black), speaker.x, y, speaker.h))
-  for (const [dh, r] of [
-    [-0.08, 0.13],
-    [0.19, 0.05],
-  ] as const) {
-    const cone = cylinder(r, r, 0.02, M.steelDark, 18)
-    cone.rotation.x = Math.PI / 2
-    group.add(place(cone, speaker.x, y - 0.16, speaker.h + dh))
-  }
+  group.add(speaker(BAR_X - 1.5, y))
   // Today's dishes hang over the low wall's west end, clear of the pass and the arm behind it.
   const today = { x: 2.6, y: BACK_OF_HOUSE_Y }
   for (const dx of [-1.6, 1.6])
@@ -711,6 +703,22 @@ async function bar(group: THREE.Group) {
   group.add(place(box(0.9, 0.01, 0.7, M.rubber), BARTENDER.x, BARTENDER.y, 0.005))
 }
 
+/** A speaker standing on a low wall at (x, y), facing south. */
+function speaker(x: number, y: number): THREE.Group {
+  const g = new THREE.Group()
+  const h = LOW_H + 0.3
+  g.add(place(box(0.42, 0.6, 0.3, M.black), x, y, h))
+  for (const [dh, r] of [
+    [-0.08, 0.13],
+    [0.19, 0.05],
+  ] as const) {
+    const cone = cylinder(r, r, 0.02, M.steelDark, 18)
+    cone.rotation.x = Math.PI / 2
+    g.add(place(cone, x, y - 0.16, h + dh))
+  }
+  return g
+}
+
 /** The private room: low walls like the near ones, a door frame, its name toward the view, a carpet. */
 function privateRoom(group: THREE.Group) {
   const { x0, x1, y0, y1, door } = PRIVATE_ROOM
@@ -720,6 +728,7 @@ function privateRoom(group: THREE.Group) {
   group.add(place(box(0.14, 0.12, door.y1 - door.y0 + 0.14, M.rosewood), x0, (door.y0 + door.y1) / 2, 2.2))
   group.add(place(sign('包间 · 牡丹厅', 1.6, 0.32), x0 + 1.4, y0 - 0.09, LOW_H - 0.3))
   group.add(place(rug(x1 - x0 - 0.4, y1 - y0 - 0.4), (x0 + x1) / 2, (y0 + y1) / 2, 0.004))
+  group.add(speaker(PRIVATE_SPEAKER.x, PRIVATE_SPEAKER.y))
 }
 
 /** Charging pads for the runner and the cleaner, by the east wall. */

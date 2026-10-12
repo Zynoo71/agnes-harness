@@ -22,6 +22,7 @@ export const DEVICES: { id: string; en: string; zh: string }[] = [
   { id: 'supplies-01', en: 'Supplies cabinet', zh: '用品柜' },
   { id: 'cleaner-01', en: 'Cleaner', zh: '清洁机器人' },
   { id: 'room-01', en: 'Room', zh: '灯光音乐空调' },
+  { id: 'room-02', en: 'Private room', zh: '包间灯光音乐空调' },
   { id: 'pos-01', en: 'Payment terminal', zh: '收银' },
   { id: 'cam-01', en: 'Dining room camera', zh: '摄像头' },
 ]

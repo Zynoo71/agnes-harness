@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { buildActors } from './actors.js'
 import { DmWatch } from './dm/watch.js'
 import { DEVICES } from './labels.js'
-import { BACK_OF_HOUSE_Y, BAR_X, FIXTURES, ROOM } from './layout.js'
+import { BACK_OF_HOUSE_Y, BAR_X, FIXTURES, PRIVATE_ROOM, PRIVATE_SPEAKER, ROOM, TABLES } from './layout.js'
 import { deviceCameras } from './live/camera.js'
 import { connectDevices } from './live/index.js'
 import { watchers } from './live/world.js'
@@ -79,7 +79,7 @@ const want = new THREE.Color()
 const EVENING = { fill: 1.1, key: 1.4 }
 function updateLights(t: number) {
   const s = SCENES[lighting] ?? (SCENES.warm as (typeof SCENES)[string])
-  const dark = live?.world.ambience.outside === 'evening' ? 1 : 0
+  const dark = live?.world.outside === 'evening' ? 1 : 0
   want.set(s.color)
   if (lighting === 'party') want.setHSL((t * 0.08) % 1, 0.95, 0.55)
   fill.color.lerp(want, 0.05)
@@ -87,7 +87,31 @@ function updateLights(t: number) {
   fill.intensity += (Math.max(0.35, s.fill - EVENING.fill * dark) - fill.intensity) * 0.05
   key.intensity += (Math.max(0.3, s.key - EVENING.key * dark) - key.intensity) * 0.05
   renderer.toneMappingExposure += (s.exposure - renderer.toneMappingExposure) * 0.05
+  // The private room's lamp, over its table: room-02's scene, on top of the dining room's light.
+  const p = PRIVATE_SCENES[privateLighting] ?? (PRIVATE_SCENES.warm as (typeof PRIVATE_SCENES)[string])
+  want.set(p.color)
+  if (privateLighting === 'party') want.setHSL((t * 0.08 + 0.5) % 1, 0.95, 0.55)
+  lamp.color.lerp(want, 0.05)
+  lamp.intensity += (p.intensity - lamp.intensity) * 0.05
+  shade.color.copy(lamp.color).multiplyScalar(0.25 + lamp.intensity / 40)
 }
+// room-02's scenes for the lamp in the private room.
+const PRIVATE_SCENES: Record<string, { intensity: number; color: number }> = {
+  bright: { intensity: 30, color: 0xffffff },
+  warm: { intensity: 18, color: 0xffd9a8 },
+  dim: { intensity: 4, color: 0xffb070 },
+  party: { intensity: 60, color: 0xff8ad8 },
+}
+let privateLighting = 'warm'
+const t6 = TABLES.find((t) => t.id === 't6') ?? { x: 0, y: 0 }
+const lamp = new THREE.PointLight(0xffd9a8, 18, (PRIVATE_ROOM.x1 - PRIVATE_ROOM.x0) * 1.1, 2)
+scene.add(place(lamp, t6.x, t6.y, 2.6))
+// The lamp itself, a glowing paper lantern on a cord, so the scene shows at a glance.
+const shade = new THREE.MeshBasicMaterial({ color: 0xffd9a8 })
+const lantern = new THREE.Group()
+lantern.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 12).scale(1, 0.85, 1), shade))
+lantern.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.6), new THREE.MeshBasicMaterial({ color: 0x2a1a12 })), 0, 0, 0.45))
+scene.add(place(lantern, t6.x, t6.y, 2.3))
 
 // Where each device's tag sits: over the robot that moves, or over the fixture it is.
 const fixed = (x: number, y: number) => {
@@ -114,6 +138,7 @@ const ANCHORS: Record<string, Anchor> = {
   'supplies-01': { object: fixed(FIXTURES.supplies.x, FIXTURES.supplies.y), h: 1.5 },
   'cleaner-01': { object: actors.cleaner.object, h: 0.8, moving: true },
   'room-01': { object: fixed(BAR_X - 1.5, BACK_OF_HOUSE_Y - 0.3), h: 2.2 },
+  'room-02': { object: fixed(PRIVATE_SPEAKER.x, PRIVATE_SPEAKER.y - 0.3), h: 2.2 },
   'pos-01': { object: fixed(FIXTURES.cashier.x, FIXTURES.cashier.y), h: 1.45 },
   'cam-01': { object: fixed(ROOM.w - 0.3, 0.3), h: 3.0 },
 }
@@ -176,10 +201,14 @@ const live = hub
       params.get('devices')?.split(','),
     )
   : undefined
-if (live)
+if (live) {
   live.world.light = (name) => {
     lighting = name
   }
+  live.world.lightPrivate = (name) => {
+    privateLighting = name
+  }
+}
 // Scripts (an evaluation, a test) reach the world here.
 if (live) Object.assign(window, { restaurant: { world: live.world, reset: live.reset, view } })
 
@@ -209,9 +238,14 @@ try {
 } catch {}
 
 // The birthday song through the speakers, once the sound button is on.
+// Either room playing it is enough; the louder of the two sets the volume.
 buildSound(() => {
-  const a = live?.world.ambience
-  return a && { track: a.music, volume: a.volume }
+  const w = live?.world
+  if (!w) return undefined
+  const rooms = [w.ambience, w.privateRoom].filter((a) => a.music === 'birthday')
+  return rooms.length
+    ? { track: 'birthday', volume: Math.max(...rooms.map((a) => a.volume)) }
+    : { track: w.ambience.music, volume: w.ambience.volume }
 }, document.getElementById('sound') as HTMLButtonElement)
 
 // The minimap in the top-right corner; M toggles it.

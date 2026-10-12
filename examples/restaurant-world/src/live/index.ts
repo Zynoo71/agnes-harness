@@ -1,7 +1,7 @@
 import type * as THREE from 'three'
 import type { Actors } from '../actors.js'
 import { FOOTPRINTS } from '../layout.js'
-import { ambience } from './ambience.js'
+import { ambience, privateAmbience } from './ambience.js'
 import { cam } from './cam.js'
 import { floor } from './floor.js'
 import { host } from './host.js'
@@ -40,6 +40,7 @@ export function connectDevices(
     supplies(world, log),
     cleaner(world, log),
     ambience(world, log),
+    privateAmbience(world, log),
     pos(world, log),
     cam(world, log),
   ]

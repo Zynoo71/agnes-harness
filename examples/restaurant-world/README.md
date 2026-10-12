@@ -28,7 +28,7 @@ The restaurant is drawn as in a management game: an orthographic view from the s
 - **Picture in picture.** With a hub, the main view stays where it is, and a frame in the top-left corner shows the device that just started a call: from its own camera (cam-01), else from a camera that keeps beside it, following a robot as it moves. It shows the ceiling camera until the first call and holds each device at least 8 s. `P` toggles it; `?pip=0` starts with it off.
 - **Reset.** With a hub, the Reset button (bottom right) or `R` puts the restaurant back as the page started it, without reloading, so the devices stay connected: every running call ends `interrupted` / `stop` as on `mhs/stop`; the robots go home, dishes and supplies leave the tables, spills dry up, the orders, bill and sold-out dishes are cleared, table 2 is booked again, the lights, music and air go back to warm, guzheng and 24 °C, and the guest walks in from the street again. Reset is a control of this page, not part of any device.
 - **Sound.** The 🔈 button in the bar turns the speakers on (browsers allow sound only after a click): while room-01 plays the birthday song, the page plays its melody at room-01's volume.
-- `L` toggles the device tags. `?quality=high|balanced|low` trades sharpness for frame rate. Frames are capped at 30 a second; `?fps=60` lifts the cap. `?stats` adds draw calls, triangles and JavaScript time per frame to the bar.
+- `L` toggles the device tags. `?quality=high|balanced|low` trades sharpness for frame rate. Frames run at up to 60 a second, the shadows following the robots at 30; `?fps=30` halves the work on a slow machine. `?stats` adds draw calls, triangles and JavaScript time per frame to the bar.
 
 ## The restaurant
 

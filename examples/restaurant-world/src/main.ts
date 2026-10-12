@@ -370,9 +370,9 @@ const reset = async () => {
 }
 resetButton.addEventListener('click', () => void reset())
 
-// Frames are capped at 30 a second by default; ?fps=60 lifts the cap. ?stats adds the draw calls,
-// triangles and JavaScript time of an average frame to the status line.
-const FPS = Number(params.get('fps')) || 30
+// Up to 60 frames a second, so the robots glide; ?fps=30 halves the work on a slow machine. ?stats
+// adds the draw calls, triangles and JavaScript time of an average frame to the status line.
+const FPS = Number(params.get('fps')) || 60
 const STATS = params.has('stats')
 let frames = 0
 let last = 0
@@ -389,7 +389,8 @@ renderer.setAnimationLoop(() => {
   renderer.info.reset()
   actors.update(start / 1000)
   updateLights(start / 1000)
-  if (frames % 10 === 0) renderer.shadowMap.needsUpdate = true
+  // Shadows follow the moving robots at 30 a second, or every frame below that.
+  if (FPS <= 30 || frames % 2 === 0) renderer.shadowMap.needsUpdate = true
   renderer.render(scene, view.camera)
   draws += renderer.info.render.calls
   triangles += renderer.info.render.triangles

@@ -521,7 +521,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
 function dmStatus(mode: { on: boolean; model?: string | undefined }, recent: HubEvent | undefined): string {
   if (!mode.on) return t('flow.dm.off')
   const d = recent?.data
-  if (!d) return `${mode.model ?? ''} · ${t('flow.dm.on')}`
+  if (!d) return t('flow.dm.on')
   const sure = Math.round(
     (((d.top as [string, number][] | undefined)?.[0]?.[1] as number | undefined) ?? 0) * 100,
   )

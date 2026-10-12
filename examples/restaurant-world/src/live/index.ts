@@ -3,7 +3,10 @@ import type { Actors } from '../actors.js'
 import { FOOTPRINTS } from '../layout.js'
 import { floor } from './floor.js'
 import { host } from './host.js'
+import { arm, bar, stove, wok } from './kitchen.js'
 import { menu } from './menu.js'
+import { cleaner, runner } from './robots.js'
+import { supplies } from './supplies.js'
 import { World, type WorldDevice } from './world.js'
 
 /**
@@ -20,7 +23,18 @@ export function connectDevices(
   only: string[] | undefined,
 ): { devices: WorldDevice[]; world: World; reset: () => Promise<void> } {
   const world = new World(renderer, scene, FOOTPRINTS, actors)
-  const all = [host(world, log), floor(world, log), menu(world, log)]
+  const all = [
+    host(world, log),
+    floor(world, log),
+    menu(world, log),
+    wok(world, log),
+    stove(world, log),
+    bar(world, log),
+    arm(world, log),
+    runner(world, log),
+    supplies(world, log),
+    cleaner(world, log),
+  ]
   // ?devices=host-01,menu-01 connects only these, for example to check one device on its own.
   const devices = only ? all.filter((d) => only.includes(d.id)) : all
   for (const dev of devices) void dev.run(hub)

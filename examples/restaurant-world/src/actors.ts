@@ -320,6 +320,9 @@ export interface Arm {
   pose(shoulder: number, elbow: number): void
 }
 
+/** The kitchen arm's measures: the shoulder's height over the floor (on its plinth), its links, and the grip below the wrist. */
+export const ARM_LINKS = { shoulder: 0.14 + 0.55 + 0.22, upper: 1.15, fore: 1.05, grip: 0.3 }
+
 /** The kitchen arm: an orange and white industrial arm on a column, long enough for the wok, the stove and the pass. */
 function arm(): Arm {
   const object = new THREE.Group()
@@ -335,17 +338,17 @@ function arm(): Arm {
     g.add(at(box(r * 1.6, length, r * 1.6, look), 0, length / 2, 0))
     return g
   }
-  shoulder.add(link(1.0, 0.09, M.orange))
-  const elbow = joint(shoulder, 0, 1.0, 0)
-  elbow.add(link(0.9, 0.07, M.shell))
-  const wrist = joint(elbow, 0, 0.9, 0)
+  shoulder.add(link(ARM_LINKS.upper, 0.09, M.orange))
+  const elbow = joint(shoulder, 0, ARM_LINKS.upper, 0)
+  elbow.add(link(ARM_LINKS.fore, 0.07, M.shell))
+  const wrist = joint(elbow, 0, ARM_LINKS.fore, 0)
   wrist.add(sphere(0.07, M.shellDark, 12))
   wrist.add(at(cylinder(0.05, 0.05, 0.12, M.orange, 12), 0, 0.08, 0))
   wrist.add(at(box(0.16, 0.03, 0.06, M.shellDark), 0, 0.15, 0))
   for (const side of [-1, 1]) wrist.add(at(box(0.025, 0.12, 0.04, M.shell), side * 0.065, 0.22, 0))
   wrist.add(at(sphere(0.02, M.glowCyan, 8), 0, 0.15, 0.035))
   // The fingers point down while it works; the grip is turned back over so a held dish sits upright.
-  const grip = joint(wrist, 0, 0.3, 0)
+  const grip = joint(wrist, 0, ARM_LINKS.grip, 0)
   grip.rotation.x = Math.PI
   const result: Arm = {
     object,
@@ -367,6 +370,8 @@ function arm(): Arm {
 
 export interface Bartender {
   object: THREE.Group
+  /** Set while it works, so it stops idling. */
+  busy: boolean
   /** Each arm's shoulder and elbow (rotation.x, − reaches forward) and its hand. */
   arms: { shoulder: THREE.Object3D; elbow: THREE.Object3D; hand: THREE.Object3D }[]
 }
@@ -397,7 +402,7 @@ function bartender(): Bartender {
     elbow.rotation.x = -1.2
     return { shoulder, elbow, hand }
   })
-  return { object, arms }
+  return { object, arms, busy: false }
 }
 
 /** A dish or drink, its base on the origin, about as wide as the real thing. */
@@ -683,13 +688,17 @@ export function buildActors(): Actors {
       g.marker.rotation.y = t * 2
       g.marker.position.y = 2.15 + Math.sin(t * 3) * 0.05
       h.head.rotation.x = Math.sin(t * 0.8) * 0.04
+      // Idle motion eases in from wherever work left the joints.
       if (!a.busy) {
-        a.base.rotation.y = Math.sin(t * 0.25) * 0.9
-        a.pose(0.45 + Math.sin(t * 0.4) * 0.08, 1.25)
+        a.base.rotation.y += (Math.sin(t * 0.25) * 0.9 - a.base.rotation.y) * 0.05
+        const s = a.shoulder.rotation.x + (0.45 + Math.sin(t * 0.4) * 0.08 - a.shoulder.rotation.x) * 0.05
+        a.pose(s, a.elbow.rotation.x + (1.25 - a.elbow.rotation.x) * 0.05)
       }
-      b.arms.forEach((arm, k) => {
-        arm.elbow.rotation.x = -1.2 + Math.sin(t * 1.1 + k * 1.7) * 0.1
-      })
+      if (!b.busy)
+        b.arms.forEach((arm, k) => {
+          arm.shoulder.rotation.x += (-0.3 - arm.shoulder.rotation.x) * 0.1
+          arm.elbow.rotation.x += (-1.2 + Math.sin(t * 1.1 + k * 1.7) * 0.1 - arm.elbow.rotation.x) * 0.1
+        })
     },
   }
 }

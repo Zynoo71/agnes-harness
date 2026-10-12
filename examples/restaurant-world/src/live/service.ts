@@ -27,9 +27,9 @@ export interface Line {
   rush: boolean
   stage: Stage
   /** The dish in the scene, from the moment cooking starts. */
-  object?: THREE.Object3D
+  object?: THREE.Object3D | undefined
   /** The table slot it was set on. */
-  slot?: number
+  slot?: number | undefined
 }
 
 export const SUPPLY_ITEMS = [
@@ -49,7 +49,7 @@ export interface Supply {
   item: SupplyItem
   stage: 'ready' | 'on_the_way' | 'served' | 'cleared'
   object: THREE.Object3D
-  slot?: number
+  slot?: number | undefined
 }
 
 export type GuestState = 'outside' | 'at_door' | 'following' | 'seated' | 'leaving' | 'left'
@@ -126,7 +126,7 @@ export class Service {
   }
 
   /** What is on a table now: served dishes and supplies, with the slots they take. */
-  onTable(): { slot?: number; object?: THREE.Object3D }[] {
+  onTable(): (Line | Supply)[] {
     return [
       ...this.lines.filter((l) => l.stage === 'served'),
       ...this.supplies.filter((s) => s.stage === 'served'),

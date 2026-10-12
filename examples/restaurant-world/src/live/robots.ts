@@ -1,0 +1,442 @@
+import { CallError } from '@agnes/mhs/device'
+import type * as THREE from 'three'
+import { puddle } from '../actors.js'
+import { besideSeat, guestSeat, HOMES, TABLE_H, TABLES, type Table, tableSlots } from '../layout.js'
+import { place } from '../shapes.js'
+import { landmark, PLACE_PARAM } from './floormap.js'
+import { kitchenSpots } from './kitchen.js'
+import { stageText } from './menu.js'
+import { addPlace, face, Robot } from './motion.js'
+import type { Line, Supply } from './service.js'
+import { supplySpots } from './supplies.js'
+import { every, everyFrame, type World, WorldDevice, wait } from './world.js'
+
+/** Something the runner carries: an order line's dish or a supply. */
+type Item = { kind: 'line'; line: Line } | { kind: 'supply'; supply: Supply }
+
+const objectOf = (i: Item) => (i.kind === 'line' ? i.line.object : i.supply.object)
+const nameOf = (i: Item) =>
+  i.kind === 'line' ? `${i.line.id} ${i.line.dish.en}` : `${i.supply.id} ${i.supply.item.replace('_', ' ')}`
+
+/** Where an item waits to be picked up: the pass, the bar counter or the supplies cabinet. */
+function pickup(i: Item): 'pass' | 'bar' | 'supplies' | undefined {
+  if (i.kind === 'supply') return i.supply.stage === 'ready' ? 'supplies' : undefined
+  if (i.line.stage === 'at_pass') return 'pass'
+  if (i.line.stage === 'ready' && i.line.dish.station === 'bar') return 'bar'
+  return undefined
+}
+
+const towards = (from: { x: number; y: number }, to: { x: number; y: number }) =>
+  Math.round(((Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI + 360) % 360)
+
+/** Puts an item on table `t` at the next free slot; a baby chair stands on the floor by the seat. */
+function setOnTable(world: World, t: Table, i: Item) {
+  const object = objectOf(i)
+  if (!object) return
+  object.position.set(0, 0, 0)
+  object.rotation.set(0, 0, 0)
+  if (i.kind === 'supply' && i.supply.item === 'baby_chair') {
+    const seat = world.service.seat ?? guestSeat(t)
+    const by = besideSeat(t, seat)
+    world.actors.group.add(place(object, (seat.x + by.x) / 2 + 0.55, (seat.y + by.y) / 2, 0, seat.yaw))
+    i.supply.slot = -1
+    return
+  }
+  const slot = world.service.freeSlot()
+  const slots = tableSlots(t)
+  const at = slots[slot % slots.length] ?? { x: t.x, y: t.y }
+  world.actors.group.add(place(object, at.x, at.y, TABLE_H + Math.floor(slot / slots.length) * 0.03))
+  if (i.kind === 'line') i.line.slot = slot
+  else i.supply.slot = slot
+}
+
+/** The runner: carries dishes, drinks and supplies to the table on three trays, and clears tables. */
+export function runner(world: World, log: (line: string) => void): WorldDevice {
+  const { service } = world
+  const { runner: model } = world.actors
+  const robot = new Robot(
+    world,
+    model.object,
+    { id: 'runner-01', label: 'runner', radius: 0.34, speed: 0.9, home: HOMES.runner, idleS: 6 },
+    log,
+  )
+  let mode: 'docked' | 'fetching' | 'delivering' | 'clearing' | 'returning' = 'docked'
+  let battery = 86
+  const aboard: Item[] = []
+  const dev = new WorldDevice({
+    id: 'runner-01',
+    kind: 'robot',
+    name: 'Runner',
+    model: 'Agnes Restaurant delivery robot',
+    mobile: true,
+    radius: 0.34,
+    localization: 'self',
+    profile: {
+      size_m: [0.55, 0.6, 1.4],
+      max_speed: 0.9,
+      trays: 3,
+      notes:
+        'A delivery robot with three trays. deliver fetches up to three items, wherever each waits (dishes on the pass, drinks and desserts on the bar counter, supplies at the supplies cabinet), and serves them at the guest’s table. clear takes dishes and supplies from a table to the dish return. It goes back to its charging pad by itself when it has nothing to do.',
+    },
+    resources: { chassis: 'queue' },
+    ui: { primary: 'pose' },
+    state: {
+      mode: { type: 'string', enum: ['docked', 'fetching', 'delivering', 'clearing', 'returning'] },
+      carrying: { type: 'string', description: 'what is on its trays' },
+      battery: {
+        type: 'integer',
+        unit: '%',
+        min: 0,
+        max: 100,
+        role: 'battery',
+        alert: { warn: 20, bad: 10, below: true },
+      },
+    },
+  })
+  dev.log = log
+  const report = () => dev.update({ mode, carrying: aboard.map(nameOf).join(', '), battery })
+  report()
+  robot.onHome = (phase) => {
+    mode = phase === 'leaving' ? 'returning' : 'docked'
+    report()
+  }
+  addPlace(dev, world, robot.body, 'runner', log)
+  dev.after = () => ({ pose: robot.body.pose() })
+  every(
+    10000,
+    () => {
+      battery = Math.max(5, Math.min(100, battery + (robot.atHome() ? 2 : -1)))
+      report()
+    },
+    log,
+  )
+  const itemOf = (id: string): Item => {
+    const line = service.line(id)
+    if (line) return { kind: 'line', line }
+    const supply = service.supply(id)
+    if (supply) return { kind: 'supply', supply }
+    throw new CallError('x_no_item', `there is no order line or supply ${id}`)
+  }
+  const guestTable = () => {
+    const t = TABLES.find((x) => x.id === service.table)
+    if (!t || service.guest !== 'seated') throw new CallError('x_not_seated', 'the guest is not at a table')
+    return t
+  }
+  /** Puts an item on the next free tray, stacked if there are more than three. */
+  const load = (i: Item) => {
+    const object = objectOf(i)
+    if (!object) return
+    const k = aboard.length
+    aboard.push(i)
+    const tray = model.trays[k % model.trays.length] as THREE.Object3D
+    tray.add(object)
+    object.position.set(((k % 2) - 0.5) * 0.12 * Math.min(1, Math.floor(k / 3)), Math.floor(k / 3) * 0.12, 0)
+    object.rotation.set(0, 0, 0)
+    object.scale.setScalar(i.kind === 'supply' && i.supply.item === 'baby_chair' ? 0.4 : 1)
+  }
+
+  dev.tool(
+    {
+      name: 'deliver',
+      description:
+        'Fetch up to three items, each from where it waits (an order line on the pass or on the bar counter, a supply at the supplies cabinet), and serve them at the guest’s table.',
+      timeout: 180,
+      params: {
+        items: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 3,
+          items: { type: 'string', maxLength: 8 },
+          description: 'order lines (o1) and supplies (s1)',
+        },
+      },
+      required: ['items'],
+      uses: ['chassis'],
+      motion: true,
+      ui: { label: 'Deliver' },
+    },
+    async (call, { items }) => {
+      const t = guestTable()
+      const things = [...new Set(items as string[])].map(itemOf)
+      for (const i of things)
+        if (!pickup(i))
+          throw new CallError(
+            'x_not_ready',
+            i.kind === 'line'
+              ? `${nameOf(i)} is ${stageText(i.line)}; only dishes on the pass and drinks on the bar counter can be fetched`
+              : `${nameOf(i)} is already ${i.supply.stage.replace('_', ' ')}`,
+          )
+      return robot.work(async () => {
+        try {
+          mode = 'fetching'
+          report()
+          // Each place once, the nearest first.
+          const stops = [...new Set(things.map((i) => pickup(i) as string))]
+          while (stops.length) {
+            const here = robot.body.pose() as { x: number; y: number }
+            stops.sort((a, b) => {
+              const pa = landmark(a)
+              const pb = landmark(b)
+              return Math.hypot(pa.x - here.x, pa.y - here.y) - Math.hypot(pb.x - here.x, pb.y - here.y)
+            })
+            const stop = stops.shift() as string
+            await robot.goTo(call, landmark(stop))
+            await wait(call, 600)
+            for (const i of things.filter((x) => pickup(x) === stop)) {
+              if (i.kind === 'line') {
+                i.line.stage = 'on_the_way'
+                kitchenSpots.delete(i.line.id)
+              } else {
+                i.supply.stage = 'on_the_way'
+                supplySpots.delete(i.supply.id)
+              }
+              load(i)
+              service.changed()
+              report()
+              await wait(call, 400)
+            }
+          }
+          mode = 'delivering'
+          report()
+          await robot.goTo(call, t.serve)
+          await face(call, robot.body, towards(t.serve, t))
+          for (const i of aboard.splice(0)) {
+            setOnTable(world, t, i)
+            objectOf(i)?.scale.setScalar(1)
+            if (i.kind === 'line') i.line.stage = 'served'
+            else i.supply.stage = 'served'
+            service.changed()
+            report()
+            await wait(call, 500)
+          }
+          return `served ${things.map(nameOf).join(', ')} at ${t.id}`
+        } finally {
+          mode = 'docked'
+          report()
+        }
+      })
+    },
+  )
+  dev.tool(
+    {
+      name: 'clear',
+      description:
+        'Take dishes and supplies from a table to the dish return: the given ones, or everything on the table. Defaults to the guest’s table.',
+      timeout: 180,
+      params: {
+        table: { type: 'string', enum: TABLES.map((t) => t.id) },
+        items: {
+          type: 'array',
+          maxItems: 20,
+          items: { type: 'string', maxLength: 8 },
+          description: 'only these',
+        },
+      },
+      uses: ['chassis'],
+      motion: true,
+      ui: { label: 'Clear' },
+    },
+    async (call, args) => {
+      const t = TABLES.find((x) => x.id === (args.table ?? service.table))
+      if (!t) throw new CallError('x_no_table', 'which table? The guest has no table yet')
+      const wanted = args.items as string[] | undefined
+      const on: Item[] =
+        t.id === service.table
+          ? [
+              ...service.lines
+                .filter((l) => l.stage === 'served')
+                .map((line): Item => ({ kind: 'line', line })),
+              ...service.supplies
+                .filter((s) => s.stage === 'served')
+                .map((supply): Item => ({ kind: 'supply', supply })),
+            ]
+          : []
+      const things = wanted
+        ? on.filter((i) => wanted.includes(i.kind === 'line' ? i.line.id : i.supply.id))
+        : on
+      if (!things.length) return `nothing to clear on ${t.id}`
+      return robot.work(async () => {
+        try {
+          mode = 'clearing'
+          report()
+          await robot.goTo(call, t.serve)
+          await face(call, robot.body, towards(t.serve, t))
+          for (const i of things) {
+            load(i)
+            if (i.kind === 'line') i.line.slot = undefined
+            else i.supply.slot = undefined
+            if (i.kind === 'line') i.line.stage = 'cleared'
+            else i.supply.stage = 'cleared'
+            service.changed()
+            report()
+            await wait(call, 300)
+          }
+          await robot.goTo(call, landmark('dish-return'))
+          await wait(call, 800)
+          for (const i of aboard.splice(0)) objectOf(i)?.removeFromParent()
+          report()
+          return `cleared ${things.length} things from ${t.id} to the dish return`
+        } finally {
+          mode = 'docked'
+          report()
+        }
+      })
+    },
+  )
+  world.onReset(() => {
+    for (const i of aboard.splice(0)) objectOf(i)?.removeFromParent()
+    robot.reset()
+    battery = 86
+    mode = 'docked'
+    report()
+  })
+  return dev
+}
+
+/** The cleaner: drives to a spot, scrubs spills off the floor and wipes a cleared table. */
+export function cleaner(world: World, log: (line: string) => void): WorldDevice {
+  const { service } = world
+  const { cleaner: model } = world.actors
+  const robot = new Robot(
+    world,
+    model.object,
+    { id: 'cleaner-01', label: 'cleaner', radius: 0.36, speed: 0.6, home: HOMES.cleaner, idleS: 5 },
+    log,
+  )
+  let mode: 'docked' | 'going' | 'cleaning' | 'returning' = 'docked'
+  let water = 92
+  let battery = 74
+  const puddles = new Map<string, THREE.Object3D>()
+  const dev = new WorldDevice({
+    id: 'cleaner-01',
+    kind: 'robot',
+    name: 'Cleaner',
+    model: 'Agnes Restaurant floor scrubber',
+    mobile: true,
+    radius: 0.36,
+    localization: 'self',
+    profile: {
+      size_m: [0.65, 0.7, 0.55],
+      max_speed: 0.6,
+      notes:
+        'A floor scrubber with a wiping arm: clean goes to a place on the floor map, scrubs spills there, and at a table that needs clearing wipes it so it is free again (its dishes must be cleared first, by runner-01). It goes back to its pad by itself.',
+    },
+    resources: { chassis: 'queue' },
+    ui: { primary: 'pose' },
+    state: {
+      mode: { type: 'string', enum: ['docked', 'going', 'cleaning', 'returning'] },
+      spills: { type: 'string', description: 'places with a spill on the floor' },
+      water: {
+        type: 'integer',
+        unit: '%',
+        min: 0,
+        max: 100,
+        alert: { warn: 20, bad: 5, below: true },
+        description: 'clean water left',
+      },
+      battery: {
+        type: 'integer',
+        unit: '%',
+        min: 0,
+        max: 100,
+        role: 'battery',
+        alert: { warn: 20, bad: 10, below: true },
+      },
+    },
+  })
+  dev.log = log
+  const report = () => dev.update({ mode, spills: [...service.spills].join(', '), water, battery })
+  report()
+  service.listeners.push(report)
+  robot.onHome = (phase) => {
+    mode = phase === 'leaving' ? 'returning' : 'docked'
+    if (phase === 'home') water = 92
+    report()
+  }
+  addPlace(dev, world, robot.body, 'cleaner', log)
+  dev.after = () => ({ pose: robot.body.pose() })
+  let scrubbing = false
+  everyFrame(() => {
+    if (scrubbing) model.brush.rotation.y += 0.4
+  }, log)
+
+  dev.tool(
+    {
+      name: 'clean',
+      description:
+        'Go to a place (a table, the door, …) and scrub the floor there; at a table that needs clearing, also wipe the table so it is free again.',
+      timeout: 120,
+      params: { place: PLACE_PARAM },
+      required: ['place'],
+      uses: ['chassis'],
+      motion: true,
+      ui: { label: 'Clean' },
+    },
+    async (call, { place: where }) => {
+      const p = landmark(where)
+      return robot.work(async () => {
+        try {
+          mode = 'going'
+          report()
+          await robot.goTo(call, p)
+          mode = 'cleaning'
+          scrubbing = true
+          report()
+          const start = robot.body.object.rotation.y
+          for (let k = 0; k < 24; k++) {
+            await wait(call, 250)
+            robot.body.object.rotation.y = start + Math.sin(k * 0.8) * 0.35
+            call.progress({ done: k + 1, total: 24, text: `scrubbing at ${where}` })
+          }
+          robot.body.object.rotation.y = start
+          water = Math.max(0, water - 8)
+          const notes: string[] = []
+          if (service.spills.delete(String(where))) {
+            puddles.get(String(where))?.removeFromParent()
+            puddles.delete(String(where))
+            notes.push('the spill is gone')
+          }
+          if (service.dirty.has(String(where))) {
+            if (where === service.table && service.onTable().length)
+              notes.push(`dishes are still on ${where}: runner-01 clear first, then clean again`)
+            else {
+              service.dirty.delete(String(where))
+              notes.push(`${where} is wiped and free`)
+            }
+          }
+          service.changed()
+          return `cleaned at ${where}${notes.length ? `; ${notes.join('; ')}` : ''}`
+        } finally {
+          scrubbing = false
+          mode = 'docked'
+          report()
+        }
+      })
+    },
+  )
+  world.conditions.push({
+    device: dev.id,
+    en: 'The guest knocks over their tea',
+    zh: '客人打翻了茶',
+    apply: () => {
+      const t = TABLES.find((x) => x.id === (service.table ?? 't3')) as Table
+      if (service.spills.has(t.id)) return
+      const seat = service.seat ?? guestSeat(t)
+      const spill = puddle()
+      world.actors.group.add(place(spill, (seat.x + t.serve.x) / 2, (seat.y + t.serve.y) / 2, 0))
+      puddles.set(t.id, spill)
+      service.spills.add(t.id)
+      service.changed()
+    },
+  })
+  world.onReset(() => {
+    for (const p of puddles.values()) p.removeFromParent()
+    puddles.clear()
+    robot.reset()
+    water = 92
+    battery = 74
+    mode = 'docked'
+    report()
+  })
+  return dev
+}

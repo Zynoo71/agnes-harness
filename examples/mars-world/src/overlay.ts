@@ -95,7 +95,7 @@ const TEXT = {
     close: 'Close',
     helpBody: `
 <h2>Agnes Base</h2>
-<p>A small base on Mars, simulated in your browser. Its eleven devices (habitat, airlock, suit, rover, hopper, Monolith, lab, power, weather station, comms dish, base camera) each speak <b>MHS</b> to <b>AgnesHub</b>, the same way real hardware would. Agnes runs the base only through their tools, state and cameras, with two deciders: the <b class="by-llm">LLM</b>, which reads, plans and talks, and the <b class="by-dm">DM</b>, a fast decision model that takes the obvious next step on its own and hands everything else to the LLM.</p>
+<p>A small base on Mars, simulated in your browser. Its eleven devices (habitat, airlock, suit, rover, hopper, Monolith, lab, power, weather station, comms dish, base camera) each speak <b>MHS</b> to <b>AgnesHub</b>, the same way real hardware would. Agnes runs the base only through their tools, state and cameras, with two deciders: the <b class="by-llm">LLM</b>, which reads, plans and talks, and <b class="by-dm">Jev</b>, a fast decision model that takes the obvious next step on its own and hands everything else to the LLM.</p>
 <p>The world moves on its own, so Agnes has to notice and act:</p>
 <ul>
 <li><b>Time.</b> A sol takes 40 minutes. The sun, the light, the solar output and the cold follow the clock; at night the batteries carry the base.</li>
@@ -111,8 +111,8 @@ const TEXT = {
 </ul>
 <h3>On this page</h3>
 <ul>
-<li>Tags over the devices show the tool each one runs, its progress and who called it: the DM in green with a bolt, the LLM in blue.</li>
-<li>Bottom left: the latest calls, alerts and events, with every decision of the DM; click a DM line to see how it chose. Top: banners for what needs attention.</li>
+<li>Tags over the devices show the tool each one runs, its progress and who called it: Jev in green with a bolt, the LLM in blue.</li>
+<li>Bottom left: the latest calls, alerts and events, with every decision of Jev; click a Jev line to see how it chose. Top: banners for what needs attention.</li>
 <li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> views · <kbd>P</kbd> picture in picture · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
 <li>Address: <code>?time=night</code>, <code>?sol=10</code> (minutes a sol takes), <code>?events=auto&amp;seed=7</code> (an event every few minutes on its own) or <code>off</code>, <code>?lang=zh</code></li>
 </ul>`,
@@ -243,7 +243,7 @@ const TEXT = {
     close: '关闭',
     helpBody: `
 <h2>Agnes 基地</h2>
-<p>一座在浏览器里模拟的火星小基地。十一台设备（栖息舱、气闸、宇航服、火星车、飞行器、Monolith、实验室、电力、气象站、通信天线、基地相机）都像真实硬件一样，用 <b>MHS</b> 连到 <b>AgnesHub</b>。Agnes 只通过它们的工具、状态和相机来管理基地，由两个角色做决定：<b class="by-llm">LLM</b> 负责读、规划和沟通；<b class="by-dm">DM</b> 是快速的决策模型，明摆着的下一步自己直接做，其余都交给 LLM。</p>
+<p>一座在浏览器里模拟的火星小基地。十一台设备（栖息舱、气闸、宇航服、火星车、飞行器、Monolith、实验室、电力、气象站、通信天线、基地相机）都像真实硬件一样，用 <b>MHS</b> 连到 <b>AgnesHub</b>。Agnes 只通过它们的工具、状态和相机来管理基地，由两个角色做决定：<b class="by-llm">LLM</b> 负责读、规划和沟通；<b class="by-dm">Jev</b> 是快速的决策模型，明摆着的下一步自己直接做，其余都交给 LLM。</p>
 <p>世界自己会变，Agnes 得自己发现、自己处理：</p>
 <ul>
 <li><b>时间。</b>一个火星日 40 分钟。太阳、光照、发电量和气温都跟着时钟走；夜里靠电池撑着。</li>
@@ -259,8 +259,8 @@ const TEXT = {
 </ul>
 <h3>页面上</h3>
 <ul>
-<li>设备上方的标签显示它正在执行的工具、进度和调用者：DM 是绿色带闪电，LLM 是蓝色。</li>
-<li>左下角是最近的调用、告警和事件，DM 的每次决定也在其中；点 DM 的那一行看它怎么选的。顶部横幅提示需要注意的事。</li>
+<li>设备上方的标签显示它正在执行的工具、进度和调用者：Jev 是绿色带闪电，LLM 是蓝色。</li>
+<li>左下角是最近的调用、告警和事件，Jev 的每次决定也在其中；点 Jev 的那一行看它怎么选的。顶部横幅提示需要注意的事。</li>
 <li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 视角 · <kbd>P</kbd> 画中画 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
 <li>地址参数：<code>?time=night</code>、<code>?sol=10</code>（一个火星日的分钟数）、<code>?events=auto&amp;seed=7</code>（每隔几分钟自动来一个事件）或 <code>off</code>、<code>?lang=en</code></li>
 </ul>`,
@@ -354,7 +354,7 @@ export function buildOverlay(options: {
     if (!by) return el('span', 'who', `← ${caller}`)
     const c = el('span', `who ${by}`)
     c.innerHTML = by === 'dm' ? BOLT : BUBBLE
-    c.append(caller)
+    c.append(by === 'dm' ? 'Jev' : caller)
     if (extra) c.append(el('span', 'p', extra))
     return c
   }

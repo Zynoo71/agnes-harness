@@ -114,7 +114,10 @@ export function greenhouse(world: World, log: (line: string) => void): WorldDevi
       for (const name of BEDS) {
         const b = world.beds[name]
         const growing = b.crop !== 'none' && b.growth < 1 && b.planted > 0
-        if (growing && needs(b) === 'nothing') b.growth = Math.min(1, b.growth + 1 / GROW_S)
+        if (growing && needs(b) === 'nothing') {
+          b.growth = Math.min(1, b.growth + 1 / GROW_S)
+          if (b.growth >= 1) for (const hear of world.ripeListeners) hear(name, b.crop)
+        }
         b.moisture = Math.max(0, b.moisture - (growing ? DRINK.growing : DRINK.resting))
       }
       report()
@@ -144,7 +147,7 @@ export function greenhouse(world: World, log: (line: string) => void): WorldDevi
       }
       report()
       return {
-        detail: `watered the ${bed} bed: soil moisture ${Math.round(b.moisture)} %; ${b.crop === 'none' ? 'nothing grows in it yet' : b.growth >= 1 ? `its ${b.crop}es are ripe` : needs(b) === 'nothing' ? `its ${b.crop}es grow: ${bed}_stage turns ripe in about ${Math.ceil((1 - b.growth) * GROW_S)} s; wait for that, then harvest` : `its ${b.crop}es still need ${needs(b)}`}`,
+        detail: `watered the ${bed} bed: soil moisture ${Math.round(b.moisture)} %; ${b.crop === 'none' ? 'nothing grows in it yet' : b.growth >= 1 ? `its ${b.crop}es are ripe` : needs(b) === 'nothing' ? `its ${b.crop}es grow: ${bed}_stage turns ripe in about ${Math.ceil((1 - b.growth) * GROW_S)} s; harvest it then` : `its ${b.crop}es still need ${needs(b)}`}`,
         data: { bed, moisture: Math.round(b.moisture) },
       }
     },

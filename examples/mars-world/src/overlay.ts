@@ -40,6 +40,16 @@ const TEXT = {
     eventsHead: 'Events',
     timeHead: 'Skip to',
     conditionsHead: 'Conditions',
+    askAgnes: 'Ask Agnes to handle it',
+    askHarvest: 'Ask Agnes to harvest',
+    asked: 'Told Agnes',
+    noChat: 'Start a chat in Agnes first',
+    ripe: (bed: string, crop: string) => `Greenhouse · the ${crop}es in the ${bed} bed are ripe`,
+    harvestPrompt: (bed: string, crop: string) =>
+      `The ${crop}es in the greenhouse's ${bed} bed are ripe. Harvest them and take them to the habitat pantry.`,
+    alertPrompt: (dev: string, field: string, value: string) =>
+      `${dev}: ${field} is critical (${value}). Deal with it.`,
+    eventPrompt: (headline: string) => `${headline}. Deal with it.`,
     share: 'Decisions',
     spent: 'Time',
     think: 'think',
@@ -150,6 +160,15 @@ const TEXT = {
     eventsHead: '事件',
     timeHead: '跳到',
     conditionsHead: '状况',
+    askAgnes: '让 Agnes 处理',
+    askHarvest: '让 Agnes 收获',
+    asked: '已告诉 Agnes',
+    noChat: '先在 Agnes 里开个对话',
+    ripe: (bed: string, crop: string) => `温室 · ${bed}边苗床的${crop}熟了`,
+    harvestPrompt: (bed: string, crop: string) => `温室${bed}边苗床的${crop}熟了，收下来送进栖息舱吧`,
+    alertPrompt: (dev: string, field: string, value: string) =>
+      `${dev}的${field}告急了（${value}），你处理一下`,
+    eventPrompt: (headline: string) => `${headline}，你看着处理一下`,
     share: '决策占比',
     spent: '用时',
     think: '思考',
@@ -339,6 +358,8 @@ export function buildOverlay(options: {
   showHelp: boolean
   /** The DM's decisions from AgnesHub, newest first; the panel shows once there is one. */
   dm?: { decisions(): Decision[]; version(): number }
+  /** Posts the person's words into their conversation with Agnes; resolves whether it was posted. */
+  say?: (text: string) => Promise<boolean>
 }): {
   stats(text: string): void
   toggleEvents(): void
@@ -579,12 +600,14 @@ export function buildOverlay(options: {
   const lastEnded = new Map<string, Activity>()
 
   // Banners along the top: severe events and alarms stay while they last, the rest a few seconds.
+  // With `ask`, a button tells Agnes about it in the person's words: nothing wakes Agnes by itself.
   const banner = (
     key: string,
     level: 'info' | 'warn' | 'bad' | 'dm',
     text: () => string,
     until?: () => boolean,
     head?: HTMLElement,
+    ask?: { label: () => string; prompt: () => string },
   ) => {
     banners.querySelector(`[data-key="${key}"]`)?.remove()
     const b = el('div', `banner ${level}`)
@@ -593,11 +616,28 @@ export function buildOverlay(options: {
     const left = el('span', 'left')
     if (head) b.append(head)
     b.append(label, left)
+    const say = options.say
+    let button: HTMLButtonElement | undefined
+    let told = false
+    if (ask && say) {
+      const btn = el('button', 'ask')
+      btn.type = 'button'
+      btn.addEventListener('click', async () => {
+        btn.disabled = true
+        told = await say(ask.prompt())
+        btn.textContent = told ? t().asked : t().noChat
+        if (!told) setTimeout(() => (btn.disabled = false), 3000)
+      })
+      b.append(btn)
+      button = btn
+    }
     banners.appendChild(b)
     const started = performance.now()
     const refresh = () => {
       label.textContent = text()
-      const over = until ? until() : performance.now() - started > 8000
+      if (button && !button.disabled && ask) button.textContent = ask.label()
+      // A banner with a button stays longer, so there is time to press it.
+      const over = until ? until() : performance.now() - started > (button && !told ? 20000 : 8000)
       if (over) b.remove()
     }
     refresh()
@@ -642,9 +682,26 @@ export function buildOverlay(options: {
           'bad',
           () => `${name(a.device)} · ${fieldName(a.field)} ${t().alertBad}`,
           () => dev?.alerts.get(a.field)?.level !== 'bad',
+          undefined,
+          {
+            label: () => t().askAgnes,
+            prompt: () =>
+              t().alertPrompt(name(a.device), fieldName(a.field), `${a.value}${a.unit ? ` ${a.unit}` : ''}`),
+          },
         )
       }
     })
+    // A ripe bed stays on a banner until it is harvested.
+    live.world.ripeListeners.push((bed, crop) =>
+      banner(
+        `ripe-${bed}`,
+        'info',
+        () => t().ripe(value(bed), value(crop)),
+        () => live.world.beds[bed].growth < 1,
+        undefined,
+        { label: () => t().askHarvest, prompt: () => t().harvestPrompt(value(bed), value(crop)) },
+      ),
+    )
     // What reached Earth: a card with the photo, the report and Mission Control's answer.
     live.world.mailListeners.push((m: Mail) => {
       lastMail = m
@@ -682,6 +739,8 @@ export function buildOverlay(options: {
             return `${t().kinds[h.kind]} · ${h.headline[lang]}${severe ? ` · ${left === undefined ? t().untilHandled : clockTime(left)}` : ''}`
           },
           severe ? () => !live.world.events?.active.includes(h) : undefined,
+          undefined,
+          { label: () => t().askAgnes, prompt: () => t().eventPrompt(h.headline[lang]) },
         )
       }
     })

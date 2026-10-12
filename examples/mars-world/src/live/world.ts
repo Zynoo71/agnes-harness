@@ -396,6 +396,8 @@ export class World {
   labReceive: ((sample: string) => void) | undefined
   /** Photos the cameras took, by id (`photo-1`). */
   readonly photos = new Map<string, Photo>()
+  /** Hear each bed as its crop turns ripe; the page offers to tell Agnes. */
+  readonly ripeListeners: ((bed: BedName, crop: Crop) => void)[] = []
   /** Hear each report as it reaches Earth; the page shows it. */
   readonly mailListeners: ((mail: Mail) => void)[] = []
   /** Conditions the devices offer the controls panel. */

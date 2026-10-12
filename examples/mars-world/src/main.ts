@@ -19,6 +19,7 @@ import { connectDevices } from './live/index.js'
 import { watchers } from './live/world.js'
 import { buildMinimap } from './minimap.js'
 import { buildOverlay, type Lang } from './overlay.js'
+import { say } from './prompt.js'
 import { applyShot, SHOTS } from './shots.js'
 import { buildSky, type Light, lightAt, updateSky } from './sky.js'
 import { buildRocks, buildTerrain, FROST, PAD_RADIUS } from './terrain.js'
@@ -397,6 +398,7 @@ const overlay = buildOverlay({
   // The About card opens by itself the first time the page is visited.
   showHelp: !params.has('shot') && !stored('mars-seen'),
   ...(dmWatch ? { dm: { decisions: () => dmWatch.decisions, version: () => dmWatch.version } } : {}),
+  ...(hub ? { say: (text: string) => say(hub, text) } : {}),
 })
 try {
   localStorage.setItem('mars-seen', '1')

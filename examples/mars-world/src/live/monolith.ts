@@ -1264,7 +1264,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         })
         const said = speak(flavour(voice(LINES.planted)))
         return {
-          detail: `planted ${b.planted} seed potatoes in the ${bed} bed and came back out of the greenhouse, at ${where()}; they grow with soil moisture of 30 % or more and light (greenhouse-01 ${bed} moisture ${Math.round(b.moisture)} %), in about ${Math.ceil((1 - b.growth) * GROW_S)} s of that: wait for greenhouse-01 ${bed}_stage to turn ripe, then harvest. Said: "${said}"`,
+          detail: `planted ${b.planted} seed potatoes in the ${bed} bed and came back out of the greenhouse, at ${where()}; they grow with soil moisture of 30 % or more and light (greenhouse-01 ${bed} moisture ${Math.round(b.moisture)} %), in about ${Math.ceil((1 - b.growth) * GROW_S)} s of that; harvest once greenhouse-01 ${bed}_stage is ripe. Said: "${said}"`,
           data: { bed, crop: 'potato', planted: b.planted, moisture: Math.round(b.moisture), said },
         }
       }),

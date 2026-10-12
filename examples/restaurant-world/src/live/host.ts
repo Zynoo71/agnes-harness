@@ -157,7 +157,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
           service.seatedAt ??= performance.now()
           service.menuOpen = true
           service.changed()
-          return `the guest is seated at ${t.id}, ${t.name.en.toLowerCase()}; the menu is open on their screen`
+          return `the guest is seated at ${t.id}, ${t.name.en.toLowerCase()}; the menu is open on their screen, and they tell you what they would like`
         } finally {
           mode = 'at_door'
           report()
@@ -169,7 +169,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'see_off',
       description:
-        'Walk the guest from their table to the door once the bill is paid (pos-01); they leave, and the table is left for clearing.',
+        'Walk the guest from their table to the door when they want to leave and the bill is paid (pos-01); they leave, and the table is left for clearing.',
       timeout: 120,
       uses: ['chassis'],
       motion: true,

@@ -33,7 +33,6 @@ const TOOLS: Record<string, [en: string, zh: string]> = {
   clear: ['Clear table', '收桌'],
   cook: ['Cook', '烹饪'],
   deliver: ['Deliver', '送餐'],
-  discount: ['Discount', '打折'],
   dispense: ['Dispense', '取用品'],
   hurry: ['Hurry', '催菜'],
   look_at: ['Look at', '看向'],

@@ -5,8 +5,8 @@ import { stageText } from './menu.js'
 import { type World, WorldDevice, wait } from './world.js'
 
 /**
- * The payment terminal: makes the bill and shows it on the guest's screen with a QR code to pay,
- * takes a discount, and charges.
+ * The payment terminal: makes the bill, with any discount, and shows it on the guest's screen with a
+ * QR code to pay, and charges.
  */
 export function pos(world: World, log: (line: string) => void): WorldDevice {
   const { service } = world
@@ -19,7 +19,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
     placement: placed(FIXTURES.cashier.x, FIXTURES.cashier.y, 90),
     profile: {
       notes:
-        "Bills the guest's table: bill shows the bill with a QR code on the guest's screen; discount takes a percentage off; charge takes the payment (QR code, card or cash). Everything ordered and not cancelled is on the bill.",
+        "Bills the guest's table: bill shows the bill with a QR code on the guest's screen, with any percentage taken off; charge takes the payment (QR code, card or cash). Everything ordered and not cancelled is on the bill.",
     },
     resources: { till: 'queue' },
     state: {
@@ -53,17 +53,26 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
   dev.tool(
     {
       name: 'bill',
-      description: "Make the bill for the guest's table and show it on their screen with a QR code to pay.",
+      description:
+        "Make the bill for the guest's table and show it on their screen with a QR code to pay, once the guest asks for it. Decide any discount here (a birthday, a wait that was too long): the guest sees its reason. Billing again before payment replaces the discount.",
       timeout: 10,
+      params: {
+        percent: { type: 'integer', minimum: 0, maximum: 50, description: 'percentage off, default 0' },
+        reason: { type: 'string', maxLength: 40, description: 'why, as the guest sees it' },
+      },
       uses: ['till'],
       ui: { label: 'Bill' },
     },
-    async (call) => {
+    async (call, { percent, reason }) => {
       if (!service.table || service.guest === 'left')
         throw new CallError('x_no_guest', 'the guest has no table')
       if (!service.billed().length) throw new CallError('x_nothing_ordered', 'nothing was ordered')
       await wait(call, 1000)
-      if (service.bill !== 'paid') service.bill = 'billed'
+      if (service.bill !== 'paid') {
+        service.discount = Number(percent ?? 0)
+        service.discountReason = String(reason ?? '')
+        service.bill = 'billed'
+      }
       service.billOpen = true
       service.changed()
       return {
@@ -77,30 +86,9 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
   )
   dev.tool(
     {
-      name: 'discount',
-      description:
-        'Take a percentage off the bill, with the reason the guest sees (a birthday, a wait that was too long).',
-      timeout: 5,
-      params: {
-        percent: { type: 'integer', minimum: 0, maximum: 50 },
-        reason: { type: 'string', maxLength: 40 },
-      },
-      required: ['percent'],
-      uses: ['till'],
-      ui: { label: 'Discount' },
-    },
-    async (_call, { percent, reason }) => {
-      if (service.bill === 'paid') throw new CallError('x_paid', 'the bill is already paid')
-      service.discount = Number(percent)
-      service.discountReason = String(reason ?? '')
-      service.changed()
-      return `${percent}% off; total ¥${service.total()}`
-    },
-  )
-  dev.tool(
-    {
       name: 'charge',
-      description: 'Take the payment for the bill shown: by QR code (the guest scans it), card or cash.',
+      description:
+        'Take the payment for the bill shown, the way the guest says they pay: by QR code (they scan it), card or cash.',
       timeout: 30,
       params: { method: { type: 'string', enum: ['qr', 'card', 'cash'] } },
       uses: ['till'],

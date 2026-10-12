@@ -55,7 +55,7 @@ The street and the door are at the south. Inside: the waiting area west of the d
 | `supplies-01` | Napkins, chopsticks, bowls, spoons, cups, takeaway boxes and a baby chair; the result names each (`s1`, `s2`, …) for the runner | `dispense(item, qty)`, `restock()` |
 | `cleaner-01` | Scrubs a spill off the floor, and wipes a table once nothing is left on it | `clean(place)` |
 | `room-01` | Lights (bright, warm, dim, party), music (guzheng, jazz, pop, the birthday song, off) with a settable `volume`, and the air conditioning; reports the air's temperature, and whether it is day or evening outside | `set_lights(scene)`, `play_music(track, volume?)`, `set_temperature(celsius)` |
-| `pos-01` | The payment terminal: the bill on the guest's screen, a discount of up to 50 % with a reason, and payment by QR code, card or cash | `bill()`, `discount(percent, reason)`, `charge(method)` |
+| `pos-01` | The payment terminal: the bill on the guest's screen, with a discount of up to 50 % and its reason, and payment by QR code, card or cash | `bill(percent?, reason?)`, `charge(method)` |
 | `cam-01` | A ceiling camera in the south-east corner; stills for the model and live video for people | `look_at(place)` |
 
 The menu has seventeen dishes (`src/menu.ts`), each made at one station: five from the wok, five from the steamer and stove, seven drinks and desserts from the bar, among them a birthday cake with candles. A dish made at the wrong station is refused with the station that makes it.

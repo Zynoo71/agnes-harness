@@ -137,7 +137,7 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
       service.menuOpen = false
       service.changed()
       return {
-        detail: `ordered ${made.map((l) => `${l.id} ${l.dish.en} (${STATION_DEVICE[l.dish.station]})`).join(', ')}`,
+        detail: `ordered ${made.map((l) => `${l.id} ${l.dish.en}`).join(', ')}; nothing is made until you start it: ${made.map((l) => `${STATION_DEVICE[l.dish.station]} ${l.dish.station === 'bar' ? 'make' : 'cook'} item ${l.id}`).join(', ')}`,
         data: { lines: made.map((l) => ({ id: l.id, dish: l.dish.id, by: STATION_DEVICE[l.dish.station] })) },
       }
     },

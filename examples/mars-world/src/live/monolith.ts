@@ -195,7 +195,8 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   }
 
   // The front camera in the display strip, held level as the slabs swing.
-  const front = new THREE.PerspectiveCamera(60, 16 / 9, 0.05, 2000)
+  // Its near plane clips the slabs that swing past the lens as it walks.
+  const front = new THREE.PerspectiveCamera(60, 16 / 9, 0.5, 2000)
   front.rotation.order = 'YXZ'
   front.rotation.set(-0.12, Math.PI, 0)
   front.position.set(0, 1.36, 0.24)

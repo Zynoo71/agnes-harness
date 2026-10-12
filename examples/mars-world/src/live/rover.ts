@@ -373,6 +373,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     dev.update({ mode: 'driving' })
     try {
       for (const [i, p] of points.entries()) {
+        world.rover.leg = p
         await body.go(call, p, {
           speed: DRIVE.speed,
           accel: DRIVE.accel,
@@ -387,6 +388,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
       if (e instanceof Blocked) throw new CallError('estop', e.message)
       throw e
     } finally {
+      world.rover.leg = undefined
       dev.update({ mode: world.rover.docked ? 'docked' : 'idle' })
     }
   }

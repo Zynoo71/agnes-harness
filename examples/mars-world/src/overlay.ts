@@ -81,12 +81,15 @@ const TEXT = {
       suit_leak: 'Suit leak',
       dust_devil: 'Dust devil',
       meteorite: 'Meteorite',
+      rockfall: 'Rockfall',
     } as Record<EventKind, string>,
     kindAbout: {
       dust_storm: 'Wind and dust build, then die down. Dark sky, dusty panels, no flying.',
       suit_leak: 'Oxygen goes ten times as fast; the astronaut cannot walk.',
       dust_devil: 'A whirlwind dusts the solar panels.',
       meteorite: 'A new unusual rock in the west field or the east dunes.',
+      rockfall:
+        'A boulder tumbles onto the way, ahead of the rover if it is driving. Monolith can push it aside.',
     } as Record<EventKind, string>,
     names: {} as Record<string, string>,
     fields: {} as Record<string, string>,
@@ -103,7 +106,7 @@ const TEXT = {
 <ul>
 <li><b>Time.</b> A sol takes 40 minutes. The sun, the light, the solar output and the cold follow the clock; at night the batteries carry the base.</li>
 <li><b>Drift.</b> Dust settles on the panels, the suit's oxygen runs down, a hopper away from its pad boils off propellant.</li>
-<li><b>Controls</b> (<kbd>E</kbd>). Start an event (a dust storm, a suit leak, a dust devil, a meteorite) with the parameters you choose, end it, skip the clock to morning, noon, sunset or night, or bring about trouble: low suit oxygen, a low battery bank, dusty panels, a drop in cabin oxygen.</li>
+<li><b>Controls</b> (<kbd>E</kbd>). Start an event (a dust storm, a suit leak, a dust devil, a meteorite, a rockfall) with the parameters you choose, end it, skip the clock to morning, noon, sunset or night, or bring about trouble: low suit oxygen, a low battery bank, dusty panels, a drop in cabin oxygen.</li>
 </ul>
 <h3>Ask Agnes</h3>
 <ul>
@@ -185,12 +188,14 @@ const TEXT = {
       suit_leak: '宇航服漏气',
       dust_devil: '尘卷风',
       meteorite: '陨石',
+      rockfall: '落石',
     } as Record<EventKind, string>,
     kindAbout: {
       dust_storm: '风和沙尘升起又减弱：天变暗，太阳能板积灰，不能飞。',
       suit_leak: '氧气消耗快 10 倍，宇航员走不动。',
       dust_devil: '一股旋风给太阳能板蒙上灰。',
       meteorite: '西边野外或东边沙丘多出一块可疑岩石。',
+      rockfall: '一块大石头滚到路上，火星车正在开时落在它前方。Monolith 能把它推开。',
     } as Record<EventKind, string>,
     names: {
       'habitat-01': '栖息舱',
@@ -254,7 +259,7 @@ const TEXT = {
 <ul>
 <li><b>时间。</b>一个火星日 40 分钟。太阳、光照、发电量和气温都跟着时钟走；夜里靠电池撑着。</li>
 <li><b>漂移。</b>太阳能板慢慢积灰，宇航服的氧气一直在减少，离开停机坪的飞行器推进剂会蒸发。</li>
-<li><b>控制台</b>（<kbd>E</kbd>）。按自己选的参数触发事件（沙尘暴、宇航服漏气、尘卷风、陨石）或提前结束；把时钟跳到清晨、正午、日落或夜里；制造状况：宇航服氧气不足、储能电池电量低、太阳能板积灰、舱内氧气骤降。</li>
+<li><b>控制台</b>（<kbd>E</kbd>）。按自己选的参数触发事件（沙尘暴、宇航服漏气、尘卷风、陨石、落石）或提前结束；把时钟跳到清晨、正午、日落或夜里；制造状况：宇航服氧气不足、储能电池电量低、太阳能板积灰、舱内氧气骤降。</li>
 </ul>
 <h3>可以让 Agnes 做</h3>
 <ul>

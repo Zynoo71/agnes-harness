@@ -420,6 +420,7 @@ const EVENT_VIEW: Record<EventKind, string> = {
   suit_leak: 'suit',
   dust_devil: 'power',
   meteorite: 'event',
+  rockfall: 'event',
 }
 const PIP = { left: 14, top: 76, w: 320, h: 180, every: 3, holdMs: 8000 }
 const pipBox = document.getElementById('pip') as HTMLElement
@@ -485,11 +486,13 @@ if (live) {
   live.world.events?.listeners.push((h, phase) => {
     if (phase !== 'start') return
     const text = () => overlay.eventName(h.kind)
-    if (h.kind === 'meteorite' && h.place) {
+    if ((h.kind === 'meteorite' || h.kind === 'rockfall') && h.place) {
       // From the base side of the fall, a little above it, so the streak, the flash and the dust show.
       const { x, z } = h.place
-      pipCamera.position.set(x + 16, 7, z + 12)
-      pipCamera.lookAt(x, 2, z)
+      // A boulder is smaller than a meteorite's flash and dust, so closer and lower.
+      const near = h.kind === 'rockfall' ? 0.45 : 1
+      pipCamera.position.set(x + 16 * near, 7 * near, z + 12 * near)
+      pipCamera.lookAt(x, 2 * near, z)
       pipCamera.fov = 50
       pipCamera.updateProjectionMatrix()
     } else applyShot(pipCamera, EVENT_VIEW[h.kind])

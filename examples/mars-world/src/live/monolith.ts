@@ -43,6 +43,8 @@ const GAIT = {
 const REACH = 1.2
 /** Seconds to lift or set down a load. */
 const LIFT_S = 1.5
+/** Pushing a boulder aside: the widest it can move, in metres across, how far, and in how many seconds. */
+const PUSH = { across: 2, metres: 3.5, seconds: 3.5 }
 /** Where it holds an astronaut: this far in front of its centre and this high off the ground. */
 const HELD = { ahead: 0.72, up: 0.32 }
 /** It counts as at the airlock within this many metres of the outer door, and at the lab of the lab. */
@@ -81,6 +83,10 @@ const LINES = {
     smooth: 'Delivered, flawlessly.',
   },
   standing: { honest: 'Setting you down here. Stay where you are.', smooth: 'Here we are. Lovely spot.' },
+  pushed: {
+    honest: 'Boulder moved. The way is clear.',
+    smooth: 'Boulder relocated. It wanted a better view.',
+  },
 }
 
 /**
@@ -696,6 +702,115 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
             ? `set the astronaut (suit-01) into the airlock chamber; airlock-01 is occupied: close_outer, then cycle_in brings them into the habitat. Said: "${said}"`
             : `set the astronaut (suit-01) down at ${where(spot)}; they wait there. Said: "${said}"`,
           data: { put: 'suit-01', at: atAirlock ? 'airlock' : toMap(spot), said },
+        }
+      }),
+  )
+
+  dev.tool(
+    {
+      name: 'push_boulder',
+      description: `Push a boulder up to ${PUSH.across} m across off the way it blocks, ${PUSH.metres} m to the side: it walks round to the boulder's far side and rolls it. The boulder at (x, y), such as the one a rover stopped before; it must be within 6 m. Bigger boulders cannot be moved.`,
+      timeout: 120,
+      params: {
+        x: {
+          type: 'number',
+          minimum: MAP_AREA.x0,
+          maximum: MAP_AREA.x1,
+          description: "the boulder's x, metres east",
+        },
+        y: {
+          type: 'number',
+          minimum: MAP_AREA.y0,
+          maximum: MAP_AREA.y1,
+          description: "the boulder's y, metres north",
+        },
+      },
+      required: ['x', 'y'],
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Push boulder' },
+    },
+    (call, { x, y }) =>
+      motion(call, 'walk', async () => {
+        if (load) throw new CallError('x_hands_full', `it carries ${load.id}; put_down first`)
+        const at = fromMap(x as number, y as number)
+        const rock = OBSTACLES.filter((o) => o.label === 'boulder').sort(
+          (a, b) => Math.hypot(a.x - at.x, a.z - at.z) - Math.hypot(b.x - at.x, b.z - at.z),
+        )[0]
+        if (!rock || Math.hypot(rock.x - at.x, rock.z - at.z) > rock.r + 2)
+          throw new CallError('x_no_boulder', `there is no boulder at ${where(at)}`)
+        if (rock.r * 2 > PUSH.across)
+          throw new CallError(
+            'x_too_big',
+            `${rock.id} is ${round(rock.r * 2, 1)} m across, too big to move; go round it`,
+          )
+        const gap = Math.hypot(rock.x - body.at.x, rock.z - body.at.z) - rock.r
+        if (gap > 6)
+          throw new CallError(
+            'unreachable',
+            `${rock.id} is ${round(gap, 1)} m away, at ${where(rock)}; go_to it first`,
+          )
+        // The way it blocks runs from the rover, if it is near, or from the dock; push square to it,
+        // to the side with more room.
+        const rover = world.things().find((t) => t.id === 'rover-01')
+        const [dx0, dz0] = LAYOUT.dock
+        const from = rover && Math.hypot(rover.x - rock.x, rover.z - rock.z) < 30 ? rover : { x: dx0, z: dz0 }
+        const way = Math.atan2(rock.x - from.x, rock.z - from.z)
+        const others = around([rock.id])
+        const room = (side: number) => {
+          const to = {
+            x: rock.x + Math.sin(way + side) * PUSH.metres,
+            z: rock.z + Math.cos(way + side) * PUSH.metres,
+          }
+          const open = openAround(world.planGrid(), others, to, rock.r)
+          return (open ? 100 : 0) + Math.min(...others.map((o) => Math.hypot(o.x - to.x, o.z - to.z) - o.r))
+        }
+        const side = room(Math.PI / 2) >= room(-Math.PI / 2) ? Math.PI / 2 : -Math.PI / 2
+        const push = way + side
+        const dir = { x: Math.sin(push), z: Math.cos(push) }
+        // Round to the far side, then face the boulder the way it will roll.
+        const behind = {
+          x: rock.x - dir.x * (rock.r + MONO.nose + 0.2),
+          z: rock.z - dir.z * (rock.r + MONO.nose + 0.2),
+        }
+        const route = plan(behind, 'walk', [rock.id])
+        await travel(call, route.path, 'walk', (remaining) => {
+          const hit = hazard('walk', remaining, [rock.id])
+          return hit && describe(hit)
+        }).catch(estop)
+        await turnTo(
+          call,
+          model.group,
+          { y: body.heading + Math.atan2(Math.sin(push - body.heading), Math.cos(push - body.heading)) },
+          600,
+        )
+        // Roll it: the boulder turns about the axis square to the push, and Monolith walks behind it.
+        const was = { x: rock.x, z: rock.z }
+        const lift = rock.object.position.y - world.ground(rock)
+        const axis = new THREE.Vector3(dir.z, 0, -dir.x)
+        const steps = Math.round(PUSH.seconds * FRAME_HZ)
+        let moved = 0
+        for (let i = 1; i <= steps; i++) {
+          await frame(call)
+          const k = i / steps
+          const to = PUSH.metres * k * k * (3 - 2 * k)
+          const step = to - moved
+          moved = to
+          rock.x += dir.x * step
+          rock.z += dir.z * step
+          rock.object.position.set(rock.x, world.ground(rock) + lift, rock.z)
+          rock.object.rotateOnWorldAxis(axis, step / rock.r)
+          body.object.position.x += dir.x * step
+          body.object.position.z += dir.z * step
+          body.object.position.y = world.ground(body.at)
+          body.speed = step * FRAME_HZ
+          if (i % FRAME_HZ === 0) call.progress({ done: i, total: steps, text: `pushing ${rock.id}` })
+        }
+        body.speed = 0
+        const said = speak(flavour(voice(LINES.pushed)))
+        return {
+          detail: `pushed ${rock.id} ${PUSH.metres} m aside, from ${where(was)} to ${where(rock)}; the way past ${where(was)} is clear. Said: "${said}"`,
+          data: { boulder: rock.id, from: toMap(was), to: toMap(rock), said },
         }
       }),
   )

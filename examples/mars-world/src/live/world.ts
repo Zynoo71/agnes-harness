@@ -340,8 +340,8 @@ export interface Mail {
 
 /** What the live devices share: the scene, its truth, and the state that ties devices together. */
 export class World {
-  /** The rover reports these; the lab reads them before it unloads. */
-  rover = { docked: true, cargo: [] as string[] }
+  /** The rover reports these (and `leg`, where it drives to now); the lab reads them before it unloads. */
+  rover = { docked: true, cargo: [] as string[], leg: undefined as Point | undefined }
   /** Set by the rover: tells it to report its state after another device changed it. */
   roverChanged: (() => void) | undefined
   /**
@@ -401,7 +401,7 @@ export class World {
 
   /** Puts the shared state and every device back as a fresh page has them. */
   reset(): void {
-    this.rover = { docked: true, cargo: [] }
+    this.rover = { docked: true, cargo: [], leg: undefined }
     this.astronaut = 'working'
     this.airlock = { inner: 'open', outer: 'closed' }
     this.suitLeak = false

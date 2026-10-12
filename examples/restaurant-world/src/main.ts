@@ -11,6 +11,7 @@ import { buildOverlay, type Lang } from './overlay.js'
 import { buildRoom } from './room.js'
 import { place } from './shapes.js'
 import { SHOTS, shotNamed } from './shots.js'
+import { buildSound } from './sound.js'
 import { IsoView } from './view.js'
 
 const params = new URLSearchParams(location.search)
@@ -206,6 +207,12 @@ const overlay = buildOverlay({
 try {
   localStorage.setItem('restaurant-seen', '1')
 } catch {}
+
+// The birthday song through the speakers, once the sound button is on.
+buildSound(() => {
+  const a = live?.world.ambience
+  return a && { track: a.music, volume: a.volume }
+}, document.getElementById('sound') as HTMLButtonElement)
 
 // The minimap in the top-right corner; M toggles it.
 const minimap = buildMinimap(

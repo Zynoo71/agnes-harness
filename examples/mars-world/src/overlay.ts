@@ -764,11 +764,10 @@ export function buildOverlay(options: {
     if (to) h.append(' → ', el('span', 'to', to))
     return h
   }
-  // Every action the DM takes gets a banner, together with what else it did in the last 20 s; what
-  // devices reported that it hands to the LLM gets a banner and a line in the activity list.
+  // Every action the DM takes gets a banner, together with what else it did in the last 20 s; a
+  // wake-up it hands to the LLM gets a banner and a line in the activity list.
   const dmAnnounce = (d: Decision) => {
     if (d.outcome === 'did' && d.device) {
-      const device = d.device
       dmDid = [...dmDid.filter((x) => d.time - x.time < 20), d]
       const did = dmDid
       const what = (x: Decision) => `${name(x.device ?? '')} ${x.choice.replace(`${x.device} `, '')}`

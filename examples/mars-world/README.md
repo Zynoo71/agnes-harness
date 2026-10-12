@@ -66,13 +66,13 @@ The world changes on its own, so an agent has something to notice and handle. Al
 - **On their own.** `?events=auto` starts one every 5–8 real minutes (the first after 2.5–4), picked from a seed (`?seed=` makes the picks repeat): one severe event at a time, three minutes between severe events. `?events=off` hides the controls, for evaluations that must run the same each time.
 - Scripts reach them in the page as `window.mars.events` (`start(kind, params, headline, by)`, `active`, `past`) and `window.mars.director` (`next()`, `start(kind, params)`).
 
-## Two modes: LLM, and DM + LLM
+## DM and LLM
 
-The button in the bar switches who acts on what the devices report by themselves (alerts, an enum state that changed with no job running, such as `storm_warning`); the page remembers it, and `?dm=on` or `?dm=off` sets it for one load.
+Agnes's DM (decision model, `packages/mhs/server/hub-api.md` section 15.5) can take some steps of a conversation in the LLM's place: after the results of a device call, or a wake-up from AgnesHub, it picks one fixed device action within a second, and hands the step to the LLM when it is unsure. It is switched per conversation by the DM button in Agnes's composer. The page only shows who acted (`src/dm/watch.ts` subscribes to the hub's `dm` events):
 
-- **LLM**: nothing happens until someone asks in Agnes, or the LLM set a watch.
-- **DM + LLM**: a decision model (DM), Cloudflare Workers AI's `@cf/cloudflare/clef`, answers within a second. The page joins AgnesHub as the agent `DM` and asks one Choice question: the scene (`src/dm/scene.ts`), what just happened, the triggering device's state now and what the DM did in the last ten minutes, against every fixed action the devices allow (`src/dm/options.ts`: each combination of enum and boolean parameters, writable enum fields, ids from earlier results such as a survey's `targets`), with `nothing` first and `ask_llm` last. It takes the top option: an action is called at once (its tags and the activity list say `← DM`) and it asks again, up to three actions; `ask_llm` wakes the Agnes conversation that last used a device (`hub/brief`). The panel at the bottom right shows the latest decision as it goes: what happened, how many actions it chose among and how long it took, how sure it is (the chosen action's probability, with the model's own confidence beside it), the six likeliest actions with their probabilities and the chosen one marked (▶ while it runs, ✓ when done), and what came of it; the earlier decisions follow in a line each. `?dm=dry` decides without acting.
-- The dev server keeps the key: with `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` in the environment or in `examples/mars-world/.env` (git-ignored), it answers `POST /dm` and passes it to clef. Without them the button is greyed out.
+- Each device tag and line in the activity list carries a chip, a bolt and DM or a speech bubble and LLM, from the caller AgnesHub records on the job.
+- Every action the DM takes gets a banner, with what else it did in the last 20 s; a wake-up it hands to the LLM gets a banner and a line in the activity list.
+- The panel at the bottom right shows the latest decision as it goes: what happened, how many actions it chose among and how long it took, how sure it is, the six likeliest actions with the chosen one marked, and what came of it; the earlier decisions follow in a line each.
 
 ## Live devices
 

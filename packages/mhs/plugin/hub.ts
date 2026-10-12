@@ -179,10 +179,7 @@ export const hub = {
       // Per conversation, as switched with hub/dm; AGNES_DM=on turns it on where it was never switched.
       const switched = new Map<string, boolean>()
       const on = (conversation: string) => switched.get(conversation) ?? env.AGNES_DM === 'on'
-      // What devices report by themselves wakes the conversation on duty, where the DM takes it first.
-      const dm = new Dm(north, scene, model, (lines) => {
-        if (brain.onDuty && on(brain.onDuty)) brain.wakeOnDuty(lines.join('\n'))
-      })
+      const dm = new Dm(north, scene, model)
       north.dm = (conversation, value) => {
         if (value !== undefined) switched.set(conversation, value)
         return { ready: true, on: on(conversation), model: model.name }
@@ -207,7 +204,6 @@ export const hub = {
       }
       log(`the DM (${model.name}) is ready`)
       ctx.effect(() => () => {
-        dm.stop()
         delete north.dm
         dmLink = undefined
       })

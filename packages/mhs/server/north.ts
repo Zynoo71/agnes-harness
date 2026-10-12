@@ -232,8 +232,8 @@ const now = () => Date.now() / 1000
 const round = (n: number, digits = 1) => Number(n.toFixed(digits))
 
 /**
- * Emits `event` (HubEvent) for every event of section 11, and `state` (device id, changed values)
- * for every state report, so in-process callers such as the brain see what pages see.
+ * Emits `event` (HubEvent) for every event of section 11, so in-process callers such as the brain
+ * see what pages see.
  */
 export class North extends EventEmitter {
   private readonly wss = new WebSocketServer({ noServer: true })
@@ -323,7 +323,6 @@ export class North extends EventEmitter {
       const updated = this.south.state(id)?.updated ?? {}
       const time = Math.max(...Object.keys(values).map((k) => updated[k] ?? 0))
       this.broadcast('hub/state', { device: id, time, values })
-      this.emit('state', id, values)
       for (const [field, value] of Object.entries(values))
         this.checkWatches(id, { state: field, value, item: values })
     })

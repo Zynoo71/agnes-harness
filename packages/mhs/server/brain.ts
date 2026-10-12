@@ -276,17 +276,14 @@ export class Brain {
    */
   brief(caller: Caller, text: string, wake: boolean): boolean {
     const line = `${caller.name}: ${text}`
-    if (wake) return this.wakeOnDuty(line)
+    if (wake) {
+      if (!this.onDuty) return false
+      this.wake(this.onDuty, line)
+      return true
+    }
     this.notes.push({ time: Date.now() / 1000, text: line })
     this.notes.splice(0, this.notes.length - NOTES_KEPT)
     return false
-  }
-
-  /** Wakes the conversation on duty with the text; false when none is. */
-  wakeOnDuty(text: string): boolean {
-    if (!this.onDuty) return false
-    this.wake(this.onDuty, text)
-    return true
   }
 
   /** The snapshot added at the start of every turn (section 15.2): maps and places first, then devices. */

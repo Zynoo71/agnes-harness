@@ -518,7 +518,7 @@ An `agent` client that acts on devices by itself (a fast decision model, say) te
 
 ### 15.5 The DM
 
-The DM is a decision model that takes some steps of the brain's loop in the LLM's place: after the results of `call_device` or `set_device`, or in a turn that a device report woke, it picks one fixed device action, and the step is that action's call. When it is less than 20 % sure, or picks `ask_llm`, the LLM takes the step. A step a person started always goes to the LLM, and only the LLM judges that nothing needs doing.
+The DM is a decision model that takes some steps of the brain's loop in the LLM's place: after the results of `call_device` or `set_device`, or in a turn a wake-up from AgnesHub started (section 15.3), it picks one fixed device action, and the step is that action's call. When it is less than 20 % sure, or picks `ask_llm`, the LLM takes the step. A step a person started always goes to the LLM, and only the LLM judges that nothing needs doing.
 
 ```json
 → {"jsonrpc": "2.0", "id": "70", "method": "hub/dm", "params": {"conversation": "c1", "on": true}}
@@ -526,7 +526,6 @@ The DM is a decision model that takes some steps of the brain's loop in the LLM'
 ```
 
 - **`hub/dm`** switches the DM for one conversation; without `on` it only reports. `ready` is false when no decision model is configured; `model` names the one that is.
-- **Device reports.** While the DM is on for the conversation on duty, an alert or a read-only enumerated state that changed with no job running wakes that conversation, merged within 1 s, so the DM can take it first.
 - **`dm` event**, one per decision, `level` `info`:
 
 | `data` field | Meaning |

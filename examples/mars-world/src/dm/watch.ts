@@ -10,9 +10,9 @@ type Json = Record<string, unknown>
 export interface Decision {
   /** Hub time, in seconds. */
   time: number
-  /** What the step answered: tool results or what devices reported, a line each. */
+  /** What the step answered: tool results or the wake-up text, a line each. */
   trigger: string[]
-  /** Whether a wake-up from AgnesHub (what devices reported) started the step. */
+  /** Whether a wake-up from AgnesHub (a job ended, a watch) started the step. */
   woken: boolean
   choice: string
   /** With `did`: the device the action went to. */

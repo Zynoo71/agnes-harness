@@ -1,0 +1,22 @@
+{
+  "name": "@agnes/restaurant-world",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agnes MHS 3D world: a restaurant with a robot front of house and kitchen, for demos",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "dev": "node tools/dev.mjs",
+    "start": "node start.mjs",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@agnes/mhs": "workspace:*",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "0.186.0",
+    "esbuild": "0.28.2"
+  }
+}

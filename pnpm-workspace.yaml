@@ -3,6 +3,7 @@ packages:
   - packages/package-manager/bundled-plugins/document-reader
   - examples/packages/cordis-greeting
   - examples/mars-world
+  - examples/restaurant-world
   - tools/*
 patchedDependencies:
   jiti@2.7.0: patches/jiti@2.7.0.patch

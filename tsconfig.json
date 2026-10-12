@@ -41,6 +41,9 @@
       "path": "examples/mars-world"
     },
     {
+      "path": "examples/restaurant-world"
+    },
+    {
       "path": "packages/package-admin-client-node"
     },
     {

@@ -654,15 +654,13 @@ export interface Effects {
 
 export function buildEffects(): Effects {
   const fire = new THREE.Group()
-  const flame = mat(0xffa040, { emissive: 0xff6a10, emissiveIntensity: 3, transparent: true, opacity: 0.85 })
-  for (let k = 0; k < 7; k++) {
-    const a = (k / 7) * Math.PI * 2
-    const tongue = at(
-      new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.3, 8), flame),
-      Math.cos(a) * 0.2,
-      0.15,
-      Math.sin(a) * 0.2,
-    )
+  const flame = mat(0xff7a1a, { emissive: 0xff4a00, emissiveIntensity: 1.4, transparent: true, opacity: 0.9 })
+  // Tongues from the burner ring, leaning out to lick up round the outside of the wok.
+  const tongueShape = new THREE.ConeGeometry(0.05, 0.18, 8).translate(0, 0.09, 0)
+  for (let k = 0; k < 9; k++) {
+    const a = (k / 9) * Math.PI * 2
+    const tongue = at(new THREE.Mesh(tongueShape, flame), Math.cos(a) * 0.25, 0.01, Math.sin(a) * 0.25)
+    tongue.quaternion.setFromAxisAngle(new THREE.Vector3(Math.sin(a), 0, -Math.cos(a)), 0.35)
     fire.add(tongue)
   }
   fire.visible = false

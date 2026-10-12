@@ -33,7 +33,7 @@ export const SHOTS: (Framing & { name: string; en: string; zh: string; devices?:
     x: 9.5,
     y: 13.2,
     span: 8,
-    devices: ['wok-01', 'stove-01', 'arm-01'],
+    devices: ['prep-01', 'wok-01', 'stove-01', 'arm-01'],
   },
   {
     name: 'pass',

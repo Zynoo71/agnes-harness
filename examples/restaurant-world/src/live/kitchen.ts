@@ -84,8 +84,8 @@ function station(world: World, which: 'wok' | 'stove', log: (line: string) => vo
     placement: placed(isWok ? F.wok.x : F.stove.x, F.wok.y, 270),
     profile: {
       notes: isWok
-        ? 'An automatic wok: stir-fries and braises order lines from menu-01, one at a time, following the line’s note (less spicy, no peanuts). A finished dish waits on its counter for arm-01 to take it to the pass.'
-        : 'Steams and boils order lines from menu-01 (fish, dumplings, noodles, soup, rice), one at a time. A finished dish waits on its counter for arm-01 to take it to the pass.',
+        ? 'An automatic wok: stir-fries and braises order lines from menu-01, one at a time, following the line’s note (less spicy, no peanuts), once prep-01 has prepped them. A finished dish waits on its counter for arm-01 to take it to the pass.'
+        : 'Steams and boils order lines from menu-01 (fish, dumplings, noodles, soup, rice), one at a time, once prep-01 has prepped them. A finished dish waits on its counter for arm-01 to take it to the pass.',
     },
     resources: { [which]: 'queue' },
     state: {
@@ -109,8 +109,8 @@ function station(world: World, which: 'wok' | 'stove', log: (line: string) => vo
     {
       name: 'cook',
       description: isWok
-        ? 'Stir-fry or braise an order line from menu-01 (a wok-01 dish), following its note: the one named, else the next waiting. Calls wait their turn.'
-        : 'Steam or boil an order line from menu-01 (a stove-01 dish): the one named, else the next waiting. Calls wait their turn.',
+        ? 'Stir-fry or braise an order line from menu-01 (a wok-01 dish), following its note, once prep-01 has prepped it: the one named, else the next prepped. Calls wait their turn.'
+        : 'Steam or boil an order line from menu-01 (a stove-01 dish), once prep-01 has prepped it: the one named, else the next prepped. Calls wait their turn.',
       timeout: 120,
       params: { item: { type: 'string', maxLength: 8, description: 'the order line, such as o1' } },
       uses: [which],
@@ -118,16 +118,24 @@ function station(world: World, which: 'wok' | 'stove', log: (line: string) => vo
       ui: { label: 'Cook' },
     },
     async (call, { item }) => {
-      const l = lineFor(world, item, (x) => x.dish.station === which && x.stage === 'queued', which)
+      const l = lineFor(
+        world,
+        item,
+        (x) => x.dish.station === which && x.stage === 'prepped',
+        `${id}, prepped`,
+      )
       if (l.dish.station !== which)
         throw new CallError(
           'x_wrong_station',
           `${l.id} ${l.dish.en} is made by ${STATION_DEVICE[l.dish.station]}`,
         )
-      if (l.stage !== 'queued')
+      if (l.stage === 'queued' || l.stage === 'prepping')
+        throw new CallError('x_not_prepped', `${l.id} ${l.dish.en} is not prepped yet: prep-01 prep it first`)
+      if (l.stage !== 'prepped')
         throw new CallError('x_not_waiting', `${l.id} ${l.dish.en} is ${stageText(l)}`)
       cooking = l
       l.stage = 'cooking'
+      if (l.prepObject) l.prepObject.visible = false
       service.changed()
       effects[isWok ? 'fire' : 'steam'].visible = true
       try {
@@ -143,13 +151,16 @@ function station(world: World, which: 'wok' | 'stove', log: (line: string) => vo
           })
         }
       } catch (e) {
-        if (l.stage === 'cooking') l.stage = 'queued'
+        if (l.stage === 'cooking') l.stage = 'prepped'
+        if (l.prepObject) l.prepObject.visible = true
         throw e
       } finally {
         cooking = undefined
         effects[isWok ? 'fire' : 'steam'].visible = false
         service.changed()
       }
+      l.prepObject?.removeFromParent()
+      l.prepObject = undefined
       const k = freeSpot(ready(world, which), (x) => spots.get(x.id))
       spots.set(l.id, k)
       setDown(world, l, READY_AT[which](k))

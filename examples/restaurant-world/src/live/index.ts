@@ -8,6 +8,7 @@ import { host } from './host.js'
 import { arm, bar, stove, wok } from './kitchen.js'
 import { menu } from './menu.js'
 import { pos } from './pos.js'
+import { prepBot } from './prep.js'
 import { cleaner, runner } from './robots.js'
 import { supplies } from './supplies.js'
 import { World, type WorldDevice } from './world.js'
@@ -30,6 +31,7 @@ export function connectDevices(
     host(world, log),
     floor(world, log),
     menu(world, log),
+    prepBot(world, log),
     wok(world, log),
     stove(world, log),
     bar(world, log),

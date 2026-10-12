@@ -405,6 +405,65 @@ function bartender(): Bartender {
   return { object, arms, busy: false }
 }
 
+export interface Prep {
+  object: THREE.Group
+  /** Set while it works, so it stops idling. */
+  busy: boolean
+  /** Each arm's shoulder and elbow (rotation.x, − reaches forward) and its hand. */
+  arms: { shoulder: THREE.Object3D; elbow: THREE.Object3D; hand: THREE.Object3D }[]
+  /** The tray at its front: a bowl set here rides along. */
+  tray: THREE.Object3D
+}
+
+/** The prep robot: a white two-armed torso in a chef's hat on a wheeled base, with a tray in front. */
+function prep(): Prep {
+  const object = new THREE.Group()
+  object.add(at(cylinder(0.28, 0.3, 0.14, M.shellDark, 24), 0, 0.07, 0))
+  object.add(at(cylinder(0.285, 0.285, 0.02, M.glowGreen, 24), 0, 0.15, 0))
+  object.add(at(cylinder(0.17, 0.22, 0.5, M.shell, 20), 0, 0.42, 0))
+  object.add(at(box(0.44, 0.42, 0.28, M.shell), 0, 0.86, 0))
+  // A green apron and a tray at waist height for what it carries.
+  object.add(at(box(0.32, 0.36, 0.01, M.teal), 0, 0.84, 0.146))
+  object.add(at(box(0.36, 0.02, 0.24, M.shellDark), 0, 0.62, 0.26))
+  const tray = joint(object, 0, 0.64, 0.26)
+  object.add(at(cylinder(0.05, 0.06, 0.08, M.shellDark, 12), 0, 1.11, 0))
+  const head = joint(object, 0, 1.28, 0)
+  head.add(at(box(0.36, 0.26, 0.22, M.shell), 0, 0, 0))
+  head.add(at(face(0.3, 0.19, 'happy', '#9cffc8'), 0, 0, 0.111))
+  // A chef's hat: a band and a puffed top.
+  head.add(at(cylinder(0.13, 0.13, 0.1, M.porcelain, 20), 0, 0.18, 0))
+  head.add(at(sphere(0.16, M.porcelain, 16), 0, 0.3, 0))
+  const arms = [-1, 1].map((side) => {
+    const shoulder = joint(object, side * 0.27, 1.0, 0)
+    shoulder.add(sphere(0.065, M.shellDark, 12))
+    shoulder.add(at(capsule(0.045, 0.22, M.shell), 0, -0.15, 0))
+    const elbow = joint(shoulder, 0, -0.3, 0)
+    elbow.add(sphere(0.05, M.shellDark, 10))
+    elbow.add(at(capsule(0.04, 0.2, M.shell), 0, -0.14, 0))
+    const hand = joint(elbow, 0, -0.28, 0)
+    for (const f of [-1, 1]) hand.add(at(box(0.02, 0.07, 0.035, M.shellDark), f * 0.03, -0.03, 0))
+    shoulder.rotation.x = -0.3
+    elbow.rotation.x = -1.2
+    return { shoulder, elbow, hand }
+  })
+  // A knife in the right hand.
+  const knife = at(box(0.012, 0.03, 0.16, M.porcelain), 0, -0.07, 0.07)
+  arms[1]?.hand.add(knife)
+  return { object, arms, tray, busy: false }
+}
+
+/** A steel bowl of washed, cut ingredients, in the dish's colour among greens. */
+export function prepped(color = 0xc4622d): THREE.Group {
+  const g = new THREE.Group()
+  g.add(at(cylinder(0.11, 0.07, 0.07, M.porcelain, 18), 0, 0.035, 0))
+  const pieces = [color, 0x6aa84f, 0xf2f0eb, color, 0x6aa84f, 0xe8742a]
+  pieces.forEach((c, k) => {
+    const a = (k / pieces.length) * Math.PI * 2
+    g.add(at(box(0.04, 0.03, 0.04, mat(c, { roughness: 0.7 })), Math.cos(a) * 0.05, 0.08, Math.sin(a) * 0.05))
+  })
+  return g
+}
+
 /** A dish or drink, its base on the origin, about as wide as the real thing. */
 export function dish(look: Look, color = 0xc4622d): THREE.Group {
   const g = new THREE.Group()
@@ -647,6 +706,7 @@ export interface Actors {
   cleaner: Cleaner
   arm: Arm
   bartender: Bartender
+  prep: Prep
   effects: Effects
   /** Idle motion: the marker spins, the arm and the bar's robot sway while nobody drives them. */
   update(t: number): void
@@ -669,6 +729,8 @@ export function buildActors(): Actors {
   group.add(place(a.object, ARM_BASE.x, ARM_BASE.y, 0.14, 270))
   const b = bartender()
   group.add(place(b.object, BARTENDER.x, BARTENDER.y, 0.01, BARTENDER.yaw))
+  const p = prep()
+  group.add(place(p.object, HOMES.prep.x, HOMES.prep.y, 0.02, HOMES.prep.yaw))
   const effects = buildEffects()
   group.add(place(effects.fire, FIXTURES.wok.x - 0.25, FIXTURES.wok.y, 0.95))
   group.add(place(effects.steam, FIXTURES.stove.x + 0.1, FIXTURES.stove.y, 1.4))
@@ -682,6 +744,7 @@ export function buildActors(): Actors {
     cleaner: c,
     arm: a,
     bartender: b,
+    prep: p,
     effects,
     update(t) {
       effects.update(t)
@@ -694,11 +757,12 @@ export function buildActors(): Actors {
         const s = a.shoulder.rotation.x + (0.45 + Math.sin(t * 0.4) * 0.08 - a.shoulder.rotation.x) * 0.05
         a.pose(s, a.elbow.rotation.x + (1.25 - a.elbow.rotation.x) * 0.05)
       }
-      if (!b.busy)
-        b.arms.forEach((arm, k) => {
-          arm.shoulder.rotation.x += (-0.3 - arm.shoulder.rotation.x) * 0.1
-          arm.elbow.rotation.x += (-1.2 + Math.sin(t * 1.1 + k * 1.7) * 0.1 - arm.elbow.rotation.x) * 0.1
-        })
+      for (const robot of [b, p])
+        if (!robot.busy)
+          robot.arms.forEach((arm, k) => {
+            arm.shoulder.rotation.x += (-0.3 - arm.shoulder.rotation.x) * 0.1
+            arm.elbow.rotation.x += (-1.2 + Math.sin(t * 1.1 + k * 1.7) * 0.1 - arm.elbow.rotation.x) * 0.1
+          })
     },
   }
 }

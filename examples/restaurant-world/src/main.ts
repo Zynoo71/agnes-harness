@@ -104,6 +104,7 @@ const ANCHORS: Record<string, Anchor> = {
   'host-01': { object: actors.host.object, h: 1.75, moving: true },
   'menu-01': { object: fixed(FIXTURES.menuBoard.x, FIXTURES.menuBoard.y), h: 2.0 },
   'floor-01': { object: fixed(FIXTURES.screens.x, FIXTURES.screens.y), h: 2.3 },
+  'prep-01': { object: actors.prep.object, h: 2.0, moving: true },
   'wok-01': { object: fixed(FIXTURES.wok.x, FIXTURES.wok.y), h: 1.6 },
   'stove-01': { object: fixed(FIXTURES.stove.x, FIXTURES.stove.y), h: 1.6 },
   'arm-01': { object: actors.arm.object, h: 1.3 },

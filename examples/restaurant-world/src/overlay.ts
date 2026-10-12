@@ -66,6 +66,8 @@ const TEXT = {
     total: 'Total',
     stages: {
       queued: 'ordered',
+      prepping: 'prepping',
+      prepped: 'prepped',
       cooking: 'cooking',
       ready: 'plating',
       readyBar: 'ready at the bar',
@@ -84,7 +86,7 @@ const TEXT = {
     thanks: 'Thank you — see you again!',
     helpBody: `
 <h2>Agnes Restaurant</h2>
-<p>A modern Chinese restaurant, simulated in your browser. You are the one guest: you speak to <b>Agnes</b> in plain words, and Agnes runs the restaurant only through its thirteen devices (the host robot at the door, the floor plan, the menu, the wok station, the steamer and stove, the kitchen arm, the bar robot, the runner, the supplies cabinet, the cleaner, the room's lights, music and air, the payment terminal and a ceiling camera). Each speaks <b>MHS</b> to <b>AgnesHub</b>, the same way real hardware would. Two deciders: the <b class="by-llm">LLM</b>, which reads, plans and talks, and <b class="by-dm">Jev</b>, a fast decision model that takes the obvious next step on its own and hands everything else to the LLM.</p>
+<p>A modern Chinese restaurant, simulated in your browser. You are the one guest: you speak to <b>Agnes</b> in plain words, and Agnes runs the restaurant only through its fourteen devices (the host robot at the door, the floor plan, the menu, the prep robot, the wok station, the steamer and stove, the kitchen arm, the bar robot, the runner, the supplies cabinet, the cleaner, the room's lights, music and air, the payment terminal and a ceiling camera). Each speaks <b>MHS</b> to <b>AgnesHub</b>, the same way real hardware would. Two deciders: the <b class="by-llm">LLM</b>, which reads, plans and talks, and <b class="by-dm">Jev</b>, a fast decision model that takes the obvious next step on its own and hands everything else to the LLM.</p>
 <h3>Say to Agnes</h3>
 <ul>
 <li>我们一个人，找个靠窗的位置吧。</li>
@@ -177,6 +179,8 @@ const TEXT = {
     total: '合计',
     stages: {
       queued: '已下单',
+      prepping: '备菜中',
+      prepped: '已备好',
       cooking: '烹饪中',
       ready: '装盘中',
       readyBar: '吧台待取',
@@ -195,7 +199,7 @@ const TEXT = {
     thanks: '谢谢光临，欢迎再来！',
     helpBody: `
 <h2>Agnes 餐厅</h2>
-<p>一家在浏览器里模拟的现代中餐厅。你就是那位客人：用平常的话跟 <b>Agnes</b> 说，Agnes 只通过十三台设备来经营餐厅（门口的迎宾机器人、桌位、点餐、炒锅、蒸灶、厨房机械臂、吧台机器人、送餐机器人、用品柜、清洁机器人、灯光音乐空调、收银和吊顶摄像头）。每台设备都像真实硬件一样，用 <b>MHS</b> 连到 <b>AgnesHub</b>。由两个角色做决定：<b class="by-llm">LLM</b> 负责读、规划和沟通；<b class="by-dm">Jev</b> 是快速的决策模型，明摆着的下一步自己直接做，其余都交给 LLM。</p>
+<p>一家在浏览器里模拟的现代中餐厅。你就是那位客人：用平常的话跟 <b>Agnes</b> 说，Agnes 只通过十四台设备来经营餐厅（门口的迎宾机器人、桌位、点餐、备菜机器人、炒锅、蒸灶、厨房机械臂、吧台机器人、送餐机器人、用品柜、清洁机器人、灯光音乐空调、收银和吊顶摄像头）。每台设备都像真实硬件一样，用 <b>MHS</b> 连到 <b>AgnesHub</b>。由两个角色做决定：<b class="by-llm">LLM</b> 负责读、规划和沟通；<b class="by-dm">Jev</b> 是快速的决策模型，明摆着的下一步自己直接做，其余都交给 LLM。</p>
 <h3>可以跟 Agnes 说</h3>
 <ul>
 <li>我们一个人，找个靠窗的位置吧。</li>
@@ -908,8 +912,8 @@ export function buildOverlay(options: {
                   : t().left
       guest.className = s.guest === 'at_door' ? 'warn' : ''
       field('table').textContent = s.table && s.guest !== 'left' ? t().table(s.table) : ''
-      const cooking = s.lines.filter((l) => l.stage === 'cooking').length
-      const waiting = s.lines.filter((l) => l.stage === 'queued').length
+      const cooking = s.lines.filter((l) => l.stage === 'cooking' || l.stage === 'prepping').length
+      const waiting = s.lines.filter((l) => l.stage === 'queued' || l.stage === 'prepped').length
       field('kitchen').textContent = cooking + waiting ? t().kitchen(cooking, waiting) : t().kitchenIdle
       const a = live.world.ambience
       const room = field('room')

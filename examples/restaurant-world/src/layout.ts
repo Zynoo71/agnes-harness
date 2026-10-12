@@ -169,6 +169,15 @@ export const HOMES = {
   host: { x: 11, y: 2.1, yaw: 270 },
   runner: { x: 21.2, y: 3.4, yaw: 180 },
   cleaner: { x: 21.2, y: 1.8, yaw: 180 },
+  prep: { x: 5.2, y: 13.55, yaw: 90 },
+} as const
+
+/** Where the prep robot stands to work, facing the back counters. */
+export const PREP_STOPS = {
+  coldStore: { x: FIXTURES.coldStore.x + 0.2, y: 13.55, yaw: 90 },
+  board: { x: FIXTURES.prep.x, y: 13.6, yaw: 90 },
+  wok: { x: FIXTURES.wok.x - 0.55, y: 13.6, yaw: 90 },
+  stove: { x: FIXTURES.stove.x + 0.55, y: 13.6, yaw: 90 },
 } as const
 
 /** Where the bar's robot works, behind the counter. */

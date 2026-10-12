@@ -11,6 +11,8 @@ import type { Dish } from '../menu.js'
 /** How far an order line has got. */
 export type Stage =
   | 'queued'
+  | 'prepping'
+  | 'prepped'
   | 'cooking'
   | 'ready'
   | 'at_pass'
@@ -26,6 +28,8 @@ export interface Line {
   note: string
   rush: boolean
   stage: Stage
+  /** The bowl of prepped ingredients in the scene, from prep until cooking starts. */
+  prepObject?: THREE.Object3D | undefined
   /** The dish in the scene, from the moment cooking starts. */
   object?: THREE.Object3D | undefined
   /** The table slot it was set on. */
@@ -144,7 +148,10 @@ export class Service {
   }
 
   reset(): void {
-    for (const l of this.lines) l.object?.removeFromParent()
+    for (const l of this.lines) {
+      l.object?.removeFromParent()
+      l.prepObject?.removeFromParent()
+    }
     for (const s of this.supplies) s.object.removeFromParent()
     this.guest = 'outside'
     this.table = undefined

@@ -7,7 +7,9 @@ import { type World, WorldDevice } from './world.js'
 export function stageText(l: Line): string {
   const by = STATION_DEVICE[l.dish.station]
   const words: Record<Stage, string> = {
-    queued: `waiting for ${by}`,
+    queued: l.dish.station === 'bar' ? `waiting for ${by}` : 'waiting for prep-01',
+    prepping: 'being prepped by prep-01',
+    prepped: `prepped, waiting for ${by}`,
     cooking: `being made on ${by}`,
     ready: l.dish.station === 'bar' ? 'ready at the bar' : `ready on ${by}`,
     at_pass: 'at the pass',
@@ -19,9 +21,23 @@ export function stageText(l: Line): string {
   return words[l.stage]
 }
 
+/** The calls that make `lines`: one prep trip for the kitchen's, then each station's cook; the bar's make. */
+function nextCalls(lines: Line[]): string {
+  const kitchen = lines.filter((l) => l.dish.station !== 'bar')
+  const bar = lines.filter((l) => l.dish.station === 'bar')
+  return [
+    ...(kitchen.length
+      ? [
+          `prep-01 prep (all of them in one trip), then ${kitchen.map((l) => `${STATION_DEVICE[l.dish.station]} cook item ${l.id}`).join(', ')}`,
+        ]
+      : []),
+    ...bar.map((l) => `bar-01 make item ${l.id}`),
+  ].join('; ')
+}
+
 /**
  * The menu and the orders: the guest's screen shows the menu; an order makes lines (o1, o2, …),
- * one per portion, that the wok, the stove and the bar make when they are told to; lines waiting
+ * one per portion, that the prep robot preps and the wok or the stove cooks, or the bar makes, when they are told to; lines waiting
  * can be cancelled, and any line hurried.
  */
 export function menu(world: World, log: (line: string) => void): WorldDevice {
@@ -33,7 +49,7 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
     model: 'Agnes Restaurant ordering',
     localization: 'none',
     profile: {
-      notes: `Takes the guest's orders. Each portion becomes an order line (o1, o2, …) that its station makes when told: wok-01 cook, stove-01 cook, bar-01 make. The menu (id: name, price, station): ${MENU.map(menuLine).join('. ')}.`,
+      notes: `Takes the guest's orders. Each portion becomes an order line (o1, o2, …) that is made when told: a wok-01 or stove-01 dish is prepped by prep-01 prep, then cooked by its station's cook; a bar-01 item is made by bar-01 make. The menu (id: name, price, station): ${MENU.map(menuLine).join('. ')}.`,
     },
     resources: { orders: 'queue' },
     state: {
@@ -137,7 +153,7 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
       service.menuOpen = false
       service.changed()
       return {
-        detail: `ordered ${made.map((l) => `${l.id} ${l.dish.en}`).join(', ')}; nothing is made until you start it: ${made.map((l) => `${STATION_DEVICE[l.dish.station]} ${l.dish.station === 'bar' ? 'make' : 'cook'} item ${l.id}`).join(', ')}`,
+        detail: `ordered ${made.map((l) => `${l.id} ${l.dish.en}`).join(', ')}; nothing is made until you start it: ${nextCalls(made)}`,
         data: { lines: made.map((l) => ({ id: l.id, dish: l.dish.id, by: STATION_DEVICE[l.dish.station] })) },
       }
     },

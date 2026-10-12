@@ -92,8 +92,7 @@ export function buildOptions(devices: DeviceEntry[], candidates: Map<string, Can
       }
       if (!closed) continue
       for (const c of combos) {
-        const args = Object.entries(c.args).map(([k, v]) => `${k}=${v}`)
-        const id = [d.id, t.name, ...args].join(' ')
+        const id = actionId({ device: d.id, tool: t.name, args: c.args })
         add(id, [firstSentence(t.description), ...c.notes].join('; '), {
           device: d.id,
           tool: t.name,
@@ -105,7 +104,7 @@ export function buildOptions(devices: DeviceEntry[], candidates: Map<string, Can
       if (!f.writable || !f.enum) continue
       for (const v of f.enum)
         if (v !== d.state.values[name])
-          add(`${d.id} set ${name}=${v}`, f.description ?? `set ${name}`, {
+          add(actionId({ device: d.id, values: { [name]: v } }), f.description ?? `set ${name}`, {
             device: d.id,
             values: { [name]: v },
           })
@@ -114,6 +113,12 @@ export function buildOptions(devices: DeviceEntry[], candidates: Map<string, Can
   criteria[ASK_LLM] =
     'hand it to the LLM operator: judge that nothing needs doing, talk to the astronaut, write a report, pick coordinates, judge a picture, or plan several steps'
   return { criteria, actions }
+}
+
+/** How an action is named among the options: "<device> <tool> name=value …" or "<device> set field=value …". */
+export function actionId(action: Action): string {
+  const pairs = Object.entries('values' in action ? action.values : action.args).map(([k, v]) => `${k}=${v}`)
+  return [action.device, 'values' in action ? 'set' : action.tool, ...pairs].join(' ')
 }
 
 /**

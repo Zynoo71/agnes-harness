@@ -458,8 +458,8 @@ Seven fixed tools, named verb + `device`. A device's own tools are not registere
 |---|---|---|---|
 | `list_devices` | — | Every device: id, name, kind, available, health, what it is doing, its tools and sources | `hub/devices` |
 | `read_device` | `device`, `sources` (optional) | State, health and position; with `sources`, their newest data, pictures as attachments | `hub/read` |
-| `call_device` | `device`, `tool`, `args` | Calls a tool and waits up to 50 s. A job still running then returns `running` and its job id; its result arrives by waking the conversation | `hub/call` |
-| `set_device` | `device`, `values` | Changes writable state | `hub/set` |
+| `call_device` | `device`, `tool`, `args`, `then` (optional) | Calls a tool and waits up to 50 s. A job still running then returns `running` and its job id; its result arrives by waking the conversation | `hub/call` |
+| `set_device` | `device`, `values`, `then` (optional) | Changes writable state | `hub/set` |
 | `stop_device` | `device` (optional) | Stops one device, or every device | `hub/stop` |
 | `watch_device`, `unwatch_device` | as in section 12 | Waits for a condition; the watch belongs to the conversation that set it | `hub/watch`, `hub/unwatch` |
 
@@ -518,7 +518,13 @@ An `agent` client that acts on devices by itself (a fast decision model, say) te
 
 ### 15.5 The DM
 
-The DM is a decision model that takes some steps of the brain's loop in the LLM's place: after the results of `call_device` or `set_device`, or in a turn a wake-up from AgnesHub started (section 15.3), it picks one fixed device action, and the step is that action's call. When it is less than 20 % sure, or picks `ask_llm`, the LLM takes the step. A step a person started always goes to the LLM, and only the LLM judges that nothing needs doing.
+The DM is a decision model that takes some steps of the brain's loop in the LLM's place, each as a `call_device` or `set_device` call with no LLM:
+
+- **The LLM's plan.** `call_device` and `set_device` take `then`: the steps the LLM takes right after this one, in order, each written as the arguments of a `call_device` or `set_device` call. When the results come back, the DM chooses between the plan's next step and `ask_llm`: it judges whether the results show things going as planned. A step taken out of the plan's order, by either, ends the plan.
+- **Wake-ups.** In a turn a wake-up from AgnesHub started (section 15.3), it picks one fixed device action among all the devices allow, and after its own action it may pick again, up to 3 in a row.
+- **Otherwise the LLM.** After the LLM's own results without a plan, after a failed result, when the DM is less than 20 % sure, picks `ask_llm`, or picks an action the task just took, the LLM takes the step. A step a person started always goes to the LLM, and only the LLM judges that nothing needs doing.
+
+What the DM is told: the scene, what the person asked, what the LLM said last, the task's device actions so far with how they ended, the plan's steps still to do, what just happened, and the state now of the devices those name.
 
 ```json
 → {"jsonrpc": "2.0", "id": "70", "method": "hub/dm", "params": {"conversation": "c1", "on": true}}
@@ -532,6 +538,7 @@ The DM is a decision model that takes some steps of the brain's loop in the LLM'
 |---|---|
 | `conversation` | The conversation the step belongs to |
 | `happened` | What the step answered: tool results or the wake-up text |
+| `planned` | The DM judged the next step of the LLM's plan, not among every action |
 | `outcome` | `did` (the step is the action), `llm` (the LLM takes the step) or `error` (the model could not decide; the LLM takes the step) |
 | `choice` | The chosen option: an action's id or `ask_llm` |
 | `device`, `call` | With `did`: the device, and the step's tool call `{name, args}`, so a page can tell the DM's calls in the conversation from the LLM's |

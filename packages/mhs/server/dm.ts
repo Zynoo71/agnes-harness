@@ -1,11 +1,20 @@
 import type { DecisionModel } from './dm-models.js'
-import { type Action, buildOptions, type Candidate, type DeviceEntry, idsIn } from './dm-options.js'
+import {
+  type Action,
+  ASK_LLM,
+  actionId,
+  buildOptions,
+  type Candidate,
+  type DeviceEntry,
+  idsIn,
+} from './dm-options.js'
 import type { HubEvent, North } from './north.js'
 
 /**
  * The DM: a decision model (dm-models.ts) that picks one fixed device action, so a step of the
  * Agnes loop can go without the LLM. It knows the devices and the run-time ids from AgnesHub; the
- * plugin asks it at the steps the DM may take (plugin/dm.ts). Independent of Agnes.
+ * plugin asks it at the steps the DM may take (plugin/dm.ts). While the LLM's plan has steps left,
+ * it only judges whether the next one is right to take now. Independent of Agnes.
  */
 
 type Json = Record<string, unknown>
@@ -18,6 +27,10 @@ export interface Moment {
   said?: string
   /** The tool results or the wake-up this step answers. */
   happened: string
+  /** The steps the LLM said it takes next and has not taken yet, the next first. */
+  plan?: Action[]
+  /** The device actions of this task so far with how they ended, a line each, oldest first. */
+  recent?: string[]
 }
 
 export interface Choice {
@@ -52,10 +65,17 @@ export class Dm {
     north.on('event', (event: HubEvent) => this.onEvent(event))
   }
 
-  /** Asks the model once for one step of a conversation. Throws when the model cannot answer. */
-  async decide(conversation: string, moment: Moment): Promise<Choice> {
+  /**
+   * Asks the model once for one step of a conversation. With a plan, the options are its next step
+   * and `ask_llm`; undefined when that step names a device or tool that is not there. Throws when
+   * the model cannot answer.
+   */
+  async decide(conversation: string, moment: Moment): Promise<Choice | undefined> {
     const devices = this.north.devices() as unknown as DeviceEntry[]
-    const { criteria, actions } = buildOptions(devices, this.candidates)
+    const next = moment.plan?.[0]
+    const options = next ? planOptions(devices, next) : buildOptions(devices, this.candidates)
+    if (!options) return undefined
+    const { criteria, actions } = options
     const now = Date.now()
     const done = (this.done.get(conversation) ?? [])
       .filter((d) => now - d.time < DONE_MS)
@@ -64,13 +84,22 @@ export class Dm {
       this.scene,
       moment.instruction && `The person asked: ${clip(moment.instruction)}`,
       moment.said && `The LLM operator said: ${clip(moment.said)}`,
-      `What just happened:\n${clip(moment.happened)}${nowText(devices, moment.happened)}`,
+      moment.recent?.length && `Device actions so far in this task:\n${moment.recent.join('\n')}`,
+      moment.plan?.length &&
+        `The LLM operator's plan, still to do:\n${moment.plan.map((a, i) => `${i + 1}. ${actionId(a)}`).join('\n')}`,
+      `What just happened:\n${clip(moment.happened)}${nowText(devices, [moment.happened, ...(moment.plan ?? []).map((a) => a.device)].join('\n'))}`,
       done.length && `What you already did:\n${done.join('\n')}`,
     ]
       .filter(Boolean)
       .join('\n\n')
     const t = performance.now()
-    const q = await this.model.rank(state, criteria, 'Pick the one action to take right now.')
+    const q = await this.model.rank(
+      state,
+      criteria,
+      next
+        ? "Take the plan's next step now, or hand it to the LLM?"
+        : 'Pick the one action to take right now.',
+    )
     const top = Object.entries(q.probabilities).sort((a, b) => b[1] - a[1])
     const choice = (top[0] as [string, number])[0]
     const action = actions.get(choice)
@@ -111,6 +140,23 @@ export class Dm {
       list.push({ value, from: `(from ${event.device} ${job.tool})` })
       this.candidates.set(param, list.slice(-KEEP_CANDIDATES))
     }
+  }
+}
+
+/** The plan's next step and `ask_llm`; undefined when the step names a device or tool not there. */
+function planOptions(devices: DeviceEntry[], next: Action) {
+  const d = devices.find((x) => x.id === next.device && x.available)
+  const tool = 'tool' in next ? d?.tools?.find((t) => t.name === next.tool) : undefined
+  if (!d || ('tool' in next && !tool)) return undefined
+  const id = actionId(next)
+  const what = tool ? (tool.description.split('. ')[0] ?? tool.description) : 'set these state values'
+  return {
+    criteria: {
+      [id]: `the plan's next step: ${what}`,
+      [ASK_LLM]:
+        'hand it to the LLM operator: what just happened went wrong, or makes the next step wrong now',
+    },
+    actions: new Map<string, Action>([[id, next]]),
   }
 }
 

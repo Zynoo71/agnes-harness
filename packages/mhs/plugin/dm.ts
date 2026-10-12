@@ -1,14 +1,17 @@
 /**
  * The DM in the Agnes loop: an Operation standing in for the step's model call (core's `Inference`
- * segment). At a step that answers tool results or a wake-up from AgnesHub, the decision model
- * picks one fixed device action, and the step is that action's call_device or set_device, with no
- * LLM. Everything else, and every choice of `ask_llm`, goes to the LLM as before. A step the person
- * started always goes to the LLM: it reads what they want and makes the plan.
+ * segment). The decision model takes a step, as a call_device or set_device with no LLM, in three
+ * cases: the LLM said with `then` which steps come next, and the DM judges whether the next one is
+ * right now; a wake-up from AgnesHub, where it picks one fixed device action; and after its own
+ * action, up to MAX_DM_STEPS in a row. Everything else, every failed result and every choice of
+ * `ask_llm` goes to the LLM as before. A step the person started always goes to the LLM: it reads
+ * what they want and makes the plan.
  */
 
 import { createHash } from 'node:crypto'
 import type { InferenceEvent, RequestBody } from '@agnes/protocol'
 import type { Dm, Moment } from '../server/dm.js'
+import { type Action, actionId } from '../server/dm-options.js'
 
 type Message = RequestBody['messages'][number]
 
@@ -18,6 +21,9 @@ const ACTIONS = ['call_device', 'set_device']
 const MAX_DM_STEPS = 3
 /** An action the DM is less sure of than this goes to the LLM: in tests such picks were mostly wrong. */
 const MIN_SURE = 0.2
+/** The task's last device actions the DM is told of; its own pick may not repeat the last few. */
+const RECENT = 6
+const NO_REPEAT = 4
 
 /** The parts of core's replacement context this Operation reads. */
 export interface InferenceContext {
@@ -45,6 +51,8 @@ export interface Decision {
   conversation: string
   /** What the step answered: tool results or a wake-up. */
   happened: string
+  /** The DM judged the next step of the LLM's plan (`then`), not among every action. */
+  planned: boolean
   /** did: the step is the action; llm: the LLM takes the step. */
   outcome: 'did' | 'llm'
   choice: string
@@ -102,7 +110,11 @@ export function dmOperation(link: () => DmLink | undefined) {
       }
       if (!hub?.on(conversation) || !options.toolNames.includes('call_device')) return llm()
       const moment = momentOf(request.messages)
-      if (!moment || (!moment.woken && (streak.get(conversation) ?? 0) >= MAX_DM_STEPS)) return llm()
+      if (!moment || moment.failed) return llm()
+      const chain = streak.get(conversation) ?? 0
+      const planned = Boolean(moment.plan?.length)
+      // After the LLM's own results the LLM goes on, unless it said what comes next.
+      if (!planned && !moment.woken && (chain === 0 || chain >= MAX_DM_STEPS)) return llm()
       let picked: Awaited<ReturnType<Dm['decide']>>
       try {
         picked = await hub.dm.decide(conversation, moment)
@@ -112,10 +124,13 @@ export function dmOperation(link: () => DmLink | undefined) {
         hub.report({ conversation, happened: moment.happened, outcome: 'error', error })
         return llm()
       }
+      if (!picked) return llm()
       const [, p] = picked.top[0] as [string, number]
       const how = `sure ${Math.round(p * 100)}% among ${picked.options}, ${(picked.ms / 1000).toFixed(1)} s`
-      // Only the LLM judges that nothing needs doing; the DM only acts, when sure enough, or hands over.
-      const action = p >= MIN_SURE ? picked.action : undefined
+      // Only the LLM judges that nothing needs doing; the DM only acts, when sure enough and not
+      // again what was just done, or hands over.
+      const repeat = !planned && picked.action && moment.lastActions.includes(canonicalJson(picked.action))
+      const action = p >= MIN_SURE && !repeat ? picked.action : undefined
       const outcome = action ? 'did' : 'llm'
       hub.log(`DM ${picked.choice} (${how}) for ${conversation}`)
       const call: Decision['call'] =
@@ -126,6 +141,7 @@ export function dmOperation(link: () => DmLink | undefined) {
       hub.report({
         conversation,
         happened: moment.happened,
+        planned,
         choice: picked.choice,
         outcome,
         ...(action && call ? { device: action.device, call } : {}),
@@ -138,7 +154,9 @@ export function dmOperation(link: () => DmLink | undefined) {
       const parser = (ctx.session.d.contractForModel?.(target) ?? ctx.session.d.contract).parser_version
       if (call) {
         hub.dm.did(conversation, picked.choice)
-        streak.set(conversation, (moment.woken ? 0 : (streak.get(conversation) ?? 0)) + 1)
+        // A step of the LLM's plan is the LLM's; only the DM's own picks count toward its limit.
+        if (planned) streak.delete(conversation)
+        else streak.set(conversation, (moment.woken ? 0 : chain) + 1)
         dmNotes.set(conversation, {
           call: callKey(call.name, call.args),
           note: { model: hub.dm.model.name, sure: p, options: picked.options, ms: picked.ms },
@@ -151,40 +169,118 @@ export function dmOperation(link: () => DmLink | undefined) {
   }
 }
 
+/** A moment as the plugin reads it, with what it needs besides what the DM is told. */
+export type StepMoment = Moment & {
+  /** A wake-up started the turn. */
+  woken: boolean
+  /** One of the results the step answers is an error: the LLM takes it. */
+  failed: boolean
+  /** The task's last device actions, as canonical JSON, for the DM not to repeat them. */
+  lastActions: string[]
+}
+
 /**
  * The step the DM may take, read from the request: the results of a device action, to carry the
  * task on, or a wake-up from AgnesHub. Undefined when the person spoke last or the LLM was reading
  * devices: then the LLM is making its plan. `woken` is true only for a turn a wake-up started.
  */
-export function momentOf(messages: Message[]): (Moment & { woken: boolean }) | undefined {
-  const results: string[] = []
+export function momentOf(messages: Message[]): StepMoment | undefined {
+  const results: Message[] = []
   let i = messages.length - 1
   for (; i >= 0; i--) {
     const m = messages[i] as Message
-    if (m.role === 'tool_result') results.unshift(textOf(m.content))
+    if (m.role === 'tool_result') results.unshift(m)
     else if (!(m.role === 'user' && isNote(textOf(m.content)))) break
   }
   const last = messages[i]
-  const instruction = messages
-    .slice(0, i + 1)
-    .reverse()
-    .find((m) => m.role === 'user' && !isNote(textOf(m.content)) && !isWake(textOf(m.content)))
+  const start = messages.findLastIndex(
+    (m, k) => k <= i && m.role === 'user' && !isNote(textOf(m.content)) && !isWake(textOf(m.content)),
+  )
+  const instruction = messages[start]
   const asked = instruction ? { instruction: textOf(instruction.content) } : {}
+  const task = taskOf(messages.slice(start + 1))
   if (results.length && last?.role === 'assistant') {
     if (!last.toolCalls?.every((c) => ACTIONS.includes(c.name))) return undefined
     const said = textOf(last.content)
-    return { ...asked, ...(said ? { said } : {}), happened: results.join('\n'), woken: false }
+    return {
+      ...asked,
+      ...(said ? { said } : {}),
+      happened: results.map((r) => textOf(r.content)).join('\n'),
+      ...task,
+      woken: false,
+      failed: results.some((r) => r.role === 'tool_result' && r.isError),
+    }
   }
   if (last?.role === 'user' && isWake(textOf(last.content))) {
     const before = messages
       .slice(0, i)
       .reverse()
       .find((m) => !(m.role === 'user' && isNote(textOf(m.content))))
-    return { ...asked, happened: textOf(last.content), woken: before?.role !== 'tool_result' }
+    return {
+      ...asked,
+      happened: textOf(last.content),
+      ...task,
+      woken: before?.role !== 'tool_result',
+      failed: false,
+    }
   }
   return undefined
 }
 
+/**
+ * What a task's device actions tell the DM: the steps the LLM said come next (the `then` of its
+ * latest call that had one) that nobody has taken yet, and the actions so far with their results.
+ * A step taken out of the plan's order ends the plan.
+ */
+function taskOf(messages: Message[]): { plan?: Action[]; recent?: string[]; lastActions: string[] } {
+  const results = new Map<string, string>()
+  for (const m of messages) if (m.role === 'tool_result') results.set(m.toolUseId, textOf(m.content))
+  const calls = messages.flatMap((m) =>
+    m.role === 'assistant' ? (m.toolCalls ?? []).filter((c) => ACTIONS.includes(c.name)) : [],
+  )
+  let plan: Action[] = []
+  const done: Action[] = []
+  const recent: string[] = []
+  for (const c of calls) {
+    const { then, ...args } = c.args as Record<string, unknown>
+    const action = actionOf(c.name, args)
+    if (!action) continue
+    if (Array.isArray(then) && then.length) plan = stepsOf(then)
+    else if (plan[0] && canonicalJson(plan[0]) === canonicalJson(action)) plan = plan.slice(1)
+    else plan = []
+    done.push(action)
+    const result = results.get(c.toolUseId)
+    recent.push(`- ${actionId(action)}: ${result ? clip(result.split('. ')[0] ?? result) : 'running'}`)
+  }
+  return {
+    ...(plan.length ? { plan } : {}),
+    ...(recent.length ? { recent: recent.slice(-RECENT) } : {}),
+    lastActions: done.slice(-NO_REPEAT).map(canonicalJson),
+  }
+}
+
+/** A call_device or set_device call's arguments as the action it takes; undefined without a device. */
+function actionOf(name: string, args: Record<string, unknown>): Action | undefined {
+  if (typeof args.device !== 'string') return undefined
+  if (name === 'set_device')
+    return { device: args.device, values: (args.values ?? {}) as Record<string, unknown> }
+  if (typeof args.tool !== 'string') return undefined
+  return { device: args.device, tool: args.tool, args: (args.args ?? {}) as Record<string, unknown> }
+}
+
+/** The steps of a `then`, up to the first that is not a call_device or set_device argument object. */
+function stepsOf(then: unknown[]): Action[] {
+  const steps: Action[] = []
+  for (const step of then) {
+    const s = (step ?? {}) as Record<string, unknown>
+    const action = actionOf('values' in s ? 'set_device' : 'call_device', s)
+    if (!action) break
+    steps.push(action)
+  }
+  return steps
+}
+
+const clip = (text: string) => (text.length > 160 ? `${text.slice(0, 160)}…` : text)
 const textOf = (content: { type: string; text?: string }[]) =>
   content
     .filter((c) => c.type === 'text')

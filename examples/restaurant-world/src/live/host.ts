@@ -23,7 +23,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
   const robot = new Robot(
     world,
     model.object,
-    { id: 'host-01', label: 'host robot', radius: 0.32, speed: 1.5, home: HOMES.host, idleS: 6 },
+    { id: 'host-01', label: 'host robot', radius: 0.32, speed: 1.8, home: HOMES.host, idleS: 6 },
     log,
   )
   const walker = new Body(guest.object, world)
@@ -38,7 +38,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
     localization: 'self',
     profile: {
       size_m: [0.6, 0.6, 1.3],
-      max_speed: 1.5,
+      max_speed: 1.8,
       notes:
         'The robot at the door that meets the guest: it leads them to a table, and at the end back to the door, and says things to them in a speech bubble. There is one guest. It goes back to the door by itself when it has nothing to do.',
     },
@@ -65,6 +65,9 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
   }
   addPlace(dev, world, robot.body, 'host robot', log)
   dev.after = () => ({ pose: robot.body.pose() })
+
+  /** The guest's walk off down the street after the see-off, which Reset stops. */
+  let walkAway: ReturnType<typeof quietCall> | undefined
 
   /** The guest walks a planned way to plan point `to`. */
   const guestTo = async (call: Call, to: { x: number; y: number }) => {
@@ -140,7 +143,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
           service.changed()
           const seat = guestSeat(t)
           const lead = robot.goTo(call, t.serve)
-          await wait(call, 1200)
+          await wait(call, 700)
           await guestTo(call, besideSeat(t, seat))
           await walk(call, walker, [seat], guest, WALK * 0.6)
           await face(call, walker, seat.yaw)
@@ -192,11 +195,16 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
           await walk(call, walker, [besideSeat(t, service.seat ?? guestSeat(t))], guest)
           const door = landmark('door')
           const lead = robot.goTo(call, { ...door, y: door.y + 0.6, yaw: 270 })
-          await wait(call, 1000)
+          await wait(call, 600)
           await guestTo(call, door)
           await lead
-          await walk(call, walker, [STREET, AWAY], guest)
-          guest.object.visible = false
+          // Out of the door the guest has left; they walk off down the street on their own.
+          walkAway = quietCall()
+          void walk(walkAway.call, walker, [STREET, AWAY], guest)
+            .then(() => {
+              if (service.guest === 'left') guest.object.visible = false
+            })
+            .catch(() => undefined)
           service.guest = 'left'
           service.billOpen = false
           service.dirty.add(t.id)
@@ -223,13 +231,15 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
       ui: { label: 'Say' },
     },
     async (call, { text }) => {
+      // The bubble stays up long enough to read; the call ends once the words are out.
       const ms = Math.min(9000, 2500 + String(text).length * 150)
       world.speech = { text: String(text), until: performance.now() + ms }
-      await wait(call, ms)
+      await wait(call, 600)
       return `said: ${text}`
     },
   )
   world.onReset(() => {
+    walkAway?.stop()
     robot.reset()
     walker.reset()
     guest.stand()

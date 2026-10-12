@@ -111,16 +111,16 @@ export function prepBot(world: World, log: (line: string) => void): WorldDevice 
           mode = 'fetching'
           report()
           await robot.goTo(call, PREP_STOPS.coldStore)
-          await work(call, 600, false, `taking ${names.join(', ')} from the cold store`)
+          await work(call, 400, false, `taking ${names.join(', ')} from the cold store`)
           await robot.goTo(call, PREP_STOPS.board)
           for (const l of lines) {
             holding = l
             mode = 'washing'
             report()
-            await work(call, 1000, false, `washing ${l.id} ${l.dish.en}`)
+            await work(call, 700, false, `washing ${l.id} ${l.dish.en}`)
             mode = 'cutting'
             report()
-            await work(call, 1500, true, `cutting ${l.id} ${l.dish.en}`)
+            await work(call, 1000, true, `cutting ${l.id} ${l.dish.en}`)
             const bowl = prepped(l.dish.color)
             bowl.position.set((bowls.size - 1) * 0.12, bowls.size * 0.08, 0)
             model.tray.add(bowl)

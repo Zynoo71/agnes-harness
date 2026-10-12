@@ -193,7 +193,7 @@ export function addPlace(
 
 /** The guest's walk: metres per stride, and speed. */
 const STRIDE = 0.7
-export const WALK = 1.3
+export const WALK = 1.6
 
 /** Walks `body` through plan points with a step; `stand`/`walk` pose the figure. */
 export async function walk(

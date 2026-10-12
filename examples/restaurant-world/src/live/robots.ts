@@ -57,7 +57,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
   const robot = new Robot(
     world,
     model.object,
-    { id: 'runner-01', label: 'runner', radius: 0.34, speed: 1.8, home: HOMES.runner, idleS: 6 },
+    { id: 'runner-01', label: 'runner', radius: 0.34, speed: 2.4, home: HOMES.runner, idleS: 6 },
     log,
   )
   let mode: 'docked' | 'fetching' | 'delivering' | 'clearing' | 'returning' = 'docked'
@@ -73,7 +73,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
     localization: 'self',
     profile: {
       size_m: [0.55, 0.6, 1.4],
-      max_speed: 1.8,
+      max_speed: 2.4,
       trays: 3,
       notes:
         'A delivery robot with three trays. deliver fetches up to three items, wherever each waits (dishes on the pass, drinks and desserts on the bar counter, supplies at the supplies cabinet), and serves them at the guest’s table. clear takes dishes and supplies from a table to the dish return. It goes back to its charging pad by itself when it has nothing to do.',
@@ -189,7 +189,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
             })
             const stop = stops.shift() as string
             await robot.goTo(call, landmark(stop))
-            await wait(call, 600)
+            await wait(call, 300)
             for (const i of things.filter((x) => pickup(x) === stop)) {
               if (i.kind === 'line') {
                 i.line.stage = 'on_the_way'
@@ -201,7 +201,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
               load(i)
               service.changed()
               report()
-              await wait(call, 400)
+              await wait(call, 200)
             }
           }
           mode = 'delivering'
@@ -215,7 +215,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
             else i.supply.stage = 'served'
             service.changed()
             report()
-            await wait(call, 500)
+            await wait(call, 250)
           }
           return `served ${things.map(nameOf).join(', ')} at ${t.id}`
         } finally {
@@ -277,10 +277,10 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
             else i.supply.stage = 'cleared'
             service.changed()
             report()
-            await wait(call, 300)
+            await wait(call, 200)
           }
           await robot.goTo(call, landmark('dish-return'))
-          await wait(call, 800)
+          await wait(call, 400)
           for (const i of aboard.splice(0)) objectOf(i)?.removeFromParent()
           report()
           return `cleared ${things.length} things from ${t.id} to the dish return`
@@ -308,7 +308,7 @@ export function cleaner(world: World, log: (line: string) => void): WorldDevice 
   const robot = new Robot(
     world,
     model.object,
-    { id: 'cleaner-01', label: 'cleaner', radius: 0.36, speed: 1.2, home: HOMES.cleaner, idleS: 5 },
+    { id: 'cleaner-01', label: 'cleaner', radius: 0.36, speed: 1.6, home: HOMES.cleaner, idleS: 5 },
     log,
   )
   let mode: 'docked' | 'going' | 'cleaning' | 'returning' = 'docked'
@@ -325,7 +325,7 @@ export function cleaner(world: World, log: (line: string) => void): WorldDevice 
     localization: 'self',
     profile: {
       size_m: [0.65, 0.7, 0.55],
-      max_speed: 1.2,
+      max_speed: 1.6,
       notes:
         'A floor scrubber with a wiping arm: clean goes to a place on the floor map, scrubs spills there, and at a table that needs clearing wipes it so it is free again (its dishes must be cleared first, by runner-01). It goes back to its pad by itself.',
     },

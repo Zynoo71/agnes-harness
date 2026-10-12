@@ -458,8 +458,8 @@ Seven fixed tools, named verb + `device`. A device's own tools are not registere
 |---|---|---|---|
 | `list_devices` | — | Every device: id, name, kind, available, health, what it is doing, its tools and sources | `hub/devices` |
 | `read_device` | `device`, `sources` (optional) | State, health and position; with `sources`, their newest data, pictures as attachments | `hub/read` |
-| `call_device` | `device`, `tool`, `args`, `then` (optional) | Calls a tool and waits up to 50 s. A job still running then returns `running` and its job id; its result arrives by waking the conversation | `hub/call` |
-| `set_device` | `device`, `values`, `then` (optional) | Changes writable state | `hub/set` |
+| `call_device` | `device`, `tool`, `args` | Calls a tool and waits up to 50 s. A job still running then returns `running` and its job id; its result arrives by waking the conversation | `hub/call` |
+| `set_device` | `device`, `values` | Changes writable state | `hub/set` |
 | `stop_device` | `device` (optional) | Stops one device, or every device | `hub/stop` |
 | `watch_device`, `unwatch_device` | as in section 12 | Waits for a condition; the watch belongs to the conversation that set it | `hub/watch`, `hub/unwatch` |
 

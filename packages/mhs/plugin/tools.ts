@@ -70,15 +70,6 @@ const device = Type.Optional(
   }),
 )
 
-// The steps the LLM takes right after this one: while each result shows things going as planned, the
-// DM may take the next for it (plugin/dm.ts); anything else comes back to the LLM.
-const then = Type.Optional(
-  Type.Array(Type.Record(Type.String(), Type.Unknown()), {
-    description:
-      'The device steps you will take right after this one, in order, each written as call_device or set_device arguments: [{"device": "door-01", "tool": "open"}, {"device": "lamp-01", "values": {"on": true}}]. Each may be taken for you while the results show things going as planned; a step has been taken only when its call and result are in the conversation, otherwise take it yourself.',
-  }),
-)
-
 async function reply(answer: Answer, call: ToolCall): Promise<Reply> {
   const content: Content[] = []
   const pictures: Json[] = []
@@ -141,7 +132,6 @@ export function registerBrainTools(agnes: Extension, brain: Brain): (() => void)
         args: Type.Optional(
           Type.Record(Type.String(), Type.Unknown(), { description: "The tool's arguments" }),
         ),
-        then,
       }),
       meta: ACTS,
       run: (args, call, byDm) =>
@@ -157,7 +147,7 @@ export function registerBrainTools(agnes: Extension, brain: Brain): (() => void)
       name: 'set_device',
       description:
         'Change a device\'s settable state fields (listed as `settable` by list_devices and with their ranges by read_device), such as a brightness, a colour or an on/off switch: {"device": "lamp-01", "values": {"brightness": 30}}. Several fields can change at once.',
-      parameters: Type.Object({ device, values: Type.Record(Type.String(), Type.Unknown()), then }),
+      parameters: Type.Object({ device, values: Type.Record(Type.String(), Type.Unknown()) }),
       meta: ACTS,
       run: (args) => brain.setDevice(args as { device?: string; values: Json }),
     },

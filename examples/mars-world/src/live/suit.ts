@@ -23,36 +23,115 @@ const O2_BAD = 15
 type Ask = 'none' | 'return' | 'stay' | 'resume'
 
 /**
- * The astronaut walks between the spots of the worksite on their own, working a while at each:
- * nobody commands them, and other devices must keep clear of them. A step bobs and sways the body.
+ * Where the astronaut works on their own, round the base: a name for what they are doing there and
+ * the spots they walk between at it. The outcrop is the main job; the rest are checks.
  */
-function wander(world: World, body: Body, busy: () => boolean, log: (line: string) => void): void {
+const JOBS: { at: string; spots: (readonly [number, number])[] }[] = [
+  { at: 'the outcrop', spots: [...LAYOUT.worksite] },
+  {
+    at: 'the weather station',
+    spots: [
+      [-2.6, -13],
+      [-6.4, -13.4],
+    ],
+  },
+  { at: 'the comms dish', spots: [[-10, -9.5]] },
+  {
+    at: 'the solar array',
+    spots: [
+      [12.6, 22.4],
+      [12.6, 20.8],
+    ],
+  },
+  { at: 'the seismometer', spots: [[36.2, 28.4]] },
+  {
+    at: 'the landing pad',
+    spots: [
+      [6, 37],
+      [9.5, 38.5],
+    ],
+  },
+]
+/** Metres from a vehicle at which the astronaut stops and lets it pass. */
+const GIVE_WAY = 3.5
+
+/**
+ * The astronaut goes round the base on their own: to one job after another, on a planned way, and
+ * works a while at each spot there. Nobody commands them, and other devices must keep clear of
+ * them; they stop for a vehicle close by, and cannot walk at all when `held` says so. A step bobs
+ * and sways the body.
+ */
+function wander(
+  world: World,
+  body: Body,
+  busy: () => boolean,
+  held: () => boolean,
+  log: (line: string) => void,
+): () => string {
   const model = body.object
-  const spots = LAYOUT.worksite
-  let next = 1
+  let job = 0
+  let spot = 0
+  /** The way to the current spot, planned when they set off. */
+  let way: Point[] | undefined
   let restUntil = performance.now() + 6000
   let phase = 0
   let last = performance.now()
+  /** Where the vehicles were last frame, to tell which are moving. */
+  const seen = new Map<string, Point>()
+  const stand = () => {
+    body.speed = 0
+    model.rotation.z = 0
+    model.position.y = world.ground(body.at)
+  }
   everyFrame(() => {
     const now = performance.now()
     const dt = Math.min(0.1, (now - last) / 1000)
     last = now
-    if (busy()) return
-    if (world.astronaut !== 'working' || now < restUntil) {
-      body.speed = 0
+    if (busy()) {
+      way = undefined
       return
     }
-    const [x, z] = spots[next] as readonly [number, number]
-    const distance = Math.hypot(x - body.at.x, z - body.at.z)
+    if (world.astronaut !== 'working' || held() || now < restUntil) {
+      way = undefined
+      if (body.speed) stand()
+      return
+    }
+    // A vehicle on the move close by: wait for it to pass.
+    let near = false
+    for (const t of world.things()) {
+      if (t.id !== 'rover-01' && t.id !== 'monolith-01') continue
+      const was = seen.get(t.id)
+      seen.set(t.id, { x: t.x, z: t.z })
+      const moving = was !== undefined && Math.hypot(t.x - was.x, t.z - was.z) > 0.002
+      if (moving && Math.hypot(t.x - body.at.x, t.z - body.at.z) < GIVE_WAY) near = true
+    }
+    if (near) {
+      if (body.speed) stand()
+      return
+    }
+    const [x, z] = (JOBS[job] as (typeof JOBS)[number]).spots[spot] as readonly [number, number]
+    if (!way) {
+      const keepouts = world.obstacles(['suit-01']).map((t) => ({ x: t.x, z: t.z, r: t.r + CLEARANCE }))
+      const path = planNear(world.planGrid(), body.at, { x, z }, keepouts, CLEARANCE)?.path
+      way = path?.length ? [...path] : [{ x, z }]
+    }
+    const to = way[0] as Point
+    const distance = Math.hypot(to.x - body.at.x, to.z - body.at.z)
     if (distance < 0.05) {
-      next = (next + 1) % spots.length
-      restUntil = now + 5000 + Math.random() * 7000
-      body.speed = 0
-      model.rotation.z = 0
-      model.position.y = world.ground(body.at)
+      way.shift()
+      if (way.length) return
+      way = undefined
+      // Done here: the next spot of this job, or on to another job.
+      spot += 1
+      if (spot >= (JOBS[job] as (typeof JOBS)[number]).spots.length) {
+        spot = 0
+        job = (job + 1 + Math.floor(Math.random() * (JOBS.length - 1))) % JOBS.length
+      }
+      restUntil = now + 6000 + Math.random() * 8000
+      stand()
       return
     }
-    let delta = headingTo(body.at, { x, z }) - model.rotation.y
+    let delta = headingTo(body.at, to) - model.rotation.y
     delta = Math.atan2(Math.sin(delta), Math.cos(delta))
     model.rotation.y += Math.sign(delta) * Math.min(Math.abs(delta), WALK.turn * dt)
     const step = Math.abs(delta) < 0.4 ? Math.min(distance, WALK.speed * dt) : 0
@@ -64,6 +143,8 @@ function wander(world: World, body: Body, busy: () => boolean, log: (line: strin
     model.position.y = world.ground(body.at) + Math.abs(Math.sin(phase)) * 0.05
     model.rotation.z = Math.sin(phase) * 0.05
   }, log)
+  const at = () => (JOBS[job] as (typeof JOBS)[number]).at
+  return () => (way && body.speed ? `on the way to ${at()}` : `at ${at()}`)
 }
 
 /** The astronaut's suit: its supplies, the wearer's vital signs, a helmet camera and where it is. */
@@ -83,7 +164,7 @@ export function suit(
     mobile: true,
     localization: 'self',
     profile: {
-      notes: `A pressure suit worn outside the base. It reports its supplies and the wearer's vital signs. The wearer works at the outcrop on their own, walking between spots: keep vehicles clear of them. radio talks to them: they answer, and do what is asked if they can (return walks them to the airlock's outer door and into the chamber once it is open; resume walks them back to work, out through the airlock if they are inside). Oxygen lasts about an hour of work and refills in the habitat. At ${O2_BAD}% oxygen or with a leaking suit they cannot walk: monolith-01 must carry them.`,
+      notes: `A pressure suit worn outside the base. It reports its supplies and the wearer's vital signs. The wearer works round the base on their own, one job after another (the outcrop, the weather station, the comms dish, the solar array, the seismometer, the landing pad), walking between them on the paths and stopping for a vehicle close by: keep vehicles clear of them; the pose source says where they are. radio talks to them: they answer, and do what is asked if they can (return walks them to the airlock's outer door and into the chamber once it is open; resume walks them back to work, out through the airlock if they are inside). Oxygen lasts about an hour of work and refills in the habitat. At ${O2_BAD}% oxygen or with a leaking suit they cannot walk: monolith-01 must carry them.`,
     },
     state: {
       o2_left: {
@@ -109,7 +190,7 @@ export function suit(
         type: 'string',
         enum: ['working', 'walking', 'waiting', 'carried', 'in_airlock', 'inside'],
         description:
-          'what the wearer is doing: working at the outcrop, walking where the radio sent them, waiting outside, carried by monolith-01, in the airlock chamber, in the habitat',
+          'what the wearer is doing: working round the base on their own, walking where the radio sent them, waiting outside, carried by monolith-01, in the airlock chamber, in the habitat',
       },
     },
     ui: { primary: 'helmet_video' },
@@ -195,7 +276,13 @@ export function suit(
     log,
   )
   addPlace(dev, world, body, { what: 'astronaut', maxError: 2, hz: 1 }, log)
-  wander(world, body, () => walking, log)
+  const working = wander(
+    world,
+    body,
+    () => walking,
+    () => cannotWalk() !== undefined,
+    log,
+  )
 
   every(
     1000,
@@ -317,8 +404,7 @@ export function suit(
   }
 
   const reply: Record<Ask, () => string> = {
-    none: () =>
-      `Copy. Oxygen ${Math.round(o2)}%, ${activity() === 'working' ? 'still at the outcrop' : 'standing by'}.`,
+    none: () => `Copy. Oxygen ${Math.round(o2)}%, ${activity() === 'working' ? working() : 'standing by'}.`,
     return: () => 'Copy, heading back to the airlock.',
     stay: () => 'Copy, holding here.',
     resume: () => 'Copy, going back to work.',
@@ -327,7 +413,7 @@ export function suit(
   dev.tool(
     {
       name: 'radio',
-      description: `Talk to the wearer over the suit radio. They answer, and do what \`ask\` says when they can: return walks them to the airlock's outer door (about a minute from the outcrop) and, once it is open, into the chamber, where airlock-01 close_outer and cycle_in bring them inside; stay stops them where they are; resume walks them back to work (from the habitat: into the chamber, and out once the outer door opens). They cannot walk with a leaking suit or ${O2_BAD}% oxygen or less.`,
+      description: `Talk to the wearer over the suit radio. They answer, and do what \`ask\` says when they can: return walks them to the airlock's outer door (about a minute from the far jobs) and, once it is open, into the chamber, where airlock-01 close_outer and cycle_in bring them inside; stay stops them where they are; resume walks them back to work (from the habitat: into the chamber, and out once the outer door opens). They cannot walk with a leaking suit or ${O2_BAD}% oxygen or less.`,
       timeout: 240,
       params: {
         text: { type: 'string', description: 'what to say to them' },

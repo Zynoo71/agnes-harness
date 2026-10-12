@@ -1,7 +1,7 @@
 /**
  * The DM's decisions as the page shows them. The decision model works inside Agnes's loop (the MHS
  * plugin's plugin/dm.ts) and AgnesHub sends each decision as a `dm` event; this client only
- * listens, for the DM panel.
+ * listens, for the activity list.
  */
 
 type Json = Record<string, unknown>
@@ -49,7 +49,7 @@ export class DmWatch {
     ws.onopen = () => {
       const send = (id: string, method: string, params: Json) =>
         ws.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }))
-      send('1', 'hub/hello', { role: 'ui', client: { name: 'Mars world DM panel' } })
+      send('1', 'hub/hello', { role: 'ui', client: { name: 'Mars world DM decisions' } })
       send('2', 'hub/subscribe', { events: ['dm'] })
     }
     ws.onmessage = (e) => {

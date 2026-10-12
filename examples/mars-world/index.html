@@ -19,13 +19,13 @@
                        border-top-color: rgba(246, 240, 230, 0.94); }
       :root { --panel: rgba(16, 13, 11, 0.74); --line: rgba(255, 196, 120, 0.3); --text: #f6e7d2; --dim: #c9a77c;
               --mono: ui-monospace, "SF Mono", Menlo, monospace; --amber: #ffb45c; --red: #ff6b57; --ok: #93d58e;
-              --dm: #3fd6c0; --llm: #8ea2ff; }
-      /* Who made a call: the DM in teal with a bolt, the LLM in blue with a speech bubble. */
+              --dm: #86bba6; --dm-soft: rgba(134, 187, 166, 0.55); --llm: #8ea2ff; --llm-soft: rgba(142, 162, 255, 0.55); }
+      /* Who made a call: the DM in patina green with a bolt, the LLM in blue with a speech bubble, both outlined. */
       .who { display: inline-flex; gap: 3px; align-items: center; padding: 0 5px; border-radius: 3px; font: 700 9.5px var(--mono);
              letter-spacing: 0.04em; white-space: nowrap; flex: none; }
       .who svg { width: 10px; height: 10px; }
-      .who.dm { color: #0d1a18; background: var(--dm); }
-      .who.llm { color: var(--llm); border: 1px solid var(--llm); }
+      .who.dm { color: var(--dm); border: 1px solid var(--dm-soft); }
+      .who.llm { color: var(--llm); border: 1px solid var(--llm-soft); }
       .who .p { margin-left: 2px; font-weight: 400; opacity: 0.8; }
       .by-dm { color: var(--dm); } .by-llm { color: var(--llm); }
       button { font: 600 11px var(--mono); color: var(--text); background: transparent; border: 1px solid var(--line);
@@ -63,11 +63,33 @@
       #feed .error, #feed .rejected { border-left-color: var(--red); } #feed .error .state, #feed .rejected .state { color: var(--red); }
       #feed .interrupted { border-left-color: var(--amber); } #feed .interrupted .state { color: var(--amber); }
       #feed .running { border-left-color: #f6e7d2; }
-      #feed .by-dm { border-left-color: var(--dm); } #feed .by-llm { border-left-color: var(--llm); }
+      #feed .by-dm { border-left-color: var(--dm-soft); } #feed .by-llm { border-left-color: var(--llm-soft); }
       #feed .by-dm.error, #feed .by-dm.rejected, #feed .by-llm.error, #feed .by-llm.rejected { border-left-color: var(--red); }
-      #feed .hand { border-left-color: var(--dm); background: linear-gradient(90deg, rgba(63, 214, 192, 0.14), transparent 45%), var(--panel); }
-      #feed .hand .state { color: var(--dm); display: inline-flex; gap: 3px; align-items: center; }
-      #feed .hand .state svg { width: 10px; height: 10px; } #feed .hand .to { color: var(--llm); }
+      /* The DM's decisions sit in the list: a step it handed back gets a line, and any line it decided opens to show how. */
+      #feed .head { align-self: flex-start; display: flex; gap: 8px; align-items: center; padding: 3px 8px; background: var(--panel);
+                    border-radius: 5px; color: var(--dim); }
+      #feed .head b { color: var(--text); }
+      #feed .item { transition: opacity 0.4s; }
+      #feed .hand { border-left-color: var(--dm-soft); }
+      #feed .hand .arrow { color: var(--dim); margin: 0 -3px; }
+      #feed .hand .why { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
+      #feed .hand .why .dev { color: var(--text); }
+      #feed .can-open { pointer-events: auto; cursor: pointer; }
+      #feed .caret { flex: none; color: var(--dim); font-size: 10px; }
+      #feed .open .line { border-radius: 5px 5px 0 0; }
+      #feed .decision { padding: 5px 10px 7px 12px; background: var(--panel); border-left: 2px solid var(--dm-soft); border-radius: 0 0 5px 5px;
+                        font-size: 10.5px; }
+      #feed .decision .meta { display: flex; gap: 12px; justify-content: space-between; margin-bottom: 4px; color: var(--dim); white-space: nowrap; }
+      #feed .decision .meta .said { overflow: hidden; text-overflow: ellipsis; }
+      #feed .decision .meta .dev { color: var(--text); }
+      #feed .option { position: relative; display: flex; gap: 8px; margin-top: 2px; padding: 1px 6px; white-space: nowrap; }
+      #feed .option i { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(134, 187, 166, 0.1); border-radius: 2px; }
+      #feed .option span, #feed .option b { position: relative; }
+      #feed .option span { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+      #feed .option.chosen { font-weight: 700; color: var(--dm); }
+      #feed .option.chosen i { background: rgba(134, 187, 166, 0.24); }
+      #feed .option .ask { color: var(--llm); display: inline-flex; gap: 4px; align-items: center; }
+      #feed .option .ask svg { width: 10px; height: 10px; }
       #feed .alert.warn { border-left-color: var(--amber); } #feed .alert.warn .state { color: var(--amber); }
       #feed .alert.bad { border-left-color: var(--red); } #feed .alert.bad .state { color: var(--red); }
       #feed .alert.ok .state { color: var(--ok); }
@@ -79,9 +101,6 @@
       .banner.info { border-left-color: #b9a2ff; }
       .banner.warn { border-left-color: var(--amber); }
       .banner.bad { border-color: rgba(255, 107, 87, 0.5); border-left-color: var(--red); }
-      .banner.dm { display: flex; gap: 10px; align-items: center; border-color: rgba(63, 214, 192, 0.55); border-left-color: var(--dm); }
-      .banner.dm .h { display: inline-flex; gap: 4px; align-items: center; color: var(--dm); font: 700 12px var(--mono); letter-spacing: 0.06em; }
-      .banner.dm .h svg { width: 11px; height: 11px; } .banner.dm .h .to { color: var(--llm); }
       #events-panel { position: fixed; right: 14px; top: 246px; width: 340px; max-height: calc(100vh - 300px); overflow: auto; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line);
                       border-radius: 8px; color: var(--text); font-size: 12px; backdrop-filter: blur(6px); }
       #events-panel .head { font: 700 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
@@ -99,37 +118,6 @@
       #events-panel select:disabled { opacity: 0.5; }
       #events-panel .row { display: flex; gap: 6px; margin-top: 6px; }
       #events-panel .row button { flex: 1; }
-      #dm-panel { position: fixed; right: 14px; bottom: 40px; width: 380px; max-height: calc(100vh - 320px); overflow: auto; padding: 10px 12px; background: var(--panel);
-                  border: 1px solid var(--line); border-left: 3px solid var(--dm); border-radius: 8px; color: var(--text); font-size: 11.5px; backdrop-filter: blur(6px); }
-      #dm-panel .head { display: flex; justify-content: space-between; font: 700 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dm); }
-      #dm-panel .head .model { color: var(--dim); text-transform: none; letter-spacing: 0; font-weight: 400; }
-      #dm-panel .empty { margin-top: 6px; color: var(--dim); }
-      #dm-panel .card { margin-top: 8px; font-family: var(--mono); }
-      #dm-panel .label, #dm-panel .section { font: 700 10.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
-      #dm-panel .section { margin-top: 10px; padding-bottom: 3px; border-bottom: 1px solid var(--line); }
-      #dm-panel .trigger { display: block; margin-top: 3px; line-height: 1.35; }
-      #dm-panel .trigger .dev { color: var(--text); margin-right: 2px; }
-      #dm-panel .ask { color: var(--llm); display: inline-flex; gap: 5px; align-items: center; }
-      #dm-panel .status { margin-top: 6px; color: var(--dim); font-size: 10.5px; }
-      #dm-panel .confidence { display: flex; gap: 8px; align-items: center; margin: 6px 0 4px; font-size: 10.5px; color: var(--dim); }
-      #dm-panel .confidence .track { flex: 1; height: 6px; background: rgba(255, 196, 120, 0.12); border-radius: 3px; overflow: hidden; }
-      #dm-panel .confidence i { display: block; height: 100%; background: var(--dm); }
-      #dm-panel .confidence b { color: var(--text); }
-      #dm-panel .confidence .model { flex: none; font-size: 10px; }
-      #dm-panel .option { position: relative; display: flex; gap: 6px; align-items: center; margin-top: 3px; padding: 2px 6px; font-size: 10.5px;
-                          border: 1px solid transparent; border-radius: 3px; isolation: isolate; }
-      #dm-panel .option i { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(63, 214, 192, 0.2); border-radius: 2px; z-index: -1; }
-      #dm-panel .option .mark { width: 10px; flex: none; color: var(--dm); }
-      #dm-panel .option .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      #dm-panel .option.chosen { border-color: rgba(63, 214, 192, 0.75); font-weight: 700; }
-      #dm-panel .option.chosen i { background: rgba(63, 214, 192, 0.42); }
-      #dm-panel .result { margin-top: 6px; color: var(--dim); font-size: 10.5px; line-height: 1.35; }
-      #dm-panel .did .result { color: var(--ok); } #dm-panel .llm .result { color: var(--llm); } #dm-panel .error .result { color: var(--red); }
-      #dm-panel .acting .result { color: var(--dm); animation: pulse 1s ease-in-out infinite; }
-      #dm-panel .past { display: flex; gap: 8px; justify-content: space-between; margin-top: 4px; font: 10.5px var(--mono); }
-      #dm-panel .past .trigger { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
-      #dm-panel .past .choice { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      #dm-panel .past.did .choice { color: var(--ok); } #dm-panel .past.llm .choice { color: var(--llm); }
       @keyframes pulse { 50% { opacity: 0.45; } }
       #earth { position: fixed; left: 14px; top: 84px; width: min(400px, 40vw); padding: 10px 12px 12px; background: rgba(16, 13, 11, 0.86);
                border: 1px solid rgba(147, 213, 142, 0.5); border-left: 3px solid var(--ok); border-radius: 8px; color: var(--text); font-size: 12.5px;
@@ -156,7 +144,7 @@
       .tag .act i { font-style: normal; font-weight: 700; }
       .tag .act em { font-style: normal; color: var(--dim); margin-left: 5px; }
       .tag .act em .who { vertical-align: 1px; }
-      .tag.by-dm { border-color: var(--dm); box-shadow: 0 0 0 1px rgba(63, 214, 192, 0.35), 0 0 14px rgba(63, 214, 192, 0.4); }
+      .tag.by-dm { border-color: var(--dm); box-shadow: 0 0 0 1px rgba(134, 187, 166, 0.3), 0 2px 10px rgba(0, 0, 0, 0.35); }
       .tag.by-llm { border-color: var(--llm); box-shadow: 0 0 0 1px rgba(142, 162, 255, 0.3), 0 2px 10px rgba(0, 0, 0, 0.35); }
       .tag.by-dm .meter div { background: var(--dm); } .tag.by-llm .meter div { background: var(--llm); }
       .tag.by-dm .meter div.busy { background: linear-gradient(90deg, transparent, var(--dm), transparent); background-size: 50% 100%; }
@@ -178,7 +166,6 @@
     <aside id="events-panel" hidden></aside>
     <aside id="earth" hidden></aside>
     <div id="help" hidden></div>
-    <div id="dm-panel" hidden></div>
     <div id="bar">
       <span id="clock"></span><span id="daylight"></span><span id="earth"></span><span id="weather"></span><span id="happening"></span>
       <span class="spacer"></span>

@@ -40,20 +40,20 @@ const TEXT = {
     eventsHead: 'Events',
     timeHead: 'Skip to',
     conditionsHead: 'Conditions',
-    dmTitle: 'DM · decision model',
-    dmOutcome: {
-      did: 'did it',
-      llm: 'the LLM takes this step',
-      error: 'could not decide; the LLM takes this step',
-    } as Record<string, string>,
-    dmSaw: 'What happened',
-    dmChose: (n: number, s: string) => `chose among ${n} actions in ${s} s`,
-    dmConfidence: 'Sure',
-    dmModelConfidence: (n: number, model: string) => `${model} confidence ${n}%`,
+    activity: 'Activity',
+    lately: (dm: number, llm: number, back: number) => [
+      'lately',
+      `${dm} steps`,
+      `${llm} steps`,
+      `handed back ${back}`,
+    ],
+    dmSaw: 'read',
+    dmChose: (n: number, s: string) => `${s} s · chose among ${n} actions`,
     dmAskLlm: 'Let the LLM decide',
-    dmUnsure: (n: number) => `unsure ${n}%`,
-    dmHands: 'hands it over',
-    dmEarlier: 'Earlier',
+    dmBack: 'handed back',
+    dmUnsure: (n: number) => `not sure enough (${n}%)`,
+    dmFailed: 'could not decide',
+    stillRunning: 'still running',
     dmWaited: (s: string, what: string) => `waited ${s} s, ${what} did not happen`,
     nowBtn: 'Start one now',
     startBtn: 'Start',
@@ -119,8 +119,8 @@ const TEXT = {
 </ul>
 <h3>On this page</h3>
 <ul>
-<li>Tags over the devices show the tool each one runs, its progress and who called it: the DM in teal with a bolt, the LLM in blue.</li>
-<li>Bottom left: the latest calls, alerts and events. Top: banners for what needs attention.</li>
+<li>Tags over the devices show the tool each one runs, its progress and who called it: the DM in green with a bolt, the LLM in blue.</li>
+<li>Bottom left: the latest calls, alerts and events, and every step the DM handed back to the LLM; click a DM line to see how it chose. Top: banners for what needs attention.</li>
 <li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> views · <kbd>P</kbd> picture in picture · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
 <li>Address: <code>?time=night</code>, <code>?sol=10</code> (minutes a sol takes), <code>?events=auto&amp;seed=7</code> (an event every few minutes on its own) or <code>off</code>, <code>?lang=zh</code></li>
 </ul>`,
@@ -152,20 +152,15 @@ const TEXT = {
     eventsHead: '事件',
     timeHead: '跳到',
     conditionsHead: '状况',
-    dmTitle: 'DM · 决策模型',
-    dmOutcome: {
-      did: '已执行',
-      llm: 'LLM 接手这一步',
-      error: '没能决定，LLM 接手这一步',
-    } as Record<string, string>,
-    dmSaw: '发生了什么',
-    dmChose: (n: number, s: string) => `${s} 秒内从 ${n} 个动作里选出`,
-    dmConfidence: '把握',
-    dmModelConfidence: (n: number, model: string) => `${model} 置信度 ${n}%`,
+    activity: '动态',
+    lately: (dm: number, llm: number, back: number) => ['最近', `${dm} 步`, `${llm} 步`, `交回 ${back} 次`],
+    dmSaw: '看了',
+    dmChose: (n: number, s: string) => `${s} 秒 · 从 ${n} 个动作里选`,
     dmAskLlm: '让 LLM 来判断',
-    dmUnsure: (n: number) => `没把握 ${n}%`,
-    dmHands: '转交',
-    dmEarlier: '之前',
+    dmBack: '交回',
+    dmUnsure: (n: number) => `把握不够（${n}%）`,
+    dmFailed: '没能决定',
+    stillRunning: '还在进行',
     dmWaited: (s: string, what: string) => `等了 ${s} 秒，没等到 ${what}`,
     nowBtn: '马上来一个',
     startBtn: '触发',
@@ -275,8 +270,8 @@ const TEXT = {
 </ul>
 <h3>页面上</h3>
 <ul>
-<li>设备上方的标签显示它正在执行的工具、进度和调用者：DM 是青绿色带闪电，LLM 是蓝色。</li>
-<li>左下角是最近的调用、告警和事件；顶部横幅提示需要注意的事。</li>
+<li>设备上方的标签显示它正在执行的工具、进度和调用者：DM 是绿色带闪电，LLM 是蓝色。</li>
+<li>左下角是最近的调用、告警和事件，以及 DM 交回 LLM 的每一步；点 DM 的那一行看它怎么选的。顶部横幅提示需要注意的事。</li>
 <li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 视角 · <kbd>P</kbd> 画中画 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
 <li>地址参数：<code>?time=night</code>、<code>?sol=10</code>（一个火星日的分钟数）、<code>?events=auto&amp;seed=7</code>（每隔几分钟自动来一个事件）或 <code>off</code>、<code>?lang=en</code></li>
 </ul>`,
@@ -322,7 +317,7 @@ interface Live {
   director: Director
 }
 
-/** A line of the activity list: a call, an alert or an event, drawn again when the language changes. */
+/** An item of the activity list: a call, an alert, an event or a step the DM handed back, drawn again when the language changes. */
 interface Line {
   el: HTMLElement
   draw(): void
@@ -359,7 +354,7 @@ export function buildOverlay(options: {
   const { clock, live, tags } = options
   let lang: Lang = options.lang
   const t = () => TEXT[lang]
-  // Who made a call: the DM (teal, a bolt) or the LLM (blue, a speech bubble); anyone else by name.
+  // Who made a call: the DM (green, a bolt) or the LLM (blue, a speech bubble); anyone else by name.
   const BOLT =
     '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1.5L3.5 9h4l-1 5.5 6-7.5h-4z" fill="currentColor"/></svg>'
   const BUBBLE =
@@ -374,14 +369,15 @@ export function buildOverlay(options: {
     if (extra) c.append(el('span', 'p', extra))
     return c
   }
-  // The DM's decision behind a call it made: the newest `did` for the device, from just before the call.
+  // The DM's decision behind a call it made: the `did` for the same device and tool nearest the call.
   const dmBehind = (a: Activity) => {
     const startedAt = Date.now() - (performance.now() - a.started)
+    const gap = (d: Decision) => Math.abs(d.time * 1000 - startedAt)
     return dm
       ?.decisions()
-      .find(
-        (d) => d.outcome === 'did' && d.device === a.device && Math.abs(d.time * 1000 - startedAt) < 15_000,
-      )
+      .filter((d) => d.outcome === 'did' && d.device === a.device && d.choice.split(' ')[1] === a.tool)
+      .filter((d) => gap(d) < 15_000)
+      .sort((x, y) => gap(x) - gap(y))[0]
   }
   const name = (id: string, fallback = id) => t().names[id] ?? fallback
   const fieldName = (field: string) => t().fields[field] ?? field.replaceAll('_', ' ')
@@ -408,7 +404,6 @@ export function buildOverlay(options: {
     help: document.getElementById('help-toggle') as HTMLButtonElement,
     reset: document.getElementById('reset') as HTMLButtonElement,
   }
-  const dmPanel = document.getElementById('dm-panel') as HTMLElement
   const dm = options.dm
   buttons.events.hidden = !live || options.eventsMode === 'off'
 
@@ -434,31 +429,74 @@ export function buildOverlay(options: {
     }
   })
 
-  // The activity list: the latest six lines, the newest at the bottom. Each line keeps the Mars time
-  // it was written at and draws its words in the language of the moment.
+  // The activity list: the latest eight items, the newest at the bottom, under a line that counts
+  // who took the steps. Each item keeps the Mars time it was written at and draws its words in the
+  // language of the moment. An item the DM decided opens to show how: the newest for a few seconds,
+  // any of them on a click.
   const lines: Line[] = []
+  const head = el('div', 'head')
+  head.hidden = true
+  feed.appendChild(head)
+  /** The DM's newest decision, open in the list until `until`. */
+  let fresh: { d: Decision; until: number } | undefined
   const time = () =>
     clock
       .label()
       .replace(/^Sol \d+ · /, '')
       .replace(' LMST', '')
-  const push = (kind: () => string, parts: () => (string | HTMLElement)[]): (() => void) => {
+  const drawHead = () => {
+    const n = (selector: string) => feed.querySelectorAll(selector).length
+    const [label = '', dmSteps = '', llmSteps = '', back = ''] = t().lately(
+      n('.line.call.by-dm'),
+      n('.line.call.by-llm'),
+      n('.line.hand'),
+    )
+    head.hidden = n('.line.by-dm, .line.hand') === 0
+    head.replaceChildren(
+      el('b', '', t().activity),
+      el('span', '', label),
+      chip('DM'),
+      el('span', '', dmSteps),
+      chip('LLM'),
+      el('span', '', llmSteps),
+      el('span', '', back),
+    )
+  }
+  const push = (
+    kind: () => string,
+    parts: () => (string | HTMLElement)[],
+    decision?: () => Decision | undefined,
+  ): (() => void) => {
+    const item = el('div', 'item')
     const line = el('div')
     const when = time()
+    /** Opened or closed by a click; until then it follows `fresh`. */
+    let clicked: boolean | undefined
     const draw = () => {
-      line.className = `line ${kind()}`
+      const d = decision?.()
+      const open = d !== undefined && (clicked ?? (fresh?.d === d && performance.now() < fresh.until))
+      item.className = `item${open ? ' open' : ''}`
+      line.className = `line ${kind()}${d ? ' can-open' : ''}`
       line.replaceChildren(
         el('span', 'when', when),
         ...parts().map((p) => (typeof p === 'string' ? el('span', '', p) : p)),
+        ...(d ? [el('span', 'caret', open ? '▾' : '▸')] : []),
       )
+      item.replaceChildren(line, ...(open && d ? [decisionCard(d)] : []))
     }
-    draw()
-    feed.appendChild(line)
-    lines.push({ el: line, draw })
-    while (lines.length > 6) lines.shift()?.el.remove()
-    lines.forEach((l, i) => {
-      l.el.style.opacity = String(0.45 + (0.55 * (i + 1)) / lines.length)
+    line.addEventListener('click', () => {
+      if (!decision?.()) return
+      clicked = !item.classList.contains('open')
+      draw()
     })
+    draw()
+    feed.appendChild(item)
+    lines.push({ el: item, draw })
+    while (lines.length > 8) lines.shift()?.el.remove()
+    lines.forEach((l, i) => {
+      l.el.style.opacity = String(0.55 + (0.45 * (i + 1)) / lines.length)
+    })
+    drawHead()
     return draw
   }
   const statusWord = (a: Activity) =>
@@ -472,17 +510,19 @@ export function buildOverlay(options: {
         ? `… ${progressLabel(lang, a.progress.text)}`
         : '…'
   const callLine = (a: Activity) => {
+    const behind = () => (a.caller === 'DM' ? dmBehind(a) : undefined)
     const draw = push(
       () => `call ${a.status ?? 'running'} by-${byOf(a.caller) ?? 'other'}`,
       () => {
-        const d = a.caller === 'DM' ? dmBehind(a) : undefined
+        const d = behind()
         return [
+          ...(a.caller ? [chip(a.caller, d ? `${Math.round(d.sure * 100)}%` : '')] : []),
           el('b', 'dev', name(a.device)),
           tool(a.tool),
-          ...(a.caller ? [chip(a.caller, d ? `${Math.round(d.sure * 100)}%` : '')] : []),
           el('span', 'state', callText(a)),
         ]
       },
+      behind,
     )
     return draw
   }
@@ -748,7 +788,7 @@ export function buildOverlay(options: {
     buttons.help.textContent = '?'
     buttons.help.title = t().help
     buttons.reset.textContent = t().reset
-    drawDm(true)
+    drawHead()
     panelHead.textContent = t().controls
     nowButton.textContent = t().nowBtn
     eventsHead.textContent = t().eventsHead
@@ -777,54 +817,25 @@ export function buildOverlay(options: {
     drawMail()
   }
 
-  // The DM panel: the latest decision (what happened, the likeliest actions with their
-  // probabilities, the choice and its confidence, what came of it), then the earlier ones in a line
-  // each. Something a device reported that the DM hands to the LLM also gets a banner.
+  // The DM's decisions: a step it handed back to the LLM gets an item of its own, under the result it
+  // read; a step it took is the call's own item. Either opens to show how it chose.
   let dmVersion = -1
   const dmSeen = new WeakSet<Decision>()
-  /** What the DM did lately, for its banner. */
-  let dmDid: Decision[] = []
-  const dmHead = (to?: string) => {
-    const h = el('span', 'h')
-    h.innerHTML = BOLT
-    h.append('DM')
-    if (to) h.append(' → ', el('span', 'to', to))
-    return h
-  }
-  // Every action the DM takes gets a banner, together with what else it did in the last 20 s; a
-  // wake-up it hands to the LLM gets a banner and a line in the activity list.
-  const dmAnnounce = (d: Decision) => {
-    if (d.outcome === 'did' && d.device) {
-      dmDid = [...dmDid.filter((x) => d.time - x.time < 20), d]
-      const did = dmDid
-      const what = (x: Decision) => `${name(x.device ?? '')} ${x.choice.replace(`${x.device} `, '')}`
-      banner(
-        'dm-did',
-        'dm',
-        () => `${did.map(what).join(' · ')} · ${d.model} ${(d.ms / 1000).toFixed(1)} s`,
-        undefined,
-        dmHead(),
-      )
-      return
-    }
-    if (!d.woken) return
-    const trigger = d.trigger.join(' · ')
-    banner('dm-llm', 'dm', () => trigger, undefined, dmHead('LLM'))
-    const state = el('span', 'state')
-    state.innerHTML = BOLT
-    state.append(
-      ` DM ${
-        d.outcome === 'error'
-          ? t().dmOutcome.error
-          : d.choice === 'ask_llm'
-            ? t().dmHands
-            : t().dmUnsure(Math.round(d.sure * 100))
-      } → `,
-      el('b', 'to', 'LLM'),
-    )
+  /** The call whose result a decision read, as it stood when the decision came. */
+  const saw = new WeakMap<Decision, Activity>()
+  const handLine = (d: Decision) => {
+    const sure = d.top[0] ? `${Math.round(d.sure * 100)}%` : ''
     push(
       () => 'hand',
-      () => [span('trigger', triggerParts(d.trigger[0] ?? '')), state],
+      () => {
+        const why = el('span', 'why')
+        why.append(
+          `${d.outcome === 'error' ? t().dmFailed : d.choice === 'ask_llm' ? t().dmBack : t().dmUnsure(Math.round(d.sure * 100))}: `,
+          triggerParts(d.trigger[0] ?? '', saw.get(d)),
+        )
+        return [chip('DM', sure), el('span', 'arrow', '→'), chip('LLM'), why]
+      },
+      () => d,
     )
   }
   /** An option as people read it: device, tool and values; asking the LLM looks like the LLM's. */
@@ -850,7 +861,7 @@ export function buildOverlay(options: {
     return e
   }
   /** One line of what the DM saw, short: the device, then what its call or watch came to. */
-  const triggerParts = (line: string): HTMLElement => {
+  const triggerParts = (line: string, seen?: Activity): HTMLElement => {
     const e = el('span', 'said')
     e.title = line
     const m = line.match(/^([\w-]+): (.*)$/s)
@@ -860,9 +871,10 @@ export function buildOverlay(options: {
     }
     const [, device = '', rest = ''] = m
     const took = rest.match(/Took (\d+) s\./)
-    const a = lastEnded.get(device)
+    const a = seen ?? lastEnded.get(device)
     const changed = rest.match(/^(\w+) changed from (\S+) to (\S+)/)
     const waited = rest.match(/^waited (\d+) s and (.+?) did not happen/)
+    const running = rest.match(/^(\w+) is still running/)
     const what = (w: string) =>
       w.replace(/(\w+) = (\S+)/g, (_, k: string, v: string) => `${fieldName(k)} = ${value(v)}`)
     const text =
@@ -872,74 +884,50 @@ export function buildOverlay(options: {
           ? `${fieldName(changed[1] ?? '')} ${value(changed[2] ?? '')} → ${value(changed[3] ?? '')}`
           : waited
             ? t().dmWaited(waited[1] ?? '', what(waited[2] ?? ''))
-            : clipped(rest)
+            : running
+              ? `${toolLabel(lang, running[1] ?? '')} … ${t().stillRunning}`
+              : clipped(rest)
     e.append(el('b', 'dev', name(device)), ` ${text}`)
     return e
   }
-  const dmCard = (d: Decision) => {
-    const card = el('div', `card ${d.outcome}`)
-    card.append(el('div', 'label', t().dmSaw))
-    for (const line of d.trigger) card.append(span('trigger', triggerParts(line)))
-    if (d.outcome !== 'error')
-      card.append(el('div', 'status', t().dmChose(d.options, (d.ms / 1000).toFixed(1))))
-    // How sure it is of its choice: the chosen action's probability, with the model's own confidence
-    // (computed over all the options, so it runs low among dozens) beside it.
-    const sure = d.top[0]?.[1]
-    if (sure !== undefined) {
-      const gauge = el('div', 'confidence')
-      const track = el('span', 'track')
-      const fill = el('i')
-      fill.style.width = `${Math.round(sure * 100)}%`
-      track.append(fill)
-      gauge.append(el('span', '', t().dmConfidence), track, el('b', '', `${Math.round(sure * 100)}%`))
-      if (d.confidence !== undefined)
-        gauge.append(el('span', 'model', t().dmModelConfidence(Math.round(d.confidence * 100), d.model)))
-      card.append(gauge)
-    }
-    d.top.forEach(([option, p], i) => {
+  /** How the DM chose: the result it read, how long it took among how many actions, the likeliest four. */
+  const decisionCard = (d: Decision) => {
+    const card = el('div', 'decision')
+    const meta = el('div', 'meta')
+    meta.append(
+      span('said', `${t().dmSaw} `, triggerParts(d.trigger[0] ?? '', saw.get(d))),
+      el('span', '', d.error ?? t().dmChose(d.options, (d.ms / 1000).toFixed(1))),
+    )
+    card.append(meta)
+    d.top.slice(0, 4).forEach(([option, p], i) => {
       const row = el('div', `option${i === 0 ? ' chosen' : ''}`)
       const fill = el('i')
       fill.style.width = `${Math.max(1, Math.round(p * 100))}%`
-      row.append(
-        el('span', 'mark', i === 0 ? '✓' : ''),
-        span('name', optionName(option)),
-        el('b', '', `${Math.round(p * 100)}%`),
-        fill,
-      )
+      row.append(fill, span('', optionName(option)), el('b', '', `${Math.round(p * 100)}%`))
       card.append(row)
     })
-    card.append(el('div', 'result', `${t().dmOutcome[d.outcome] ?? ''}${d.error ? `: ${d.error}` : ''}`))
     return card
   }
-  const drawDm = (force = false) => {
-    if (!dm) return
-    const [current, ...earlier] = dm.decisions()
-    dmPanel.hidden = !current
-    if (!current || (!force && dm.version() === dmVersion)) return
+  const drawDm = () => {
+    if (!dm || dm.version() === dmVersion) return
     dmVersion = dm.version()
     for (const d of [...dm.decisions()].reverse()) {
       if (dmSeen.has(d)) continue
       dmSeen.add(d)
-      dmAnnounce(d)
+      const read = lastEnded.get(d.trigger[0]?.match(/^([\w-]+):/)?.[1] ?? '')
+      if (read) saw.set(d, read)
+      fresh = { d, until: performance.now() + 8000 }
+      if (d.outcome !== 'did') handLine(d)
     }
-    const head = el('div', 'head')
-    head.append(el('span', '', t().dmTitle), el('span', 'model', current.model))
-    const parts: HTMLElement[] = [head, dmCard(current)]
-    if (earlier.length) parts.push(el('div', 'section', t().dmEarlier))
-    for (const d of earlier.slice(0, 5)) {
-      const [choice, p] = d.top[0] ?? ['', 0]
-      const row = el('div', `past ${d.outcome}`)
-      row.append(
-        span('trigger', triggerParts(d.trigger[0] ?? '')),
-        span('choice', optionName(choice), ` ${Math.round(p * 100)}%`),
-      )
-      parts.push(row)
-    }
-    dmPanel.replaceChildren(...parts)
+    for (const line of lines) line.draw()
   }
 
   const refresh = () => {
     drawDm()
+    if (fresh && performance.now() >= fresh.until) {
+      fresh = undefined
+      for (const line of lines) line.draw()
+    }
     const now = performance.now()
     const hour = clock.hour(now)
     const part = hour < 6 || hour >= 19 ? t().night : hour < 9 ? t().morning : hour < 17 ? t().day : t().dusk

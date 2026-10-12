@@ -70,9 +70,10 @@ The world changes on its own, so an agent has something to notice and handle. Al
 
 Agnes's DM (decision model, `packages/mhs/server/hub-api.md` section 15.5) can take some steps of a conversation in the LLM's place: after the results of a device call, or a wake-up from AgnesHub, it picks one fixed device action within a second, and hands the step to the LLM when it is unsure. It is switched per conversation by the DM button in Agnes's composer. The page only shows who acted (`src/dm/watch.ts` subscribes to the hub's `dm` events):
 
-- Each device tag and line in the activity list carries a chip, a bolt and DM or a speech bubble and LLM, from the caller AgnesHub records on the job.
-- Every action the DM takes gets a banner, with what else it did in the last 20 s; a wake-up it hands to the LLM gets a banner and a line in the activity list.
-- The panel at the bottom right shows the latest decision as it goes: what happened, how many actions it chose among and how long it took, how sure it is, the six likeliest actions with the chosen one marked, and what came of it; the earlier decisions follow in a line each.
+- Each device tag and line in the activity list carries an outlined chip: a bolt and DM in green, or a speech bubble and LLM in blue, from the caller AgnesHub records on the job; a DM chip carries how sure the DM was.
+- A step the DM handed back to the LLM gets a line of its own in the activity list, under the result it read, with why: it chose to hand it back, or it was not sure enough.
+- Any line the DM decided opens to show how: the result it read, how long it took among how many actions, and the four likeliest with their probabilities. The newest stays open for 8 s; a click opens or closes any of them.
+- A line above the list counts the steps in it: the DM's, the LLM's and how often the DM handed back.
 
 ## Live devices
 

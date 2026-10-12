@@ -383,7 +383,7 @@ const stored = (key: string) => {
     return null
   }
 }
-// The DM's decisions, for the DM panel: the DM itself works in Agnes's loop, switched per
+// The DM's decisions, for the activity list: the DM itself works in Agnes's loop, switched per
 // conversation in Agnes.
 const dmWatch = hub ? new DmWatch(hub) : undefined
 dmWatch?.start()

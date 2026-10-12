@@ -520,11 +520,10 @@ An `agent` client that acts on devices by itself (a fast decision model, say) te
 
 The DM is a decision model that takes some steps of the brain's loop in the LLM's place, each as a `call_device` or `set_device` call with no LLM:
 
-- **The LLM's plan.** `call_device` and `set_device` take `then`: the steps the LLM takes right after this one, in order, each written as the arguments of a `call_device` or `set_device` call. When the results come back, the DM chooses between the plan's next step and `ask_llm`: it judges whether the results show things going as planned. A step taken out of the plan's order, by either, ends the plan.
-- **Wake-ups.** In a turn a wake-up from AgnesHub started (section 15.3), it picks one fixed device action among all the devices allow, and after its own action it may pick again, up to 3 in a row.
-- **Otherwise the LLM.** After the LLM's own results without a plan, after a failed result, when the DM is less than 20 % sure, picks `ask_llm`, or picks an action the task just took, the LLM takes the step. A step a person started always goes to the LLM, and only the LLM judges that nothing needs doing.
+- **When.** After the results of a `call_device` or `set_device` call, the LLM's or its own, and after a wake-up from AgnesHub (section 15.3), it picks one fixed device action among all the devices allow, or `ask_llm`.
+- **Otherwise the LLM.** A step a person started, a step after the LLM read devices (`read_device`, `list_devices`), a failed result, and the step after 3 DM steps in a row go to the LLM. So does the step when the DM is less than 20 % sure, picks `ask_llm`, or picks one of the task's last 4 actions. Only the LLM judges that nothing needs doing.
 
-What the DM is told: the scene, what the person asked, what the LLM said last, the task's device actions so far with how they ended, the plan's steps still to do, what just happened, and the state now of the devices those name.
+What the DM is told: the scene; what the person asked; the task's devices (those the task's device tools named, and those what just happened names) with each tool's whole description, whose preconditions show which step comes next; the task's device actions so far with how they ended, up to 12; what just happened; and the state now of the task's devices. A task starts where the person last spoke.
 
 ```json
 → {"jsonrpc": "2.0", "id": "70", "method": "hub/dm", "params": {"conversation": "c1", "on": true}}
@@ -538,7 +537,6 @@ What the DM is told: the scene, what the person asked, what the LLM said last, t
 |---|---|
 | `conversation` | The conversation the step belongs to |
 | `happened` | What the step answered: tool results or the wake-up text |
-| `planned` | The DM judged the next step of the LLM's plan, not among every action |
 | `outcome` | `did` (the step is the action), `llm` (the LLM takes the step) or `error` (the model could not decide; the LLM takes the step) |
 | `choice` | The chosen option: an action's id or `ask_llm` |
 | `device`, `call` | With `did`: the device, and the step's tool call `{name, args}`, so a page can tell the DM's calls in the conversation from the LLM's |

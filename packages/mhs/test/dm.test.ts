@@ -24,7 +24,7 @@ const result = (text: string, id = 't', isError = false): Message => ({
   content: [{ type: 'text', text }],
   isError,
 })
-const call = (device: string, tool: string, then?: unknown[]) => ({ device, tool, ...(then ? { then } : {}) })
+const call = (device: string, tool: string) => ({ device, tool })
 
 describe('the DM in the loop', () => {
   it('takes steps after tool results and wake-ups, never the step the person started', () => {
@@ -33,9 +33,7 @@ describe('the DM in the loop', () => {
       momentOf([user('去东边看看'), said('先起飞'), result('took off'), user('[hook context]\nx')]),
     ).toMatchObject({
       instruction: '去东边看看',
-      said: '先起飞',
       happened: 'took off',
-      woken: false,
       failed: false,
     })
     expect(momentOf([user('去东边看看'), said('先看看', 'read_device'), result('landed')])).toBeUndefined()
@@ -53,18 +51,17 @@ describe('the DM in the loop', () => {
     expect(momentOf([user('盯着基地'), ended('好'), user('[AgnesHub] weather-01: storm')])).toMatchObject({
       instruction: '盯着基地',
       happened: '[AgnesHub] weather-01: storm',
-      woken: true,
     })
     expect(
       momentOf([user('盯着基地'), said('先看看', 'read_device'), result('ok'), user('[AgnesHub] storm')]),
-    ).toMatchObject({ happened: '[AgnesHub] storm', woken: false })
+    ).toMatchObject({ happened: '[AgnesHub] storm' })
   })
 
   it('asks its decision model and takes the likeliest option', async () => {
     const north = Object.assign(new EventEmitter(), { devices: () => [] }) as unknown as North
     const model = fake({ ask_llm: 0.7, other: 0.3 })
     const rank = vi.spyOn(model, 'rank')
-    const picked = await new Dm(north, 'scene', model).decide('c1', { happened: 'storm warning' })
+    const picked = await new Dm(north, 'scene', model).decide({ happened: 'storm warning' })
     expect(rank.mock.calls[0]?.[0]).toContain('storm warning')
     expect(picked).toMatchObject({
       choice: 'ask_llm',
@@ -76,70 +73,51 @@ describe('the DM in the loop', () => {
     expect(picked?.action).toBeUndefined()
   })
 
-  it("follows the LLM's plan step by step, and drops it when a step goes elsewhere", () => {
-    const open = { device: 'door-01', tool: 'open' }
-    const lamp = { device: 'lamp-01', values: { on: true } }
-    const start = [
+  it("tells the task's devices and its actions with their results", () => {
+    const task = [
       user('开门开灯'),
-      said('', 'call_device', call('door-01', 'unlock', [open, lamp]), 't1'),
+      said('', 'read_device', { device: 'lamp-01' }, 't0'),
+      result('lamp-01: off', 't0'),
+      said('', 'call_device', call('door-01', 'unlock'), 't1'),
       result('door-01: unlocked. Took 1 s.', 't1'),
     ]
-    expect(momentOf(start)).toMatchObject({
-      plan: [{ ...open, args: {} }, lamp],
+    expect(momentOf(task)).toMatchObject({
+      devices: ['lamp-01', 'door-01'],
       recent: ['- door-01 unlock: door-01: unlocked'],
+      failed: false,
     })
-    const opened = [...start, said('', 'call_device', open, 't2'), result('door-01: open.', 't2')]
-    expect(momentOf(opened)?.plan).toEqual([lamp])
-    const beside: Message = {
-      role: 'assistant',
-      content: [],
-      toolCalls: [
-        {
-          toolUseId: 't1',
-          name: 'call_device',
-          args: call('door-01', 'unlock', [open]) as never,
-          ordinal: 0,
-        },
-        { toolUseId: 't9', name: 'call_device', args: call('radio-01', 'say') as never, ordinal: 1 },
-      ],
-    }
-    expect(momentOf([user('开门'), beside, result('unlocked', 't1'), result('said', 't9')])?.plan).toEqual([
-      { ...open, args: {} },
-    ])
-    const elsewhere = [
-      ...start,
-      said('', 'call_device', call('door-01', 'lock'), 't2'),
-      result('locked', 't2'),
-    ]
-    expect(momentOf(elsewhere)?.plan).toBeUndefined()
-    expect(momentOf([...start.slice(0, 2), result('jammed', 't1', true)])?.failed).toBe(true)
+    expect(momentOf([...task.slice(0, 4), result('jammed', 't1', true)])?.failed).toBe(true)
   })
 
-  it('with a plan, chooses only between its next step and the LLM', async () => {
+  it("gives the model the task's devices with their whole tool descriptions and state", async () => {
     const north = Object.assign(new EventEmitter(), {
       devices: () => [
         {
           id: 'door-01',
           available: true,
-          tools: [{ name: 'open', description: 'Open the door. Slowly.' }],
-          state: { fields: {}, values: {} },
+          tools: [{ name: 'open', description: 'Open the door. Needs it unlocked.' }],
+          state: { fields: {}, values: { locked: false } },
+        },
+        {
+          id: 'lamp-01',
+          available: true,
+          tools: [{ name: 'blink', description: 'Blink. Twice.' }],
+          state: { fields: {}, values: { on: false } },
         },
       ],
     }) as unknown as North
     const model = fake({ 'door-01 open': 0.9, ask_llm: 0.1 })
     const rank = vi.spyOn(model, 'rank')
-    const dm = new Dm(north, 'scene', model)
-    const open = { device: 'door-01', tool: 'open', args: {} }
-    const picked = await dm.decide('c1', { happened: 'unlocked', plan: [open] })
-    expect(Object.keys(rank.mock.calls[0]?.[1] ?? {})).toEqual(['door-01 open', 'ask_llm'])
-    expect(rank.mock.calls[0]?.[0]).toContain('plan, still to do:\n1. door-01 open')
-    expect(picked?.action).toEqual(open)
-    expect(
-      await dm.decide('c1', { happened: 'x', plan: [{ device: 'gone-01', tool: 'open', args: {} }] }),
-    ).toBeUndefined()
+    const picked = await new Dm(north, 'scene', model).decide({ happened: 'door-01: unlocked' })
+    const [state, options] = rank.mock.calls[0] ?? []
+    expect(state).toContain('door-01:\n- open: Open the door. Needs it unlocked.')
+    expect(state).toContain('Now:\ndoor-01 now: locked false')
+    expect(state).not.toContain('lamp-01')
+    expect(Object.keys(options ?? {})).toEqual(['door-01 open', 'lamp-01 blink', 'ask_llm'])
+    expect(picked.action).toEqual({ device: 'door-01', tool: 'open', args: {} })
   })
 
-  it("leaves the LLM's own results to the LLM unless it said what comes next", async () => {
+  it("takes the step after the LLM's own results, and leaves failed results to the LLM", async () => {
     const north = Object.assign(new EventEmitter(), {
       devices: () => [
         {
@@ -181,17 +159,13 @@ describe('the DM in the loop', () => {
       said('', 'call_device', call('door-01', 'unlock'), 't1'),
       result('unlocked', 't1'),
     ]
-    expect((await run(unlocked)).llm).toBe(true)
-    expect(decide).not.toHaveBeenCalled()
-    const planned = [
-      user('开门'),
-      said('', 'call_device', call('door-01', 'unlock', [{ device: 'door-01', tool: 'open' }]), 't1'),
-      result('unlocked', 't1'),
-    ]
-    const { llm, events } = await run(planned)
+    const { llm, events } = await run(unlocked)
     expect(llm).toBe(false)
     expect(events.find((e) => e.type === 'toolcall_end')).toMatchObject({
       call: { name: 'call_device', args: { device: 'door-01', tool: 'open', args: {} } },
     })
+    const jammed = [...unlocked.slice(0, 2), result('jammed', 't1', true)]
+    expect((await run(jammed)).llm).toBe(true)
+    expect(decide).toHaveBeenCalledTimes(1)
   })
 })

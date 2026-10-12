@@ -11,6 +11,8 @@ import {
   FIXTURES,
   HOMES,
   PLANTS,
+  PRIVATE_ROOM,
+  privateWalls,
   ROOM,
   STREET_D,
   TABLES,
@@ -155,15 +157,6 @@ function chair(x: number, y: number, yaw: number): THREE.Group {
   return place(g, x, y, 0, yaw)
 }
 
-function bench(x: number, y: number, w: number, yaw: number): THREE.Group {
-  const g = new THREE.Group()
-  g.add(place(box(w, 0.45, 0.5, M.rosewood), 0, 0, 0.225))
-  g.add(place(box(w - 0.04, 0.1, 0.46, M.cushion), 0, 0, 0.5))
-  g.add(place(box(w, 0.75, 0.14, M.cushion), 0, 0.22, 0.82))
-  g.add(place(box(w + 0.02, 0.05, 0.16, M.rosewood), 0, 0.22, 1.22))
-  return place(g, x, y, 0, yaw)
-}
-
 /** One guest's place at seat `s`, toward the table's centre: a plate and bowl, chopsticks, a teacup. */
 function setting(
   g: THREE.Group,
@@ -206,7 +199,7 @@ function numberCard(n: number): THREE.Mesh {
   return new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.02), mat(0xffffff, { map: texture }))
 }
 
-/** A table laid for its guests, with chairs or benches, a number card and soy, vinegar and napkins. */
+/** A table laid for its guests, with chairs, a number card and soy, vinegar and napkins. */
 function diningTable(t: Table, n: number): THREE.Group {
   const g = new THREE.Group()
   const H = 0.75
@@ -236,11 +229,7 @@ function diningTable(t: Table, n: number): THREE.Group {
     // A runner of red cloth down the middle.
     g.add(place(box(top.w * 0.98, 0.004, 0.24, M.lacquer), t.x, t.y, H + 0.002))
   }
-  if (t.kind === 'booth') {
-    const w = (t.top as Box).w + 0.2
-    g.add(bench(t.x, t.y + 0.78, w, 270))
-    g.add(bench(t.x, t.y - 0.78, w, 90))
-  } else for (const s of t.seats) g.add(chair(s.x, s.y, s.yaw))
+  for (const s of t.seats) g.add(chair(s.x, s.y, s.yaw))
   for (const s of t.seats) setting(g, s, t, H)
   // Soy sauce, vinegar and a box of napkins in the middle; the number toward the view.
   const cx = t.x + ('r' in t.top ? 0.18 : 0)
@@ -722,6 +711,17 @@ async function bar(group: THREE.Group) {
   group.add(place(box(0.9, 0.01, 0.7, M.rubber), BARTENDER.x, BARTENDER.y, 0.005))
 }
 
+/** The private room: low walls like the near ones, a door frame, its name toward the view, a carpet. */
+function privateRoom(group: THREE.Group) {
+  const { x0, x1, y0, y1, door } = PRIVATE_ROOM
+  const plaster = mat(0xf0e2c9)
+  for (const b of privateWalls()) group.add(wall(b, LOW_H, plaster))
+  for (const y of [door.y0, door.y1]) group.add(place(box(0.14, 2.2, 0.14, M.rosewood), x0, y, 1.1))
+  group.add(place(box(0.14, 0.12, door.y1 - door.y0 + 0.14, M.rosewood), x0, (door.y0 + door.y1) / 2, 2.2))
+  group.add(place(sign('包间 · 牡丹厅', 1.6, 0.32), x0 + 1.4, y0 - 0.09, LOW_H - 0.3))
+  group.add(place(rug(x1 - x0 - 0.4, y1 - y0 - 0.4), (x0 + x1) / 2, (y0 + y1) / 2, 0.004))
+}
+
 /** Charging pads for the runner and the cleaner, by the east wall. */
 function pads(group: THREE.Group) {
   for (const home of [HOMES.runner, HOMES.cleaner]) {
@@ -749,6 +749,7 @@ export async function buildRoom(): Promise<Room> {
   await foyer(group)
   await dining(group)
   lowWall(group)
+  privateRoom(group)
   await kitchen(group)
   await bar(group)
   pads(group)

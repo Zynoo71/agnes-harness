@@ -63,13 +63,13 @@ export const SHOTS: (Framing & { name: string; en: string; zh: string; devices?:
     devices: ['host-01', 'runner-01', 'cleaner-01'],
   },
   {
-    name: 'robots',
-    en: 'Robot corner',
-    zh: '机器人充电区',
-    x: 20,
-    y: 3,
-    span: 6,
-    devices: ['runner-01', 'cleaner-01', 'cam-01'],
+    name: 'private',
+    en: 'Private room',
+    zh: '包间',
+    x: 19.2,
+    y: 6.2,
+    span: 7.5,
+    devices: ['host-01', 'runner-01', 'cleaner-01'],
   },
 ]
 

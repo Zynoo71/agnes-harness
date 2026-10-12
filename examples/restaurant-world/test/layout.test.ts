@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FOOTPRINTS, HOMES, PLACES, TABLES } from '../src/layout.js'
+import { FOOTPRINTS, HOMES, PLACES, PREP_STOPS, TABLES } from '../src/layout.js'
 import { occupancy } from '../src/live/map.js'
 import { fromMap, planPath } from '../src/live/route.js'
 
@@ -15,10 +15,18 @@ describe('restaurant floor', () => {
     for (const t of TABLES) expect(PLACES.some((p) => p.id === t.id)).toBe(true)
   })
 
-  it.each(Object.entries(HOMES))('lets a robot from %s reach every landmark', (_, home) => {
+  const { prep, ...front } = HOMES
+  it.each(Object.entries(front))('lets a robot from %s reach every landmark', (_, home) => {
     for (const p of landmarks) {
       const path = planPath(grid, fromMap(home.x, home.y), fromMap(p.x, p.y), [], BODY)
       expect(path, `${p.id}`).toBeDefined()
+    }
+  })
+
+  it('lets the prep robot reach each of its stops in the kitchen', () => {
+    for (const [id, p] of Object.entries(PREP_STOPS)) {
+      const path = planPath(grid, fromMap(prep.x, prep.y), fromMap(p.x, p.y), [], BODY)
+      expect(path, id).toBeDefined()
     }
   })
 

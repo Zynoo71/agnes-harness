@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { BACK_OF_HOUSE_Y, BAR_X, DOOR, FIXTURES, ROOM, TABLES } from './layout.js'
+import { BACK_OF_HOUSE_Y, BAR_X, DOOR, FIXTURES, PRIVATE_ROOM, ROOM, TABLES } from './layout.js'
 import type { Service } from './live/service.js'
 
 /** The part of the floor map the minimap shows, in map coordinates (x east, y north, metres). */
@@ -212,6 +212,12 @@ function drawBackground(dpr: number): HTMLCanvasElement {
   g.lineWidth = 1
   line(0, BACK_OF_HOUSE_Y, ROOM.w, BACK_OF_HOUSE_Y)
   line(BAR_X, BACK_OF_HOUSE_Y, BAR_X, ROOM.d)
+  // The private room, its door in the west wall.
+  const P = PRIVATE_ROOM
+  line(P.x0, P.y0, P.x1, P.y0)
+  line(P.x0, P.y1, P.x1, P.y1)
+  line(P.x0, P.y0, P.x0, P.door.y0)
+  line(P.x0, P.door.y1, P.x0, P.y1)
   // Counters and furniture.
   g.fillStyle = 'rgba(233, 222, 205, 0.32)'
   for (const f of Object.values(FIXTURES)) {

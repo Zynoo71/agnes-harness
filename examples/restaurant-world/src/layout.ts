@@ -15,6 +15,11 @@ export const BACK_OF_HOUSE_Y = 10.5
 export const BAR_X = 16.5
 /** The door in the south wall, from x0 to x1. */
 export const DOOR = { x0: 10, x1: 12 } as const
+/**
+ * The private room at the dining room's east end, from x0 to the east wall and from y0 to y1: its
+ * walls are cut low like the near ones, and a sliding door in its west wall opens on the dining room.
+ */
+export const PRIVATE_ROOM = { x0: 16.55, x1: 22, y0: 3.9, y1: 8.8, door: { y0: 5.65, y1: 7.05 } } as const
 /** How far the street reaches south of the room. */
 export const STREET_D = 4.5
 
@@ -45,7 +50,7 @@ export interface Table {
   name: { en: string; zh: string }
   x: number
   y: number
-  kind: 'square' | 'long' | 'booth' | 'round'
+  kind: 'square' | 'long' | 'round'
   /** The top: a box, or a circle for a round table. */
   top: Box | Round
   seats: Seat[]
@@ -59,13 +64,13 @@ export interface Table {
 const towards = (from: { x: number; y: number }, to: { x: number; y: number }) =>
   Math.round(((Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI + 360) % 360)
 
-/** A rectangular table at (x, y) with chairs or benches north and south, served from `side`. */
+/** A rectangular table at (x, y) with chairs north and south, served from `side`. */
 function rectTable(
   id: string,
   name: Table['name'],
   x: number,
   y: number,
-  kind: 'square' | 'long' | 'booth',
+  kind: 'square' | 'long',
   side: 'east' | 'west',
   window = false,
 ): Table {
@@ -76,7 +81,7 @@ function rectTable(
     { x: x + dx, y: y + 0.62, yaw: 270 },
     { x: x + dx, y: y - 0.62, yaw: 90 },
   ])
-  const reach = kind === 'booth' ? 1.05 : 0.95
+  const reach = 0.95
   const sx = side === 'east' ? x + w / 2 + 0.65 : x - w / 2 - 0.65
   return {
     id,
@@ -92,11 +97,11 @@ function rectTable(
   }
 }
 
-/** A round table for six at (x, y), served from the west. */
-function roundTable(id: string, name: Table['name'], x: number, y: number): Table {
-  const seats = Array.from({ length: 6 }, (_, k) => {
-    const a = (k / 6) * Math.PI * 2 + Math.PI / 6
-    const seat = { x: x + Math.cos(a) * 1.1, y: y + Math.sin(a) * 1.1 }
+/** A round table for `n` at (x, y), its top `r` in radius, served from the west. */
+function roundTable(id: string, name: Table['name'], x: number, y: number, n: number, r: number): Table {
+  const seats = Array.from({ length: n }, (_, k) => {
+    const a = (k / n) * Math.PI * 2 + Math.PI / n
+    const seat = { x: x + Math.cos(a) * (r + 0.3), y: y + Math.sin(a) * (r + 0.3) }
     return { ...seat, yaw: towards(seat, { x, y }) }
   })
   return {
@@ -105,11 +110,11 @@ function roundTable(id: string, name: Table['name'], x: number, y: number): Tabl
     x,
     y,
     kind: 'round',
-    top: { x, y, r: 0.8 },
+    top: { x, y, r },
     seats,
     window: false,
-    serve: { x: x - 2.1, y, yaw: 0 },
-    footprint: { x, y, r: 1.45 },
+    serve: { x: x - r - 1.3, y, yaw: 0 },
+    footprint: { x, y, r: r + 0.65 },
   }
 }
 
@@ -118,8 +123,8 @@ export const TABLES: Table[] = [
   rectTable('t2', { en: 'Table 2, by the window', zh: '2 号桌（靠窗）' }, 1.5, 7.8, 'square', 'east', true),
   rectTable('t3', { en: 'Table 3', zh: '3 号桌' }, 6.2, 5.0, 'long', 'east'),
   rectTable('t4', { en: 'Table 4', zh: '4 号桌' }, 6.2, 8.2, 'long', 'east'),
-  roundTable('t5', { en: 'Table 5, the round table', zh: '5 号桌（圆桌）' }, 12.2, 6.6),
-  rectTable('t6', { en: 'Table 6, a booth', zh: '6 号桌（卡座）' }, 18.2, 6.6, 'booth', 'west'),
+  roundTable('t5', { en: 'Table 5, the round table', zh: '5 号桌（圆桌）' }, 12.2, 6.6, 6, 0.8),
+  roundTable('t6', { en: 'Table 6, the private room', zh: '6 号桌（包间）' }, 19.35, 6.35, 8, 0.85),
 ]
 
 /** Fixed things robots go to or work at, and the furniture that stands in their way. */
@@ -279,6 +284,16 @@ export const PLACES: Place[] = [
     description: 'Where the guests sit',
   },
   {
+    id: 'private-room',
+    name: { en: 'Private room', zh: '包间' },
+    kind: 'zone',
+    x: (PRIVATE_ROOM.x0 + PRIVATE_ROOM.x1) / 2,
+    y: (PRIVATE_ROOM.y0 + PRIVATE_ROOM.y1) / 2,
+    w: PRIVATE_ROOM.x1 - PRIVATE_ROOM.x0,
+    d: PRIVATE_ROOM.y1 - PRIVATE_ROOM.y0,
+    description: 'A room of its own for eight at table 6, with its own lights, music and air; a sliding door to the dining room',
+  },
+  {
     id: 'kitchen',
     name: { en: 'Kitchen', zh: '后厨' },
     kind: 'zone',
@@ -293,6 +308,18 @@ export const PLACES: Place[] = [
 /** A box or circle on the plan as a footprint in world coordinates (z = −y). */
 const foot = (b: Box | Round): Footprint =>
   'r' in b ? { x: b.x, z: -b.y, r: b.r } : { x: b.x, z: -b.y, w: b.w, d: b.d }
+
+/** The private room's walls as boxes: the south and north ones, and the west one either side of its door. */
+export function privateWalls(): Box[] {
+  const { x0, x1, y0, y1, door } = PRIVATE_ROOM
+  const t = 0.1
+  return [
+    { x: (x0 + x1) / 2, y: y0, w: x1 - x0, d: t },
+    { x: (x0 + x1) / 2, y: y1, w: x1 - x0, d: t },
+    { x: x0, y: (y0 + door.y0) / 2, w: t, d: door.y0 - y0 },
+    { x: x0, y: (door.y1 + y1) / 2, w: t, d: y1 - door.y1 },
+  ]
+}
 
 /** Plants and other small things that stand on the floor, which robots go round. */
 export const PLANTS: Round[] = [
@@ -315,6 +342,8 @@ export const FOOTPRINTS: Footprint[] = [
   foot({ x: ROOM.w / 2, y: ROOM.d + 0.1, w: ROOM.w + 0.4, d: 0.2 }),
   foot({ x: -0.1, y: ROOM.d / 2, w: 0.2, d: ROOM.d + 0.4 }),
   foot({ x: ROOM.w + 0.1, y: ROOM.d / 2, w: 0.2, d: ROOM.d + 0.4 }),
+  // The private room's walls, the west one either side of its door.
+  ...privateWalls().map(foot),
   // The low wall with the pass, the dish return and the bar counter in it, and the bar's side wall.
   foot({ x: ROOM.w / 2, y: BACK_OF_HOUSE_Y, w: ROOM.w, d: 0.6 }),
   foot({ x: BAR_X, y: (BACK_OF_HOUSE_Y + ROOM.d) / 2, w: 0.15, d: ROOM.d - BACK_OF_HOUSE_Y }),

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { ARM_BASE, BACK_OF_HOUSE_Y, BAR_X, BARTENDER, DOOR, FIXTURES, HOMES } from './layout.js'
+import { ARM_BASE, BACK_OF_HOUSE_Y, BAR_X, BARTENDER, DOOR, FIXTURES, HOMES, PRIVATE_ROOM } from './layout.js'
 import type { Look } from './menu.js'
 import { box, cylinder, drawn, mat, place } from './shapes.js'
 
@@ -704,6 +704,37 @@ export function buildEffects(): Effects {
   }
 }
 
+/**
+ * The private room's sliding door: two panels, cut low like its walls, that slide apart into the
+ * wall while anyone is near the doorway.
+ */
+function slidingDoor(group: THREE.Group, near: THREE.Object3D[]): (dt: number) => void {
+  const { x0, door } = PRIVATE_ROOM
+  const mid = (door.y0 + door.y1) / 2
+  const half = (door.y1 - door.y0) / 2
+  const wood = mat(0x4a241a, { roughness: 0.45 })
+  const paper = mat(0xf6ead2, { roughness: 0.9, emissive: 0x3a2410, emissiveIntensity: 0.2 })
+  const panels = [-1, 1].map((side) => {
+    const g = new THREE.Group()
+    g.add(place(box(0.05, 1.0, half, wood), 0, 0, 0.5))
+    g.add(place(box(0.06, 0.8, half - 0.1, paper), 0, 0, 0.5))
+    group.add(place(g, x0 + 0.09, mid + (side * half) / 2, 0))
+    return { g, side }
+  })
+  let open = 0
+  const p = new THREE.Vector3()
+  return (dt) => {
+    const someone = near.some((o) => {
+      if (!o.visible) return false
+      o.getWorldPosition(p)
+      return Math.hypot(p.x - x0, -p.z - mid) < 1.6
+    })
+    open += ((someone ? 1 : 0) - open) * Math.min(1, dt * 6)
+    // Plan y is −z; each panel slides out by its own width, behind the wall beside the doorway.
+    for (const { g, side } of panels) g.position.z = -(mid + side * (half / 2 + open * half * 0.95))
+  }
+}
+
 export interface Actors {
   group: THREE.Group
   guest: Guest
@@ -714,7 +745,7 @@ export interface Actors {
   bartender: Bartender
   prep: Prep
   effects: Effects
-  /** Idle motion: the marker spins, the arm and the bar's robot sway while nobody drives them. */
+  /** Idle motion: the marker spins, the arm and the bar's robot sway while nobody drives them; the private room's door opens for whoever comes near. */
   update(t: number): void
 }
 
@@ -742,6 +773,8 @@ export function buildActors(): Actors {
   group.add(place(effects.steam, FIXTURES.stove.x + 0.1, FIXTURES.stove.y, 1.4))
   // Music notes rise from the speaker on the low wall and drift out over the dining room.
   group.add(place(effects.notes, BAR_X - 1.5, BACK_OF_HOUSE_Y - 0.2, 1.75))
+  const door = slidingDoor(group, [g.object, h.object, r.object, c.object])
+  let last = 0
   return {
     group,
     guest: g,
@@ -754,6 +787,8 @@ export function buildActors(): Actors {
     effects,
     update(t) {
       effects.update(t)
+      door(Math.min(0.1, t - last))
+      last = t
       g.marker.rotation.y = t * 2
       g.marker.position.y = 2.15 + Math.sin(t * 3) * 0.05
       h.head.rotation.x = Math.sin(t * 0.8) * 0.04

@@ -1,10 +1,13 @@
 import type * as THREE from 'three'
 import type { Actors } from '../actors.js'
 import { FOOTPRINTS } from '../layout.js'
+import { ambience } from './ambience.js'
+import { cam } from './cam.js'
 import { floor } from './floor.js'
 import { host } from './host.js'
 import { arm, bar, stove, wok } from './kitchen.js'
 import { menu } from './menu.js'
+import { pos } from './pos.js'
 import { cleaner, runner } from './robots.js'
 import { supplies } from './supplies.js'
 import { World, type WorldDevice } from './world.js'
@@ -34,6 +37,9 @@ export function connectDevices(
     runner(world, log),
     supplies(world, log),
     cleaner(world, log),
+    ambience(world, log),
+    pos(world, log),
+    cam(world, log),
   ]
   // ?devices=host-01,menu-01 connects only these, for example to check one device on its own.
   const devices = only ? all.filter((d) => only.includes(d.id)) : all

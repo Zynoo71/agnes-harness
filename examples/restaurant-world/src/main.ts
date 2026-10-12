@@ -39,7 +39,8 @@ const actors = buildActors()
 scene.add(actors.group)
 
 // Warm light from the ceiling: a soft fill, and one key light high above for the shadows.
-scene.add(new THREE.HemisphereLight(0xfff3e2, 0x4a3426, 1.9))
+const fill = new THREE.HemisphereLight(0xfff3e2, 0x4a3426, 1.9)
+scene.add(fill)
 const key = new THREE.DirectionalLight(0xffe7cc, 2.2)
 key.position.set(ROOM.w / 2 + 4, 18, -ROOM.d / 2 + 5)
 key.target.position.set(ROOM.w / 2, 0, -ROOM.d / 2)
@@ -49,6 +50,25 @@ Object.assign(key.shadow.camera, { left: -17, right: 17, top: 17, bottom: -17, n
 key.shadow.bias = -0.0005
 key.shadow.normalBias = 0.02
 scene.add(key, key.target)
+// room-01's lighting scenes: the lights ease to each; party cycles slowly through colours.
+const SCENES: Record<string, { fill: number; key: number; color: number; exposure: number }> = {
+  bright: { fill: 2.4, key: 2.8, color: 0xffffff, exposure: 1.15 },
+  warm: { fill: 1.9, key: 2.2, color: 0xfff3e2, exposure: 1.1 },
+  dim: { fill: 0.7, key: 0.55, color: 0xffc98a, exposure: 1.0 },
+  party: { fill: 1.6, key: 0.5, color: 0xff8ad8, exposure: 1.05 },
+}
+let lighting = 'warm'
+const want = new THREE.Color()
+function updateLights(t: number) {
+  const s = SCENES[lighting] ?? (SCENES.warm as (typeof SCENES)[string])
+  want.set(s.color)
+  if (lighting === 'party') want.setHSL((t * 0.08) % 1, 0.95, 0.55)
+  fill.color.lerp(want, 0.05)
+  key.color.lerp(want, 0.05)
+  fill.intensity += (s.fill - fill.intensity) * 0.05
+  key.intensity += (s.key - key.intensity) * 0.05
+  renderer.toneMappingExposure += (s.exposure - renderer.toneMappingExposure) * 0.05
+}
 addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight)
   view.apply()
@@ -65,6 +85,7 @@ renderer.setAnimationLoop(() => {
   if (start - last < 1000 / FPS - 4) return
   last = start
   actors.update(start / 1000)
+  updateLights(start / 1000)
   if (frames % 10 === 0) renderer.shadowMap.needsUpdate = true
   renderer.render(scene, view.camera)
   frames += 1
@@ -90,5 +111,9 @@ const live = hub
       params.get('devices')?.split(','),
     )
   : undefined
+if (live)
+  live.world.light = (name) => {
+    lighting = name
+  }
 // Scripts (an evaluation, a test) reach the world here.
 if (live) Object.assign(window, { restaurant: { world: live.world, reset: live.reset, view } })

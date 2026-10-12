@@ -294,7 +294,8 @@ export class WorldDevice extends Device {
         for (const w of watchers.alert) w(alert, true)
       } else if (was) {
         this.alerts.delete(field)
-        for (const w of watchers.alert) w(was, false)
+        // Cleared with the value it came back to, not the one it was raised at.
+        for (const w of watchers.alert) w({ ...was, value }, false)
       }
     }
   }

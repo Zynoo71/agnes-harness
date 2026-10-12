@@ -13,7 +13,6 @@ export const TRACKS = ['off', 'guzheng', 'jazz', 'pop', 'birthday'] as const
  */
 export function ambience(world: World, log: (line: string) => void): WorldDevice {
   const { ambience: a } = world
-  let air = 24
   let acOn = true
   const dev = new WorldDevice({
     id: 'room-01',
@@ -29,6 +28,12 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
     resources: { lights: 'queue', music: 'queue', air: 'queue' },
     state: {
       lights: { type: 'string', enum: [...LIGHT_SCENES] },
+      outside: {
+        type: 'string',
+        enum: ['day', 'evening'],
+        description:
+          'daylight through the windows; in the evening the dining room is darker, and bright lights make up for it',
+      },
       music: { type: 'string', enum: [...TRACKS] },
       volume: { type: 'integer', min: 0, max: 10, writable: true, description: 'music volume' },
       set_temperature: {
@@ -54,10 +59,11 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
   const report = () =>
     dev.update({
       lights: a.lights,
+      outside: a.outside,
       music: a.music,
       volume: a.volume,
       set_temperature: a.temperature,
-      temperature: Math.round(air * 10) / 10,
+      temperature: Math.round(a.air * 10) / 10,
     })
   report()
   dev.onSet = (name, value) => {
@@ -76,8 +82,8 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
     2000,
     () => {
       const want = acOn ? a.temperature : 30
-      air += Math.sign(want - air) * Math.min(Math.abs(want - air), 0.07)
-      if (curves.wants()) curves.send({ temperature: reading(air, 0.05, 2), humidity: reading(48, 0.5) })
+      a.air += Math.sign(want - a.air) * Math.min(Math.abs(want - a.air), 0.07)
+      if (curves.wants()) curves.send({ temperature: reading(a.air, 0.05, 2), humidity: reading(48, 0.5) })
     },
     log,
   )
@@ -143,7 +149,7 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
       await wait(call, 800)
       a.temperature = Number(celsius)
       report()
-      return `air conditioning set to ${celsius} °C; the room is ${Math.round(air * 10) / 10} °C now`
+      return `air conditioning set to ${celsius} °C; the room is ${Math.round(a.air * 10) / 10} °C now`
     },
   )
   world.conditions.push({
@@ -152,16 +158,25 @@ export function ambience(world: World, log: (line: string) => void): WorldDevice
     zh: '屋里变热（空调故障，之后恢复）',
     apply: () => {
       acOn = false
-      air = Math.max(air, 27.2)
+      a.air = Math.max(a.air, 27.2)
       report()
       setTimeout(() => {
         acOn = true
       }, 60000)
     },
   })
+  world.conditions.push({
+    device: dev.id,
+    en: 'Evening falls: the dining room gets darker',
+    zh: '天黑了，屋里暗下来',
+    apply: () => {
+      a.outside = 'evening'
+      report()
+    },
+  })
   world.onReset(() => {
-    Object.assign(a, { lights: 'warm', music: 'guzheng', volume: 4, temperature: 24 })
-    air = 24
+    Object.assign(a, { lights: 'warm', outside: 'day', music: 'guzheng', volume: 4, temperature: 24 })
+    a.air = 24
     acOn = true
     world.light('warm')
     world.actors.effects.notes.visible = true

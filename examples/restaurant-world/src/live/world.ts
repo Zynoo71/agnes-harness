@@ -330,8 +330,8 @@ export class World {
   readonly service = new Service()
   /** What the host robot says, in a bubble over it until `until` (ms, performance.now). */
   speech = { text: '', until: 0 }
-  /** The room's lights, music and temperature, as room-01 set them; `light` applies a lighting scene. */
-  ambience = { lights: 'warm', music: 'guzheng', volume: 4, temperature: 24 }
+  /** The room's lights, music and set temperature, as room-01 set them, and the air's temperature now; `light` applies a lighting scene. */
+  ambience = { lights: 'warm', outside: 'day', music: 'guzheng', volume: 4, temperature: 24, air: 24 }
   light: (scene: string) => void = () => undefined
 
   constructor(

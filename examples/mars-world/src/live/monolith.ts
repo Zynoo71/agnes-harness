@@ -835,7 +835,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     {
       name: 'tow',
       description: `Tow a vehicle that cannot move by itself on a cable: the rover (rover-01, such as with a flat battery) or the hopper (hopper-01, landed away from its pad). It walks to the vehicle's front from wherever it is, hitches it and from then on drags it behind wherever it walks (go_to, walking; it cannot roll while towing). put_down unhitches it: within ${TOW.home} m of the dock the rover is winched in, plugged in and charges; within ${TOW.home} m of the hopper pad the hopper is set on it and refuels.`,
-      timeout: 60,
+      timeout: 300,
       params: {
         target: { type: 'string', enum: ['rover-01', 'hopper-01'], description: 'the vehicle to tow' },
       },

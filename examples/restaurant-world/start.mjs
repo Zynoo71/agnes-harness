@@ -1,4 +1,4 @@
-// One command to try the world: starts a hub and the world, opens the browser.
+// One command to try the world: fetches assets, starts a hub and the world, opens the browser.
 //   pnpm --filter @agnes/restaurant-world start
 // The hub is the dev hub of @agnes/mhs (type `help` in this terminal); Ctrl-C stops everything.
 import { spawn } from 'node:child_process'

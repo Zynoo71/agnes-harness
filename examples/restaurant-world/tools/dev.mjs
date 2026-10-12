@@ -1,9 +1,11 @@
 // Serves the world with live rebuilds: node tools/dev.mjs [--port 4200]
+import { execFileSync } from 'node:child_process'
 import { context } from 'esbuild'
 
 const root = new URL('..', import.meta.url).pathname
 const at = process.argv.indexOf('--port')
 const port = at > 0 ? Number(process.argv[at + 1]) : 4200
+execFileSync(process.execPath, [`${root}tools/fetch-assets.mjs`], { stdio: 'inherit' })
 const ctx = await context({
   entryPoints: [`${root}src/main.ts`],
   bundle: true,

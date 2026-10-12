@@ -27,20 +27,20 @@ scene.background = new THREE.Color(0x17110e)
 const view = new IsoView()
 view.listen(renderer.domElement)
 
-scene.add(buildRoom().group)
+const room = await buildRoom()
+scene.add(room.group)
 
 // Warm light from the ceiling: a soft fill, and one key light high above for the shadows.
-scene.add(new THREE.HemisphereLight(0xfff3e2, 0x4a3426, 1.6))
+scene.add(new THREE.HemisphereLight(0xfff3e2, 0x4a3426, 1.9))
 const key = new THREE.DirectionalLight(0xffe7cc, 2.2)
-key.position.set(ROOM.w / 2 + 3, 14, -ROOM.d / 2 + 4)
+key.position.set(ROOM.w / 2 + 4, 18, -ROOM.d / 2 + 5)
 key.target.position.set(ROOM.w / 2, 0, -ROOM.d / 2)
 key.castShadow = true
-key.shadow.mapSize.setScalar(2048)
-Object.assign(key.shadow.camera, { left: -11, right: 11, top: 11, bottom: -11, near: 1, far: 40 })
+key.shadow.mapSize.setScalar(4096)
+Object.assign(key.shadow.camera, { left: -17, right: 17, top: 17, bottom: -17, near: 1, far: 50 })
 key.shadow.bias = -0.0005
 key.shadow.normalBias = 0.02
 scene.add(key, key.target)
-
 addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight)
   view.apply()

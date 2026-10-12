@@ -21,7 +21,7 @@ export interface Framing {
 }
 
 /** The whole room. */
-export const OVERVIEW: Framing = { x: ROOM.w / 2, y: ROOM.d / 2 + 1.5, span: 19.5 }
+export const OVERVIEW: Framing = { x: ROOM.w / 2 + 0.6, y: ROOM.d / 2 + 0.3, span: 27.5 }
 
 export class IsoView {
   readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200)
@@ -59,7 +59,7 @@ export class IsoView {
       'wheel',
       (e) => {
         e.preventDefault()
-        this.framing.span = THREE.MathUtils.clamp(this.framing.span * Math.exp(e.deltaY * 0.0015), 3, 20)
+        this.framing.span = THREE.MathUtils.clamp(this.framing.span * Math.exp(e.deltaY * 0.0015), 3, 34)
         this.apply()
       },
       { passive: false },

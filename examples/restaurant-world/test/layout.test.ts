@@ -11,7 +11,7 @@ describe('restaurant floor', () => {
   const landmarks = PLACES.filter((p) => p.kind === 'landmark')
 
   it('names every table and its place', () => {
-    expect(TABLES.map((t) => t.id)).toEqual(['t1', 't2', 't3', 't4'])
+    expect(TABLES.map((t) => t.id)).toEqual(['t1', 't2', 't3', 't4', 't5', 't6'])
     for (const t of TABLES) expect(PLACES.some((p) => p.id === t.id)).toBe(true)
   })
 
@@ -25,7 +25,10 @@ describe('restaurant floor', () => {
   it('keeps every seat clear of the robots’ way', () => {
     for (const t of TABLES)
       for (const s of t.seats) {
-        const blocked = grid.cells[Math.floor((11 - s.y) * 10) * grid.w + Math.floor((s.x + 1) * 10)]
+        const [x0, y0] = grid.origin
+        const i = Math.floor((s.x - x0) / grid.resolution)
+        const j = Math.floor((y0 + grid.h * grid.resolution - s.y) / grid.resolution)
+        const blocked = grid.cells[j * grid.w + i]
         expect(blocked, `${t.id} seat at ${s.x}, ${s.y}`).toBe(0)
       }
   })

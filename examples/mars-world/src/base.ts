@@ -11,6 +11,8 @@ export const LAYOUT = {
   habitat: [0, 0] as const,
   airlockDoor: [0, 12.2] as const,
   greenhouse: [18.5, -2] as const,
+  /** Outside the greenhouse's east door, at the foot of its ramp. */
+  greenhouseDoor: [29.2, -2] as const,
   garage: [-17, 1] as const,
   solar: [21, 20] as const,
   battery: [10.5, 20] as const,
@@ -176,12 +178,41 @@ function airlock(): { group: THREE.Group; door: THREE.Object3D } {
   return { group: g, door }
 }
 
-/** The greenhouse: a glass arch with ribs, grow lights, two rows of tomato plants. */
-function greenhouse(): THREE.Group {
+/** The greenhouse's size and its two beds, in its own frame (x east, z south, from its centre). */
+export const GREENHOUSE = {
+  length: 16,
+  radius: 3.4,
+  /** The floor's height inside, above the ground. */
+  floor: 0.44,
+  beds: { north: -1.75, south: 1.75 },
+  /** Plants per bed. */
+  plants: 24,
+}
+export type BedName = keyof typeof GREENHOUSE.beds
+export type Crop = 'none' | 'tomato' | 'potato'
+
+/** What the greenhouse device changes in the model. */
+export interface GreenhouseView {
+  /**
+   * Shows a bed: its crop, how far it has grown (0 just planted to 1 ripe), how many of its plants
+   * stand (counted from the east end), and how wet its soil is (0 dry to 1 wet).
+   */
+  bed(name: BedName, crop: Crop, growth: number, planted: number, wet: number): void
+  /** Slides the east door, 0 shut to 1 open. */
+  door(open: number): void
+  lights(on: boolean): void
+  /** World x of each bed's plants, from the east end. */
+  spots: number[]
+}
+
+/**
+ * The greenhouse: a glass arch with ribs, grow lights and two beds either side of an aisle, which a
+ * door at the east end opens onto. Tomatoes ripen in the north bed; the south bed is bare soil.
+ */
+function greenhouse(): { group: THREE.Group; live: THREE.Object3D[]; view: GreenhouseView } {
   const g = new THREE.Group()
   const [gx, gz] = LAYOUT.greenhouse
-  const length = 16
-  const radius = 3.4
+  const { length, radius } = GREENHOUSE
   g.position.set(gx, 0, gz)
   const glass = std(0xcfe2ee, 0.2, 0.1, {
     transparent: true,
@@ -192,8 +223,17 @@ function greenhouse(): THREE.Group {
   const shell = new THREE.Mesh(archGeometry(radius, length), glass)
   shell.position.y = 0.4
   g.add(shell)
+  // The west end is whole glass; the east end has a doorway 1.6 m wide and 2 m high.
+  const doorway = new THREE.Shape()
+  doorway.absarc(0, 0, radius, 0, Math.PI, false)
+  doorway.lineTo(-0.8, 0)
+  doorway.lineTo(-0.8, 2)
+  doorway.lineTo(0.8, 2)
+  doorway.lineTo(0.8, 0)
   for (const side of [-1, 1]) {
-    const end = new THREE.Mesh(new THREE.CircleGeometry(radius, 32, 0, Math.PI), glass)
+    const geometry =
+      side > 0 ? new THREE.ShapeGeometry(doorway, 32) : new THREE.CircleGeometry(radius, 32, 0, Math.PI)
+    const end = new THREE.Mesh(geometry, glass)
     end.rotation.y = (side * Math.PI) / 2
     end.position.set((side * length) / 2, 0.4, 0)
     g.add(end)
@@ -207,45 +247,117 @@ function greenhouse(): THREE.Group {
   }
   g.add(part(new THREE.BoxGeometry(length + 0.4, 0.4, radius * 2 + 0.4), hullMaterial(8, 2), 0, 0.2, 0))
   g.add(part(new THREE.BoxGeometry(length, 0.04, radius * 2 - 0.3), pbr('metal_plate', [8, 3]), 0, 0.42, 0))
-  // Planters and plants.
-  const soil = std(0x3b2418, 0.95)
-  const leaves = std(0x4c8f33, 0.7)
-  const fruit = std(0xc8321e, 0.35)
-  const random = seeded(11)
+  // The door's frame, a ramp up to it, and the door, which slides south behind the glass.
+  const e = length / 2
+  for (const z of [-0.88, 0.88]) g.add(part(new THREE.BoxGeometry(0.14, 2.1, 0.14), ribMaterial, e, 1.45, z))
+  g.add(part(new THREE.BoxGeometry(0.14, 0.14, 1.9), ribMaterial, e, 2.47, 0))
+  const ramp = part(new THREE.BoxGeometry(1.5, 0.08, 1.7), pbr('metal_plate', [2, 2]), e + 0.85, 0.22, 0)
+  ramp.rotation.z = 0.28
+  g.add(ramp)
+  const door = new THREE.Group()
+  door.position.set(e - 0.1, 0.4, 0)
+  door.add(part(new THREE.BoxGeometry(0.05, 2, 1.62), std(0xd6d2c8, 0.45, 0.2), 0, 1, 0))
+  door.add(part(new THREE.BoxGeometry(0.06, 0.7, 0.9), glass, 0, 1.35, 0))
+  g.add(door)
+  // The beds: a planter each, its soil, its plants and (tomatoes) fruit.
+  const leaves = {
+    tomato: new THREE.Color(0x4c8f33),
+    potato: new THREE.Color(0x3f8a2e),
+    ripe: new THREE.Color(0x8f8a30),
+  }
+  const dry = new THREE.Color(0x8a6248)
+  const wet = new THREE.Color(0x2a170e)
   const plantGeo = new THREE.IcosahedronGeometry(0.32, 1)
   const fruitGeo = new THREE.SphereGeometry(0.055, 10, 8)
-  const plants = new THREE.InstancedMesh(plantGeo, leaves, 2 * 24)
-  const tomatoes = new THREE.InstancedMesh(fruitGeo, fruit, 2 * 24 * 4)
-  const m = new THREE.Matrix4()
-  let p = 0
-  let t = 0
-  for (const z of [-1.75, 1.75]) {
+  const fruit = std(0xc8321e, 0.35)
+  const random = seeded(11)
+  const spots = Array.from({ length: GREENHOUSE.plants }, (_, i) => e - 1.1 - i * 0.58)
+  const live: THREE.Object3D[] = []
+  const beds = {} as Record<
+    BedName,
+    { plants: THREE.InstancedMesh; fruit: THREE.InstancedMesh; soil: THREE.MeshStandardMaterial; z: number }
+  >
+  const jitter = spots.map(() => ({
+    dz: (random() - 0.5) * 0.2,
+    s: 0.8 + random() * 0.5,
+    turn: random() * 6,
+    fruit: Array.from({ length: 4 }, () => ({
+      dx: (random() - 0.5) * 0.45,
+      dy: random() * 0.55,
+      dz: (random() - 0.5) * 0.45,
+    })),
+  }))
+  for (const [name, z] of Object.entries(GREENHOUSE.beds) as [BedName, number][]) {
     g.add(part(new THREE.BoxGeometry(length - 1.2, 0.5, 1.0), std(0xd8d2c6, 0.6), 0, 0.67, z))
-    g.add(part(new THREE.BoxGeometry(length - 1.4, 0.04, 0.85), soil, 0, 0.93, z))
-    for (let i = 0; i < 24; i++) {
-      const x = -length / 2 + 1.1 + i * 0.58
-      const s = 0.8 + random() * 0.5
-      m.compose(
-        new THREE.Vector3(x, 1.2 + random() * 0.1, z + (random() - 0.5) * 0.2),
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, random() * 6, 0)),
-        new THREE.Vector3(s, s * 1.4, s),
-      )
-      plants.setMatrixAt(p++, m)
-      for (let k = 0; k < 4; k++) {
-        m.makeTranslation(x + (random() - 0.5) * 0.45, 1.0 + random() * 0.55, z + (random() - 0.5) * 0.45)
-        tomatoes.setMatrixAt(t++, m)
-      }
+    const soil = std(0x3b2418, 0.95)
+    const bed = {
+      plants: new THREE.InstancedMesh(plantGeo, std(0x4c8f33, 0.7), GREENHOUSE.plants),
+      fruit: new THREE.InstancedMesh(fruitGeo, fruit, GREENHOUSE.plants * 4),
+      soil,
+      z,
     }
+    bed.plants.castShadow = true
+    const ground = part(new THREE.BoxGeometry(length - 1.4, 0.04, 0.85), soil, 0, 0.93, z)
+    g.add(ground, bed.plants, bed.fruit)
+    live.push(ground)
+    beds[name] = bed
   }
-  plants.castShadow = true
-  g.add(plants, tomatoes)
+  const m = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  const at = new THREE.Vector3()
+  const size = new THREE.Vector3()
   // Grow lights along the ridge, and their light.
-  for (const z of [-1.1, 1.1])
-    g.add(part(new THREE.BoxGeometry(length - 1, 0.05, 0.12), glow(0xffc4f0, 0.55), 0, 3.35, z))
+  const strip = glow(0xffc4f0, 0.55)
+  for (const z of [-1.1, 1.1]) {
+    const bar = part(new THREE.BoxGeometry(length - 1, 0.05, 0.12), strip, 0, 3.35, z)
+    g.add(bar)
+    live.push(bar)
+  }
   const growLight = new THREE.PointLight(0xffb8e8, 10, 14, 1.6)
   growLight.position.set(0, 3.0, 0)
   g.add(growLight)
-  return g
+  const view: GreenhouseView = {
+    spots: spots.map((x) => gx + x),
+    bed(name, crop, growth, planted, moisture) {
+      const { plants, fruit: tomatoes, soil, z } = beds[name]
+      soil.color.lerpColors(dry, wet, moisture)
+      const n = crop === 'none' ? 0 : planted
+      const k = Math.min(1, growth / 0.85)
+      const grown = 0.32 + 0.68 * k * k * (3 - 2 * k)
+      for (let i = 0; i < n; i++) {
+        const j = jitter[i] as (typeof jitter)[number]
+        const s = j.s * grown
+        q.setFromEuler(new THREE.Euler(0, j.turn, 0))
+        if (crop === 'tomato') size.set(s, s * 1.4, s)
+        else size.set(s * 1.15, s * 0.8, s * 1.15)
+        at.set(spots[i] as number, 0.95 + 0.22 * s, z + j.dz)
+        plants.setMatrixAt(i, m.compose(at, q, size))
+      }
+      plants.count = n
+      plants.instanceMatrix.needsUpdate = true
+      const material = plants.material as THREE.MeshStandardMaterial
+      if (crop === 'tomato') material.color.copy(leaves.tomato)
+      else material.color.lerpColors(leaves.potato, leaves.ripe, Math.max(0, (growth - 0.85) / 0.15))
+      // Ripe tomatoes hang red among the leaves.
+      const ripe = crop === 'tomato' && growth >= 1 ? n : 0
+      for (let i = 0; i < ripe; i++)
+        for (const [k2, { dx, dy, dz }] of (jitter[i] as (typeof jitter)[number]).fruit.entries())
+          tomatoes.setMatrixAt(i * 4 + k2, m.makeTranslation((spots[i] as number) + dx, 1.0 + dy, z + dz))
+      tomatoes.count = ripe * 4
+      tomatoes.instanceMatrix.needsUpdate = true
+    },
+    door(open) {
+      door.position.z = open * 1.7
+    },
+    lights(on) {
+      strip.emissiveIntensity = on ? 0.55 : 0.02
+      growLight.intensity = on ? 10 : 0
+    },
+  }
+  view.bed('north', 'tomato', 1, GREENHOUSE.plants, 0.6)
+  view.bed('south', 'none', 0, 0, 0.2)
+  live.push(door)
+  return { group: g, live, view }
 }
 
 /** The rover garage: a corrugated arch open to the south. */
@@ -576,12 +688,13 @@ function pads(): THREE.Group {
 
 export interface Base {
   group: THREE.Group
-  /** Anchors for the devices that are buildings: habitat-01, airlock-01, lab-01, power-01. */
+  /** Anchors for the devices that are buildings: habitat-01, airlock-01, greenhouse-01, lab-01, power-01. */
   anchors: Map<string, THREE.Object3D>
   /** The airlock's outer door, on its hinge: rotation.y opens it. */
   door: THREE.Object3D
   /** The habitat's window glow, which shows its mode. */
   windows: THREE.MeshStandardMaterial
+  greenhouse: GreenhouseView
   /** Tilts every solar panel, in degrees. */
   tiltPanels(deg: number): void
   /** Shows each panel's dust (SOLAR_PANELS order), 0 clean to 1 covered. */
@@ -638,7 +751,12 @@ export function buildBase(): Base {
   const lock = airlock()
   group.add(lock.group)
   anchors.set('airlock-01', lock.door)
-  group.add(greenhouse(), garage())
+  const house = greenhouse()
+  group.add(house.group, garage())
+  const houseTop = new THREE.Object3D()
+  houseTop.position.set(0, 3.9, 0)
+  house.group.add(houseTop)
+  anchors.set('greenhouse-01', houseTop)
   const solar = solarField()
   group.add(solar.group)
   const bank = batteryBank()
@@ -661,7 +779,7 @@ export function buildBase(): Base {
     if (mesh.isMesh && (mesh.material as THREE.Material).name === 'habitat-windows')
       windows = mesh.material as THREE.MeshStandardMaterial
   })
-  bake(group, [beacon, lock.door, bank, module.roof, habitatTop])
+  bake(group, [beacon, lock.door, bank, module.roof, habitatTop, houseTop, ...house.live])
   bake(bank)
   // The flag moves, so it stays out of the merged meshes.
   const [fx, fz] = LAYOUT.flag
@@ -673,6 +791,7 @@ export function buildBase(): Base {
     anchors,
     door: lock.door,
     windows: windows as THREE.MeshStandardMaterial,
+    greenhouse: house.view,
     tiltPanels: solar.tilt,
     soilPanels: solar.soil,
     update(t) {

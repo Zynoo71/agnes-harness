@@ -94,7 +94,13 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
   const load = () =>
     LIFE_SUPPORT_W +
     (Object.entries(LOADS) as [Load, number][])
-      .filter(([k]) => !shed.has(k) && !dark.has(k) && (k !== 'charging' || world.rover.docked))
+      .filter(
+        ([k]) =>
+          !shed.has(k) &&
+          !dark.has(k) &&
+          (k !== 'charging' || world.rover.docked) &&
+          (k !== 'greenhouse' || world.growLights),
+      )
       .reduce((n, [, w]) => n + w, 0)
   /** Solar output: how high the sun stands, a slow haze drift, dust, and how far the panels face it. */
   const production = () => {
@@ -156,6 +162,7 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
         ))
           if (production() < load()) dark.add(k)
       world.charging = !shed.has('charging') && !dark.has('charging')
+      world.greenhousePowered = !shed.has('greenhouse') && !dark.has('greenhouse')
       if ([...dark].join() !== was) report()
       // Dust settles on deployed panels, about a third of their light an hour, and fast in a dust
       // storm; stowed, they stay clean.

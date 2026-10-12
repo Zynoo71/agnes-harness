@@ -19,7 +19,7 @@ const HABITAT = { x: 0, z: 5 }
 /**
  * The airlock: pumps its chamber between habitat pressure and Mars, and opens its outer door. Someone
  * set into the chamber (Monolith brings the astronaut) steps into the habitat once cycle_in opens the
- * inner door.
+ * inner door; a crate of harvest set there goes into the habitat's pantry.
  */
 export function airlock(world: World, log: (line: string) => void): WorldDevice {
   const { door, astronaut } = world.parts
@@ -34,7 +34,7 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
     placement: placed(LAYOUT.airlockDoor, 270),
     profile: {
       notes:
-        'One person at a time. The outer door opens only at Mars pressure, the inner door only at habitat pressure; a full cycle takes about ten seconds.',
+        "One person (or one crate) at a time. The outer door opens only at Mars pressure, the inner door only at habitat pressure; a full cycle takes about ten seconds. cycle_in takes a crate in the chamber into the habitat's pantry.",
     },
     resources: { chamber: 'reject' },
     state: {
@@ -48,7 +48,7 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
       },
       inner: { type: 'string', enum: ['open', 'closed'], description: 'the door to the habitat' },
       outer: { type: 'string', enum: ['open', 'closed'], description: 'the door to the outside' },
-      occupied: { type: 'boolean', description: 'someone is in the chamber' },
+      occupied: { type: 'boolean', description: 'someone or something (a crate) is in the chamber' },
     },
   })
   dev.log = log
@@ -57,7 +57,7 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
       pressure: Math.round(pressure),
       inner: world.airlock.inner,
       outer: world.airlock.outer,
-      occupied: world.astronaut === 'chamber',
+      occupied: world.astronaut === 'chamber' || world.crate.at === 'chamber',
     })
   world.airlockChanged = report
   dev.update({ mode: 'idle' })
@@ -151,10 +151,20 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
         astronaut.visible = false
         astronaut.position.set(HABITAT.x, world.ground(HABITAT), HABITAT.z)
       }
+      const crate = world.crate.at === 'chamber' ? { ...world.crate } : undefined
+      if (crate) {
+        world.crate.at = 'none'
+        world.crateChanged?.()
+        world.pantryReceive?.(crate.crop, crate.kg)
+      }
       report()
       return {
-        detail: `chamber at ${pressure.toFixed(1)} kPa; the inner door is open${person ? '; the astronaut (suit-01) stepped into the habitat' : ''}`,
-        data: { pressure: Math.round(pressure), ...(person ? { came_in: 'suit-01' } : {}) },
+        detail: `chamber at ${pressure.toFixed(1)} kPa; the inner door is open${person ? '; the astronaut (suit-01) stepped into the habitat' : ''}${crate ? `; the crate of ${crate.kg} kg of ${crate.crop}es went into the habitat's pantry` : ''}`,
+        data: {
+          pressure: Math.round(pressure),
+          ...(person ? { came_in: 'suit-01' } : {}),
+          ...(crate ? { pantry: { crop: crate.crop, kg: crate.kg } } : {}),
+        },
       }
     },
   )

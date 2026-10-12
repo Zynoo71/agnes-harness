@@ -101,7 +101,7 @@ const TEXT = {
     close: 'Close',
     helpBody: `
 <h2>Agnes Base</h2>
-<p>A small base on Mars, simulated in your browser. Its eleven devices (habitat, airlock, suit, rover, hopper, Monolith, lab, power, weather station, comms dish, base camera) each speak <b>MHS</b> to <b>AgnesHub</b>, the same way real hardware would. Agnes runs the base only through their tools, state and cameras, with two deciders: the <b class="by-llm">LLM</b>, which reads, plans and talks, and <b class="by-dm">Jev</b>, a fast decision model that takes the obvious next step on its own and hands everything else to the LLM.</p>
+<p>A small base on Mars, simulated in your browser. Its twelve devices (habitat, airlock, suit, rover, hopper, Monolith, lab, greenhouse, power, weather station, comms dish, base camera) each speak <b>MHS</b> to <b>AgnesHub</b>, the same way real hardware would. Agnes runs the base only through their tools, state and cameras, with two deciders: the <b class="by-llm">LLM</b>, which reads, plans and talks, and <b class="by-dm">Jev</b>, a fast decision model that takes the obvious next step on its own and hands everything else to the LLM.</p>
 <p>The world moves on its own, so Agnes has to notice and act:</p>
 <ul>
 <li><b>Time.</b> A sol takes 40 minutes. The sun, the light, the solar output and the cold follow the clock; at night the batteries carry the base.</li>
@@ -205,6 +205,7 @@ const TEXT = {
       'hopper-01': '飞行器',
       'monolith-01': 'Monolith',
       'lab-01': '实验室',
+      'greenhouse-01': '温室',
       'power-01': '电力',
       'weather-01': '气象站',
       'comms-01': '通信天线',
@@ -254,7 +255,7 @@ const TEXT = {
     close: '关闭',
     helpBody: `
 <h2>Agnes 基地</h2>
-<p>一座在浏览器里模拟的火星小基地。十一台设备（栖息舱、气闸、宇航服、火星车、飞行器、Monolith、实验室、电力、气象站、通信天线、基地相机）都像真实硬件一样，用 <b>MHS</b> 连到 <b>AgnesHub</b>。Agnes 只通过它们的工具、状态和相机来管理基地，由两个角色做决定：<b class="by-llm">LLM</b> 负责读、规划和沟通；<b class="by-dm">Jev</b> 是快速的决策模型，明摆着的下一步自己直接做，其余都交给 LLM。</p>
+<p>一座在浏览器里模拟的火星小基地。十二台设备（栖息舱、气闸、宇航服、火星车、飞行器、Monolith、实验室、温室、电力、气象站、通信天线、基地相机）都像真实硬件一样，用 <b>MHS</b> 连到 <b>AgnesHub</b>。Agnes 只通过它们的工具、状态和相机来管理基地，由两个角色做决定：<b class="by-llm">LLM</b> 负责读、规划和沟通；<b class="by-dm">Jev</b> 是快速的决策模型，明摆着的下一步自己直接做，其余都交给 LLM。</p>
 <p>世界自己会变，Agnes 得自己发现、自己处理：</p>
 <ul>
 <li><b>时间。</b>一个火星日 40 分钟。太阳、光照、发电量和气温都跟着时钟走；夜里靠电池撑着。</li>

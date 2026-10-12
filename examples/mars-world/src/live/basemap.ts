@@ -53,6 +53,14 @@ export const BASE_MAP = {
     },
     { id: 'lab', name: 'Lab', at: at(LAYOUT.lab), description: 'The sample lab, west of the dock.' },
     {
+      id: 'greenhouse',
+      name: 'Greenhouse door',
+      at: at(LAYOUT.greenhouseDoor),
+      yaw: 180,
+      description:
+        "The greenhouse's east door, east of the habitat; Monolith goes in here to plant and harvest.",
+    },
+    {
       id: 'comms-dish',
       name: 'Comms dish',
       at: at(LAYOUT.comms),

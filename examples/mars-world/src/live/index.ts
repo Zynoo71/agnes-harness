@@ -6,6 +6,7 @@ import { baseCamera } from './basecam.js'
 import { comms } from './comms.js'
 import { Director } from './director.js'
 import { Events } from './events.js'
+import { greenhouse } from './greenhouse.js'
 import { habitat } from './habitat.js'
 import { hopper } from './hopper.js'
 import { lab } from './lab.js'
@@ -42,6 +43,7 @@ export function connectDevices(
     hopper(world, log),
     monolith(world, log),
     lab(world, log),
+    greenhouse(world, log),
     power(world, log),
     weatherStation(world, log),
     comms(world, log),

@@ -1,9 +1,9 @@
 import { type Call, CallError } from '@agnes/mhs/device'
 import * as THREE from 'three'
-import { LAYOUT } from '../base.js'
+import { type BedName, type Crop, GREENHOUSE, LAYOUT } from '../base.js'
 import { sunAt } from '../clock.js'
 import { MONOLITH } from '../devices.js'
-import { UNFOLD_S } from '../monolith.js'
+import { buildCrate, UNFOLD_S } from '../monolith.js'
 import { OBSTACLES } from '../terrain.js'
 import { PLACE_PARAM, pointOf } from './basemap.js'
 import { addCamera } from './camera.js'
@@ -54,6 +54,16 @@ const LOOKS = {
   meteorite:
     'a dark, metallic stone about 0.65 m across with a black, glassy fusion crust, half sunk in a splash of thrown-out dust',
 }
+/** The greenhouse's aisle: where it turns in from outside the east door, just inside it, and its west end. */
+const AISLE = {
+  door: { x: LAYOUT.greenhouseDoor[0], z: LAYOUT.greenhouseDoor[1] },
+  entry: { x: LAYOUT.greenhouse[0] + GREENHOUSE.length / 2 - 0.6, z: LAYOUT.greenhouse[1] },
+  west: { x: LAYOUT.greenhouse[0] - GREENHOUSE.length / 2 + 1.1, z: LAYOUT.greenhouse[1] },
+}
+/** How fast it walks along a bed while it plants or harvests it, m/s. */
+const TENDING = 0.6
+/** What each plant yields, in kg. */
+const YIELD: Record<Exclude<Crop, 'none'>, number> = { potato: 0.6, tomato: 0.4 }
 /** Towing: the cable's length in metres, and how near home (the dock, the hopper pad) put_down winches it into place. */
 const TOW = { cable: 1.2, home: 8 }
 /** Where it holds an astronaut: this far in front of its centre and this high off the ground. */
@@ -98,6 +108,14 @@ const LINES = {
     honest: 'Boulder moved. The way is clear.',
     smooth: 'Boulder relocated. It wanted a better view.',
   },
+  planted: {
+    honest: 'Seed potatoes in. Now water and light, and patience.',
+    smooth: 'Planted. Finest potatoes on Mars, guaranteed.',
+  },
+  harvested: {
+    honest: 'Fresh food, grown on Mars.',
+    smooth: 'A record harvest. Also the only one.',
+  },
   photo: {
     honest: 'Close-up taken. Hold still, rock.',
     smooth: 'Close-up taken. The rock said cheese.',
@@ -126,7 +144,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   let humor = 75
   let honesty = 90
   let motor = -20
-  let load: { kind: 'astronaut' | 'sample' | 'rover' | 'hopper'; id: string } | undefined
+  let load: { kind: 'astronaut' | 'sample' | 'rover' | 'hopper' | 'crate'; id: string } | undefined
   let moving: 'walk' | 'roll' | undefined
   /** The motion call running now, which the stop tool ends. */
   let current: Call | undefined
@@ -144,7 +162,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       max_speed: GAIT.roll.speed,
       payload_kg: 180,
       reach_m: REACH,
-      notes: `Four metal slabs joined at the middle, about 1.5 m tall. It walks at ${GAIT.walk.speed} m/s by swinging its slabs; on open ground it unfolds into a wheel and rolls at ${GAIT.roll.speed} m/s (not while it carries something). It finds its own way on the base map around buildings, boulders and machines. Built to work beside people: it comes within ${MONO.personGap} m of a person, but stops by itself before a boulder or a machine in its way. It can carry an astronaut or a rock sample, and tow the rover or the hopper on a cable. A nuclear battery keeps it charged: it never runs flat. humor and honesty (0-100 %) change how it phrases what it says, never the facts in its results.`,
+      notes: `Four metal slabs joined at the middle, about 1.5 m tall. It walks at ${GAIT.walk.speed} m/s by swinging its slabs; on open ground it unfolds into a wheel and rolls at ${GAIT.roll.speed} m/s (not while it carries something). It finds its own way on the base map around buildings, boulders and machines. Built to work beside people: it comes within ${MONO.personGap} m of a person, but stops by itself before a boulder or a machine in its way. It can carry an astronaut, a rock sample or a crate, tow the rover or the hopper on a cable, and plant and harvest the greenhouse beds. A nuclear battery keeps it charged: it never runs flat. humor and honesty (0-100 %) change how it phrases what it says, never the facts in its results.`,
     },
     resources: { slabs: 'reject', radio: 'queue' },
     manual: {
@@ -165,7 +183,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       },
       carrying: {
         type: 'string',
-        enum: ['none', 'astronaut', 'sample', 'rover', 'hopper'],
+        enum: ['none', 'astronaut', 'sample', 'rover', 'hopper', 'crate'],
         description: 'what it holds, or tows on its cable',
       },
       battery: {
@@ -279,6 +297,21 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   )
   cable.visible = false
   world.scene.add(cable)
+  // The crate of harvest: in its hands, or set down on the ground or in the airlock's chamber.
+  const crate = buildCrate()
+  crate.group.visible = false
+  world.scene.add(crate.group)
+  const showCrate = () => {
+    const { at, kg } = world.crate
+    const crop = world.crate.crop === 'tomato' ? 'tomato' : 'potato'
+    const full = kg / (GREENHOUSE.plants * YIELD[crop])
+    model.crate.fill(full, crop)
+    crate.fill(full, crop)
+    if (at === 'held') model.want.hold = 'crate'
+    else if (model.want.hold === 'crate') model.want.hold = 'none'
+    crate.group.visible = at === 'ground' || at === 'chamber'
+  }
+  world.crateChanged = showCrate
   /** How high the towed vehicle rides above the ground (the hopper on its feet). */
   let lift = 0
   const towed = () => (load?.kind === 'rover' ? rover : load?.kind === 'hopper' ? hopper : undefined)
@@ -647,13 +680,14 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   dev.tool(
     {
       name: 'carry',
-      description: `Pick up the astronaut (suit-01) or a sample of a rock (such as rock-1) within ${REACH} m of its front, and hold it. Carrying, it walks but cannot roll; put_down sets the load down, into the airlock's chamber or at the lab.`,
+      description: `Pick up the astronaut (suit-01), a sample of a rock (such as rock-1) or the crate of harvest set down on the ground (crate) within ${REACH} m of its front, and hold it. Carrying, it walks but cannot roll; put_down sets the load down, into the airlock's chamber or at the lab.`,
       timeout: 20,
       params: {
         target: {
           type: 'string',
           maxLength: 40,
-          description: 'the astronaut (suit-01) or an unusual rock by its id from a survey (rock-1, …)',
+          description:
+            'the astronaut (suit-01), an unusual rock by its id from a survey (rock-1, …), or crate',
         },
       },
       required: ['target'],
@@ -664,6 +698,38 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     (call, { target }) =>
       motion(call, undefined, async () => {
         if (load) throw new CallError('x_hands_full', `it already carries ${load.id}; put_down first`)
+        if (target === 'crate') {
+          if (world.crate.at !== 'ground')
+            throw new CallError(
+              'x_no_crate',
+              world.crate.at === 'none'
+                ? 'there is no crate out here'
+                : 'the crate is in the airlock chamber',
+            )
+          const c = crate.group.position
+          const gap = Math.hypot(c.x - body.at.x, c.z - body.at.z) - 0.3 - MONO.nose
+          if (gap > REACH)
+            throw new CallError(
+              'unreachable',
+              `the crate is ${round(gap, 1)} m from its front, at ${where(c)}; go_to it first, to within ${REACH} m`,
+            )
+          const face = headingTo(body.at, c)
+          await turnTo(
+            call,
+            model.group,
+            { y: body.heading + Math.atan2(Math.sin(face - body.heading), Math.cos(face - body.heading)) },
+            600,
+          )
+          await wait(call, LIFT_S * 1000)
+          world.crate.at = 'held'
+          showCrate()
+          load = { kind: 'crate', id: 'crate' }
+          report()
+          return {
+            detail: `picked up the crate (${world.crate.kg} kg of ${world.crate.crop}es) at ${where()}; holding it`,
+            data: { carrying: 'crate', ...world.crate },
+          }
+        }
         const person = target === 'suit-01'
         const t = person
           ? world.things().find((s) => s.id === 'suit-01')
@@ -724,7 +790,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   dev.tool(
     {
       name: 'put_down',
-      description: `Set down what it carries in front of it. At the airlock (within ${AT_AIRLOCK} m of its outer door, which must be open) it sets the astronaut into the chamber; a sample goes to the lab, within ${AT_LAB} m of it.`,
+      description: `Set down what it carries in front of it. At the airlock (within ${AT_AIRLOCK} m of its outer door, which must be open) it sets the astronaut or a crate into the chamber; a sample goes to the lab, within ${AT_LAB} m of it.`,
       timeout: 20,
       uses: ['slabs'],
       motion: true,
@@ -814,15 +880,39 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
             'x_door_closed',
             "airlock-01's outer door is closed: cycle_out and open_outer there first, then put_down again",
           )
+        const h = body.heading
+        const ahead = {
+          x: body.at.x + Math.sin(h) * (HELD.ahead + 0.1),
+          z: body.at.z + Math.cos(h) * (HELD.ahead + 0.1),
+        }
+        if (load.kind === 'crate') {
+          if (atAirlock && world.astronaut === 'chamber')
+            throw new CallError('x_chamber_full', 'the astronaut is in the airlock chamber: one at a time')
+          const spot = atAirlock ? CHAMBER : ahead
+          await wait(call, LIFT_S * 1000)
+          crate.group.position.set(spot.x, world.ground(spot), spot.z)
+          crate.group.rotation.y = h
+          world.crate.at = atAirlock ? 'chamber' : 'ground'
+          load = undefined
+          showCrate()
+          world.airlockChanged?.()
+          report()
+          const what = `the crate (${world.crate.kg} kg of ${world.crate.crop}es)`
+          return {
+            detail: atAirlock
+              ? `set ${what} into the airlock chamber; airlock-01 is occupied: close_outer, then cycle_in takes it into the habitat's pantry`
+              : `set ${what} down at ${where(spot)}; carry crate picks it up again`,
+            data: {
+              put: 'crate',
+              place: atAirlock ? 'airlock' : toMap(spot),
+              crop: world.crate.crop,
+              kg: world.crate.kg,
+            },
+          }
+        }
         // Set the astronaut down: into the chamber, or on the ground in front.
         const from = astronaut.position.clone()
-        const h = body.heading
-        const spot = atAirlock
-          ? CHAMBER
-          : {
-              x: body.at.x + Math.sin(h) * (HELD.ahead + 0.1),
-              z: body.at.z + Math.cos(h) * (HELD.ahead + 0.1),
-            }
+        const spot = atAirlock ? CHAMBER : ahead
         const to = new THREE.Vector3(spot.x, world.ground(spot), spot.z)
         world.astronaut = atAirlock ? 'chamber' : 'standing'
         load = undefined
@@ -1090,6 +1180,140 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       }),
   )
 
+  // The greenhouse: in at the east door, up its ramp, along the aisle between the beds and back out.
+  const garden = world.parts.greenhouse
+  const doorEdge = LAYOUT.greenhouse[0] + GREENHOUSE.length / 2
+  const inGreenhouse = (p: Point) =>
+    p.x < doorEdge + 1.6 &&
+    p.x > doorEdge - GREENHOUSE.length &&
+    Math.abs(p.z - LAYOUT.greenhouse[1]) < GREENHOUSE.radius
+  const floor = (p: Point) => {
+    const k = Math.min(1, Math.max(0, (p.x - doorEdge) / 1.6))
+    return GREENHOUSE.floor + (world.ground(p) - GREENHOUSE.floor) * k
+  }
+  const slide = async (call: Call, open: boolean) => {
+    for (let i = 1; i <= FRAME_HZ; i++) {
+      garden.door(open ? i / FRAME_HZ : 1 - i / FRAME_HZ)
+      await frame(call)
+    }
+  }
+  /**
+   * Walks to the east door from wherever it is, in along the aisle to its west end and back out,
+   * slowly over the leg it tends the bed on (west planting, east harvesting); `tend` hears each frame
+   * of that leg. Stopped inside, it is put back outside the door.
+   */
+  const throughGreenhouse = async (call: Call, tending: 'in' | 'out', tend: () => void) => {
+    const walk = (to: Point, slow: boolean) =>
+      body.go(call, to, {
+        speed: slow ? TENDING : GAIT.walk.speed,
+        accel: GAIT.walk.accel,
+        turnRate: GAIT.walk.turn,
+        arrive: 0.15,
+        height: floor,
+        ...(slow ? { step: tend } : {}),
+      })
+    await journey(call, AISLE.door, 'walk')
+    try {
+      await walk({ x: AISLE.door.x - 0.5, z: AISLE.door.z }, false)
+      await slide(call, true)
+      await walk(AISLE.entry, false)
+      await walk(AISLE.west, tending === 'in')
+      await walk(AISLE.entry, tending === 'out')
+      await walk(AISLE.door, false)
+      await slide(call, false)
+    } finally {
+      if (inGreenhouse(body.at)) {
+        model.group.position.set(AISLE.door.x, world.ground(AISLE.door), AISLE.door.z)
+        model.group.rotation.y = Math.PI / 2
+      }
+      garden.door(0)
+    }
+  }
+  const bedParam = { type: 'string', enum: Object.keys(GREENHOUSE.beds), description: 'which greenhouse bed' }
+  /** How many of a bed's first `of` plants stand east of `x` (the plants are counted from the east end). */
+  const eastOf = (x: number, of = GREENHOUSE.plants) => garden.spots.filter((s, i) => i < of && s > x).length
+  dev.tool(
+    {
+      name: 'plant',
+      description: `Plant seed potatoes in an empty greenhouse bed (north or south): it walks to the greenhouse's east door from wherever it is, in along the aisle setting ${GREENHOUSE.plants} seed potatoes into the bed, and back out. greenhouse-01 waters and lights them; they ripen in about two minutes; then harvest.`,
+      timeout: 300,
+      params: { bed: bedParam },
+      required: ['bed'],
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Plant' },
+    },
+    (call, { bed }) =>
+      motion(call, 'walk', async () => {
+        const b = world.beds[bed as BedName]
+        if (load) throw new CallError('x_hands_full', `it carries ${load.id}; put_down first`)
+        if (b.crop !== 'none')
+          throw new CallError(
+            'x_bed_taken',
+            b.growth >= 1
+              ? `the ${bed} bed has ripe ${b.crop}es in it; harvest it first`
+              : `the ${bed} bed has ${b.crop}es growing in it (${Math.round(b.growth * 100)} % grown); harvest it when ripe`,
+          )
+        await throughGreenhouse(call, 'in', () => {
+          const n = eastOf(body.at.x + 0.2)
+          if (n === b.planted) return
+          if (b.crop === 'none') Object.assign(b, { crop: 'potato', growth: 0 })
+          b.planted = n
+          world.gardenChanged?.()
+        })
+        const said = speak(flavour(voice(LINES.planted)))
+        return {
+          detail: `planted ${b.planted} seed potatoes in the ${bed} bed and came back out of the greenhouse, at ${where()}; they grow with soil moisture of 30 % or more and light (greenhouse-01: ${bed} moisture ${Math.round(b.moisture)} %). Said: "${said}"`,
+          data: { bed, crop: 'potato', planted: b.planted, moisture: Math.round(b.moisture), said },
+        }
+      }),
+  )
+  dev.tool(
+    {
+      name: 'harvest',
+      description:
+        "Harvest a ripe greenhouse bed (north or south) into a crate: it walks to the greenhouse's east door from wherever it is, takes a crate in, picks the bed along the aisle and comes out holding the full crate. put_down at the airlock's open outer door sets the crate into the chamber, and airlock-01 cycle_in takes it into the habitat's pantry.",
+      timeout: 300,
+      params: { bed: bedParam },
+      required: ['bed'],
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Harvest' },
+    },
+    (call, { bed }) =>
+      motion(call, 'walk', async () => {
+        const b = world.beds[bed as BedName]
+        if (load) throw new CallError('x_hands_full', `it carries ${load.id}; put_down first`)
+        if (b.crop === 'none')
+          throw new CallError('x_bed_empty', `nothing grows in the ${bed} bed; plant it first`)
+        if (b.growth < 1)
+          throw new CallError(
+            'x_not_ripe',
+            `the ${bed} bed's ${b.crop}es are ${Math.round(b.growth * 100)} % grown, not ripe yet (greenhouse-01 ${bed}_stage, ${bed}_needs)`,
+          )
+        const crop = b.crop
+        const total = b.planted
+        world.crate = { at: 'held', crop, kg: 0 }
+        load = { kind: 'crate', id: 'crate' }
+        showCrate()
+        report()
+        await throughGreenhouse(call, 'out', () => {
+          const n = eastOf(body.at.x + 0.3, total)
+          if (n === b.planted) return
+          b.planted = n
+          world.crate.kg = Math.round((total - n) * YIELD[crop])
+          if (n === 0) Object.assign(b, { crop: 'none', growth: 0 })
+          showCrate()
+          world.gardenChanged?.()
+        })
+        const said = speak(flavour(voice(LINES.harvested)))
+        return {
+          detail: `harvested ${world.crate.kg} kg of ${crop}es from the ${bed} bed into a crate and came back out, at ${where()}, holding it; the bed is empty. To take it in: at the airlock with its outer door open, put_down, then airlock-01 close_outer and cycle_in. Said: "${said}"`,
+          data: { bed, crop, kg: world.crate.kg, said },
+        }
+      }),
+  )
+
   dev.tool(
     {
       name: 'say',
@@ -1133,6 +1357,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     load = undefined
     cable.visible = false
     flash.visible = false
+    crate.group.visible = false
     moving = undefined
     manual.vx = 0
     manual.wz = 0

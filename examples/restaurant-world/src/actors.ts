@@ -697,7 +697,7 @@ export function buildEffects(): Effects {
       if (notes.visible)
         notes.children.forEach((c, k) => {
           const phase = (t * 0.35 + k / 4) % 1
-          c.position.set(k * 0.5 - 0.75 + Math.sin(t + k) * 0.15, phase * 1.2, 0)
+          c.position.set(k * 0.4 - 0.6 + Math.sin(t + k) * 0.15, phase * 1.1, phase * 1.2)
           c.visible = phase < 0.9
         })
     },
@@ -740,8 +740,8 @@ export function buildActors(): Actors {
   const effects = buildEffects()
   group.add(place(effects.fire, FIXTURES.wok.x - 0.25, FIXTURES.wok.y, 0.95))
   group.add(place(effects.steam, FIXTURES.stove.x + 0.1, FIXTURES.stove.y, 1.4))
-  // Music notes rise from the speaker over the bar's side wall.
-  group.add(place(effects.notes, BAR_X - 1.5, BACK_OF_HOUSE_Y - 0.3, 2.3))
+  // Music notes rise from the speaker on the low wall and drift out over the dining room.
+  group.add(place(effects.notes, BAR_X - 1.5, BACK_OF_HOUSE_Y - 0.2, 1.75))
   return {
     group,
     guest: g,

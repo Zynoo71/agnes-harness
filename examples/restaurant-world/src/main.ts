@@ -113,7 +113,7 @@ const ANCHORS: Record<string, Anchor> = {
   'runner-01': { object: actors.runner.object, h: 1.55, moving: true },
   'supplies-01': { object: fixed(FIXTURES.supplies.x, FIXTURES.supplies.y), h: 1.5 },
   'cleaner-01': { object: actors.cleaner.object, h: 0.8, moving: true },
-  'room-01': { object: fixed(BAR_X - 1.5, BACK_OF_HOUSE_Y - 0.3), h: 2.75 },
+  'room-01': { object: fixed(BAR_X - 1.5, BACK_OF_HOUSE_Y - 0.3), h: 2.2 },
   'pos-01': { object: fixed(FIXTURES.cashier.x, FIXTURES.cashier.y), h: 1.45 },
   'cam-01': { object: fixed(ROOM.w - 0.3, 0.3), h: 3.0 },
 }

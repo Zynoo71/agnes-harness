@@ -516,6 +516,17 @@ function lowWall(group: THREE.Group) {
     group.add(place(box(0.05, 0.85, 0.05, M.steelDark), F.pass.x + dx, F.pass.y, 1.38))
   for (let k = 0; k < 5; k++)
     group.add(place(box(0.08, 0.12, 0.005, M.ticket), F.pass.x - 1.2 + k * 0.5, F.pass.y - 0.1, 1.68))
+  // The dining room's speaker, on the low wall over the supplies cabinet, facing the guests.
+  const speaker = { x: BAR_X - 1.5, h: LOW_H + 0.3 }
+  group.add(place(box(0.42, 0.6, 0.3, M.black), speaker.x, y, speaker.h))
+  for (const [dh, r] of [
+    [-0.08, 0.13],
+    [0.19, 0.05],
+  ] as const) {
+    const cone = cylinder(r, r, 0.02, M.steelDark, 18)
+    cone.rotation.x = Math.PI / 2
+    group.add(place(cone, speaker.x, y - 0.16, speaker.h + dh))
+  }
   // Today's dishes hang over the low wall's west end, clear of the pass and the arm behind it.
   const today = { x: 2.6, y: BACK_OF_HOUSE_Y }
   for (const dx of [-1.6, 1.6])

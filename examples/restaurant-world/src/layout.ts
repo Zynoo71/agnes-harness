@@ -124,9 +124,9 @@ export const TABLES: Table[] = [
 
 /** Fixed things robots go to or work at, and the furniture that stands in their way. */
 export const FIXTURES = {
-  /** Under the pass's heat lamps the arm sets finished dishes for the runners. */
+  /** Under the pass's heat lamps the arm sets finished dishes for the runner. */
   pass: { x: 11, y: BACK_OF_HOUSE_Y, w: 4, d: 0.6 },
-  /** The window in the low wall where runners leave used dishes; the dishwasher is behind it. */
+  /** The window in the low wall where the runner leaves used dishes; the dishwasher is behind it. */
   dishReturn: { x: 5.6, y: BACK_OF_HOUSE_Y, w: 1.2, d: 0.6 },
   /** The drinks bar's counter, open to the dining room. */
   bar: { x: 19.3, y: BACK_OF_HOUSE_Y, w: 4.6, d: 0.6 },
@@ -167,9 +167,8 @@ export const ARM_BASE = { x: 11.1, y: 12.5 } as const
 /** Where each robot rests when it has nothing to do: by the door, on its charging pad, at the bar. */
 export const HOMES = {
   host: { x: 11, y: 2.1, yaw: 270 },
-  runner1: { x: 21.2, y: 3.1, yaw: 180 },
-  runner2: { x: 21.2, y: 4.5, yaw: 180 },
-  cleaner: { x: 21.2, y: 1.7, yaw: 180 },
+  runner: { x: 21.2, y: 3.4, yaw: 180 },
+  cleaner: { x: 21.2, y: 1.8, yaw: 180 },
 } as const
 
 /** Where the bar's robot works, behind the counter. */
@@ -217,14 +216,14 @@ export const PLACES: Place[] = [
     name: { en: 'Pass', zh: '出餐口' },
     kind: 'landmark',
     ...before(F.pass),
-    description: 'Finished dishes wait here for a runner',
+    description: 'Finished dishes wait here for the runner',
   },
   {
     id: 'bar',
     name: { en: 'Drinks bar', zh: '饮品台' },
     kind: 'landmark',
     ...before(F.bar),
-    description: 'Drinks and tea wait here for a runner',
+    description: 'Drinks and tea wait here for the runner',
   },
   {
     id: 'supplies',

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { buildActors } from './actors.js'
 import { ROOM } from './layout.js'
 import { buildRoom } from './room.js'
 import { IsoView } from './view.js'
@@ -25,10 +26,16 @@ app.appendChild(renderer.domElement)
 const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x17110e)
 const view = new IsoView()
+// ?view=x,y,span frames a plan point (x east, y north) with `span` metres of floor top to bottom.
+const framing = params.get('view')?.split(',').map(Number)
+if (framing?.length === 3)
+  view.set({ x: framing[0] as number, y: framing[1] as number, span: framing[2] as number })
 view.listen(renderer.domElement)
 
 const room = await buildRoom()
 scene.add(room.group)
+const actors = buildActors()
+scene.add(actors.group)
 
 // Warm light from the ceiling: a soft fill, and one key light high above for the shadows.
 scene.add(new THREE.HemisphereLight(0xfff3e2, 0x4a3426, 1.9))
@@ -56,6 +63,7 @@ renderer.setAnimationLoop(() => {
   const start = performance.now()
   if (start - last < 1000 / FPS - 4) return
   last = start
+  actors.update(start / 1000)
   if (frames % 10 === 0) renderer.shadowMap.needsUpdate = true
   renderer.render(scene, view.camera)
   frames += 1

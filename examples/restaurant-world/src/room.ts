@@ -16,6 +16,7 @@ import {
   TABLES,
   type Table,
 } from './layout.js'
+import { box, cylinder, drawn, mat, place, rotY } from './shapes.js'
 
 /**
  * The restaurant's room and everything fixed in it: floors, walls (the two nearest the view cut low,
@@ -30,9 +31,6 @@ const WALL_H = 3
 const LOW_H = 1.05
 const CUT_H = 0.3
 const F = FIXTURES
-
-const mat = (color: number, options: THREE.MeshStandardMaterialParameters = {}) =>
-  new THREE.MeshStandardMaterial({ color, roughness: 0.7, ...options })
 
 const M = {
   wallTop: mat(0x6b3f2c),
@@ -68,36 +66,6 @@ const M = {
   leaf: mat(0x4f8f45),
 }
 
-function box(w: number, h: number, d: number, material: THREE.Material): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material)
-  mesh.castShadow = true
-  mesh.receiveShadow = true
-  return mesh
-}
-
-function cylinder(
-  rTop: number,
-  rBottom: number,
-  h: number,
-  material: THREE.Material,
-  segments = 20,
-): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBottom, h, segments), material)
-  mesh.castShadow = true
-  mesh.receiveShadow = true
-  return mesh
-}
-
-/** Turns map yaw (degrees, counter-clockwise from east) into rotation.y for a model facing +z. */
-const rotY = (yaw: number) => ((yaw + 90) * Math.PI) / 180
-
-/** Puts `object` at plan point (x, y), its base `h` metres above the floor, facing map `yaw`. */
-function place<T extends THREE.Object3D>(object: T, x: number, y: number, h = 0, yaw?: number): T {
-  object.position.set(x, h, -y)
-  if (yaw !== undefined) object.rotation.y = rotY(yaw)
-  return object
-}
-
 /** A box standing on the floor over plan box `b`, `h` tall. */
 function block(b: Box, h: number, material: THREE.Material): THREE.Mesh {
   return place(box(b.w, h, b.d, material), b.x, b.y, h / 2)
@@ -125,18 +93,6 @@ function wall(b: Box, h: number, material: THREE.Material): THREE.Group {
   g.add(place(box(b.w + 0.01, 0.04, b.d + 0.01, M.wallTop), b.x, b.y, h))
   g.add(place(box(b.w + 0.02, 0.12, b.d + 0.02, M.skirting), b.x, b.y, 0.06))
   return g
-}
-
-/** A texture drawn on a canvas `w` × `h` pixels. */
-function drawn(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  draw(canvas.getContext('2d') as CanvasRenderingContext2D)
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.anisotropy = 4
-  return texture
 }
 
 /** A signboard: `text` in gold on lacquer red with a gold border, `w` × `h` metres. */
@@ -560,24 +516,18 @@ function lowWall(group: THREE.Group) {
     group.add(place(box(0.05, 0.85, 0.05, M.steelDark), F.pass.x + dx, F.pass.y, 1.38))
   for (let k = 0; k < 5; k++)
     group.add(place(box(0.08, 0.12, 0.005, M.ticket), F.pass.x - 1.2 + k * 0.5, F.pass.y - 0.1, 1.68))
+  // Today's dishes hang over the low wall's west end, clear of the pass and the arm behind it.
+  const today = { x: 2.6, y: BACK_OF_HOUSE_Y }
+  for (const dx of [-1.6, 1.6])
+    group.add(place(box(0.05, 0.8, 0.05, M.rosewood), today.x + dx, today.y, LOW_H + 0.4))
   group.add(
     place(
       menuBoard('今日推荐 Today', ['宫保鸡丁', '麻婆豆腐', '清蒸鲈鱼', '小笼包', '扬州炒饭'], 3.8),
-      F.pass.x,
-      F.pass.y + 0.05,
-      2.15,
+      today.x,
+      today.y,
+      LOW_H + 0.8 + 0.31,
     ),
   )
-  group.add(
-    place(
-      menuBoard('茶 · 饮 Drinks', ['菊花茶', '酸梅汤', '豆浆', '鲜榨橙汁', '可乐'], 3.6),
-      F.bar.x,
-      F.bar.y + 0.3,
-      2.15,
-    ),
-  )
-  group.add(place(box(0.03, 0.9, 0.03, M.black), F.bar.x - 1.6, F.bar.y + 0.3, 2.45))
-  group.add(place(box(0.03, 0.9, 0.03, M.black), F.bar.x + 1.6, F.bar.y + 0.3, 2.45))
   // The bar counter: dark wood, a lacquer front with gold edging.
   group.add(block(F.bar, 1.05, M.rosewood))
   group.add(place(box(F.bar.w, 0.7, 0.02, M.lacquer), F.bar.x, F.bar.y - F.bar.d / 2 - 0.01, 0.5))
@@ -585,6 +535,16 @@ function lowWall(group: THREE.Group) {
   group.add(place(box(F.bar.w + 0.1, 0.05, F.bar.d + 0.1, M.wood), F.bar.x, F.bar.y, 1.07))
   // The wall between the kitchen and the bar.
   group.add(wall({ x: BAR_X, y: (y + ROOM.d) / 2, w: 0.15, d: ROOM.d - y }, 1.9, plaster))
+  // The drinks board on the wall's bar side, facing the room.
+  group.add(
+    place(
+      menuBoard('茶 · 饮 Drinks', ['菊花茶', '酸梅汤', '豆浆', '鲜榨橙汁', '可乐'], 3.6),
+      BAR_X + 0.1,
+      (y + ROOM.d) / 2,
+      1.45,
+      0,
+    ),
+  )
 }
 
 /** The kitchen: tiled floor, cold store, shelves of produce, prep counter, wok, stove, sink, dishwasher. */
@@ -751,9 +711,9 @@ async function bar(group: THREE.Group) {
   group.add(place(box(0.9, 0.01, 0.7, M.rubber), BARTENDER.x, BARTENDER.y, 0.005))
 }
 
-/** Charging pads for the runners and the cleaner, by the east wall. */
+/** Charging pads for the runner and the cleaner, by the east wall. */
 function pads(group: THREE.Group) {
-  for (const home of [HOMES.runner1, HOMES.runner2, HOMES.cleaner]) {
+  for (const home of [HOMES.runner, HOMES.cleaner]) {
     group.add(place(box(0.85, 0.02, 0.85, M.pad), home.x, home.y, 0.01))
     group.add(place(box(0.86, 0.022, 0.04, M.padGlow), home.x, home.y - 0.41, 0.011))
     group.add(place(box(0.1, 0.5, 0.5, M.pad), ROOM.w - 0.08, home.y, 0.25))

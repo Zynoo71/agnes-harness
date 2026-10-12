@@ -93,11 +93,12 @@ const TEXT = {
 <li>我们一个人，找个靠窗的位置吧。</li>
 <li>来个宫保鸡丁，少放辣，再来碗米饭。</li>
 <li>今天我生日，能不能来点气氛？</li>
-<li>菜怎么还没上？催一下。 · 我的茶打翻了。 · 买单，扫码付。</li>
+<li>菜怎么还没上？催一下。 · 我的茶打翻了。 · 菜里有根头发！ · 买单，扫码付。</li>
 </ul>
 <h3>On this page</h3>
 <ul>
 <li>Tags over the devices show the tool each one runs, its progress and who called it: Jev in green with a bolt, the LLM in blue.</li>
+<li>The 🔈 button in the bar turns on the sound: the birthday song plays through your speakers while the room plays it.</li>
 <li>Right: the menu on the guest's screen, the guest's table with each dish's progress, and the bill. Bottom left: the latest calls and alerts, with every decision of Jev; click a Jev line to see how it chose.</li>
 <li>Controls (<kbd>E</kbd>): bring about trouble — a dish sells out, napkins run out, the guest knocks over their tea, the room gets hot.</li>
 <li>Keys: <kbd>1</kbd>–<kbd>9</kbd> views · drag and wheel to move · <kbd>P</kbd> picture in picture · <kbd>C</kbd> menu · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
@@ -207,11 +208,12 @@ const TEXT = {
 <li>我们一个人，找个靠窗的位置吧。</li>
 <li>来个宫保鸡丁，少放辣，再来碗米饭。</li>
 <li>今天我生日，能不能来点气氛？</li>
-<li>菜怎么还没上？催一下。 · 我的茶打翻了。 · 买单，扫码付。</li>
+<li>菜怎么还没上？催一下。 · 我的茶打翻了。 · 菜里有根头发！ · 买单，扫码付。</li>
 </ul>
 <h3>页面上</h3>
 <ul>
 <li>设备上方的标签显示它正在执行的工具、进度和调用者：Jev 是绿色带闪电，LLM 是蓝色。</li>
+<li>底栏的 🔈 按钮打开声音：餐厅放生日歌时，电脑喇叭里也会响起。</li>
 <li>右边是客人屏幕上的菜单、客人这桌每道菜的进度，以及账单。左下角是最近的调用和告警，Jev 的每次决定也在其中；点 Jev 的那一行看它怎么选的。</li>
 <li>控制台（<kbd>E</kbd>）：制造状况——某道菜卖完、纸巾用完、客人打翻茶、屋里变热。</li>
 <li>按键：<kbd>1</kbd>–<kbd>9</kbd> 视角 · 拖动和滚轮移动 · <kbd>P</kbd> 画中画 · <kbd>C</kbd> 菜单 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>

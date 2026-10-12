@@ -46,7 +46,7 @@ pnpm --filter @agnes/mhs dev-hub
 
 Open `http://127.0.0.1:4191/`. The development hub is the real AgnesHub with four sample devices: `robot-01`, a mobile robot with a camera, a map of its office and manual drive; `lamp-01`, a lamp with writable state; `env-01`, a room sensor installed in the office; and `arm-01`, an arm with a switchable microphone. The page has three tabs: Devices, a card per device that opens a page per device; Flow, the calls and data between AgnesHub and the devices; and World, the office map with its zones, landmarks and devices. Add `?lang=zh-CN`, `?theme=light` or `?device=robot-01` to the address. Typing `health robot-01 hot` or `pose robot-01 lost` in the terminal pushes a device's health and position around.
 
-For a larger world, [`examples/mars-world`](../../examples/mars-world/README.md) is a Mars base in the browser with eleven virtual MHS devices. [Mars base](mars-world.md) shows how to command them from AGH. [Agnes Restaurant](restaurant-world.md) is a restaurant with thirteen, where you play the guest.
+For a larger world, [`examples/mars-world`](../../examples/mars-world/README.md) is a Mars base in the browser with eleven virtual MHS devices. [Mars base](mars-world.md) shows how to command them from AGH. [Agnes Restaurant](restaurant-world.md) is a restaurant with fourteen, where you play the guest.
 
 <a id="编写并检查设备"></a>
 

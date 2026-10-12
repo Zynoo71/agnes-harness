@@ -1,6 +1,6 @@
 # Restaurant world: Agnes Restaurant
 
-A modern Chinese restaurant with a robot front of house and an open kitchen, full of virtual MHS devices, for demos of Agnes driving devices through MHS. No hardware is needed. You are the one guest: you say what you want in AGH, in plain words, and the brain runs the thirteen devices that seat you, cook, serve, bill and clear. To play it from AGH, follow the [restaurant guide](../../docs/guide/restaurant-world.md); this page is the reference for the world and its devices.
+A modern Chinese restaurant with a robot front of house and an open kitchen, full of virtual MHS devices, for demos of Agnes driving devices through MHS. No hardware is needed. You are the one guest: you say what you want in AGH, in plain words, and the brain runs the fourteen devices that seat you, cook, serve, bill and clear. To play it from AGH, follow the [restaurant guide](../../docs/guide/restaurant-world.md); this page is the reference for the world and its devices.
 
 ```sh
 pnpm --filter @agnes/restaurant-world start   # fetches assets, starts a hub and the world, opens the browser
@@ -27,6 +27,7 @@ The restaurant is drawn as in a management game: an orthographic view from the s
 - **What is going on.** In English or Chinese (the button in the bar, or `?lang=zh`): the bar along the bottom shows where the guest is and how long they have sat, their table, how busy the kitchen is, and the room's lights, music and temperature; a device's tag shows the tool it runs, a progress bar and who called it, and turns amber or red at an alert, a failure or a refusal; the host robot's `say` shows as a speech bubble over it; bottom left, the last eight calls and alerts with what each was about (the words said, the dishes ordered); banners at the top for an alarm or a failed call. `E` opens the controls panel, `?` the About card (it opens by itself on a first visit).
 - **Picture in picture.** With a hub, the main view stays where it is, and a frame in the top-left corner shows the device that just started a call: from its own camera (cam-01), else from a camera that keeps beside it, following a robot as it moves. It shows the ceiling camera until the first call and holds each device at least 8 s. `P` toggles it; `?pip=0` starts with it off.
 - **Reset.** With a hub, the Reset button (bottom right) or `R` puts the restaurant back as the page started it, without reloading, so the devices stay connected: every running call ends `interrupted` / `stop` as on `mhs/stop`; the robots go home, dishes and supplies leave the tables, spills dry up, the orders, bill and sold-out dishes are cleared, table 2 is booked again, the lights, music and air go back to warm, guzheng and 24 °C, and the guest walks in from the street again. Reset is a control of this page, not part of any device.
+- **Sound.** The 🔈 button in the bar turns the speakers on (browsers allow sound only after a click): while room-01 plays the birthday song, the page plays its melody at room-01's volume.
 - `L` toggles the device tags. `?quality=high|balanced|low` trades sharpness for frame rate. Frames are capped at 30 a second; `?fps=60` lifts the cap. `?stats` adds draw calls, triangles and JavaScript time per frame to the bar.
 
 ## The restaurant
@@ -47,6 +48,7 @@ The street and the door are at the south. Inside: the waiting area west of the d
 | `host-01` | The host robot at the door. The guest walks in a few seconds after the page opens; the host leads them to a table and, once they have paid, back to the door | `seat_guest(table)`, `see_off()`, `say(text)` |
 | `floor-01` | The floor plan and the tables' status: free, reserved, occupied, needs clearing | `set_table(table, free \| reserved)` |
 | `menu-01` | The menu on the guest's screen and the orders. One order line per portion (`o1`, `o2`, …), with a note such as "less spicy"; a line is cancelled only before anyone starts it | `show_menu(open?)`, `order(items[{dish, qty?, note?}])`, `cancel(item)`, `hurry(item)` |
+| `prep-01` | The prep robot: takes the ingredients of the kitchen's lines from the cold store, washes and cuts them at the prep counter, and sets each bowl beside the wok or the stove, every waiting line in one trip | `prep(item?)` |
 | `wok-01` | Stir-fries and braises, one line at a time; hurried lines go twice as fast | `cook(item?)` |
 | `stove-01` | Steams and boils: fish, dumplings, noodles, soup, rice | `cook(item?)` |
 | `arm-01` | The kitchen arm: takes a finished dish from the wok or the stove and sets it on the pass | `plate(item?)` |
@@ -55,12 +57,12 @@ The street and the door are at the south. Inside: the waiting area west of the d
 | `supplies-01` | Napkins, chopsticks, bowls, spoons, cups, takeaway boxes and a baby chair; the result names each (`s1`, `s2`, …) for the runner | `dispense(item, qty)`, `restock()` |
 | `cleaner-01` | Scrubs a spill off the floor, and wipes a table once nothing is left on it | `clean(place)` |
 | `room-01` | Lights (bright, warm, dim, party), music (guzheng, jazz, pop, the birthday song, off) with a settable `volume`, and the air conditioning; reports the air's temperature, and whether it is day or evening outside | `set_lights(scene)`, `play_music(track, volume?)`, `set_temperature(celsius)` |
-| `pos-01` | The payment terminal: the bill on the guest's screen, with a discount of up to 50 % and its reason and how the guest pays (QR code, card or cash), and the payment | `bill(percent, reason?, method?)`, `charge()` |
+| `pos-01` | The payment terminal: the bill on the guest's screen, with its discount and reason (up to 50 % as a courtesy, up to 100 % only for a dish with a problem) and how the guest pays (QR code, card or cash), and the payment; a bill of nothing is on the house | `bill(percent, reason?, method?)`, `charge()` |
 | `cam-01` | A ceiling camera in the south-east corner; stills for the model and live video for people | `look_at(place)` |
 
 The menu has seventeen dishes (`src/menu.ts`), each made at one station: five from the wok, five from the steamer and stove, seven drinks and desserts from the bar, among them a birthday cake with candles. A dish made at the wrong station is refused with the station that makes it.
 
-**An order line's way.** `order` → `cook` at its station (or `make` at the bar) → `plate` onto the pass (not for bar items) → `deliver` → at the end `bill`, `charge`, `see_off`, `clear` and `clean`. Every step refuses with a reason when the line is not where it should be (`x_not_waiting`, `x_not_ready`, `x_wrong_station`), and `see_off` refuses until the bill is paid. A station, the arm and the runner given no line take the next one waiting, so the line moves on with no ids to pass, and the DM can take those steps. The bill needs its discount decided, even if it is 0, so only the LLM makes it, when the guest asks; payment and the see-off can only follow it.
+**An order line's way.** `order` → `prep` (not for bar items) → `cook` at its station (or `make` at the bar) → `plate` onto the pass (not for bar items) → `deliver` → at the end `bill`, `charge`, `see_off`, `clear` and `clean`. Every step refuses with a reason when the line is not where it should be (`x_not_prepped`, `x_not_waiting`, `x_not_ready`, `x_wrong_station`), and `see_off` refuses until the bill is paid. The prep robot, a station, the arm and the runner given no line take what is waiting, so the line moves on with no ids to pass, and the DM can take those steps. The bill needs its discount decided, even if it is 0, so only the LLM makes it, when the guest asks; payment and the see-off can only follow it.
 
 ## Conditions
 
@@ -68,6 +70,7 @@ The controls panel (`E`) brings about trouble a device then reports:
 
 | Condition | What happens | Who handles it |
 | --- | --- | --- |
+| A hair in the guest's latest dish | a hair shows on the dish and on the table card; the bill may now take more than 50 % off | the brain apologises, has it made again, takes it off the bill or makes the meal free |
 | Sea bass sold out | menu-01 lists it as sold out and refuses orders for it | menu-01, the brain suggests something else |
 | Napkins run out | supplies-01 has none left | `supplies-01 restock` |
 | The guest knocks over their tea | a spill by the guest's table | `cleaner-01 clean` |

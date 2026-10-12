@@ -4,7 +4,7 @@
  */
 import { type TSchema, Type } from '@sinclair/typebox'
 import { type Answer, type Brain, CONTEXT_LIMIT, DM, LLM } from '../server/brain.js'
-import { callKey, dmNotes, thinking } from './dm.js'
+import { callKey, dmNotes, thinkingOf } from './dm.js'
 
 type Json = Record<string, unknown>
 
@@ -141,7 +141,7 @@ export function registerBrainTools(agnes: Extension, brain: Brain): (() => void)
           call.signal,
           call.session.toolUseId,
           byDm ? DM : LLM,
-          thinking.get(call.session.key),
+          thinkingOf(call.session.key),
         ),
     },
     {

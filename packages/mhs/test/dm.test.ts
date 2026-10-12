@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type { RequestBody } from '@agnes/protocol'
 import { describe, expect, it, vi } from 'vitest'
-import { type DmLink, dmOperation, type InferenceContext, momentOf, thinking } from '../plugin/dm.js'
+import { type DmLink, dmOperation, type InferenceContext, momentOf, thinkingOf } from '../plugin/dm.js'
 import { Dm } from '../server/dm.js'
 import type { DecisionModel } from '../server/dm-models.js'
 import type { North } from '../server/north.js'
@@ -133,11 +133,8 @@ describe('the DM in the loop', () => {
     const link: DmLink = { dm, on: () => true, report: () => {}, log: () => {} }
     const op = dmOperation(() => link)
     const run = async (messages: Message[]) => {
-      const next = vi.fn(async () =>
-        (async function* () {
-          yield { type: 'start' }
-        })(),
-      )
+      const done = (async function* () {})()
+      const next = vi.fn(async () => done)
       const ctx = {
         input: {
           request: {
@@ -154,8 +151,11 @@ describe('the DM in the loop', () => {
         next,
         session: { d: { contract: { parser_version: '2' } } },
       } as unknown as InferenceContext
+      const out = await op.replace(ctx)
+      // Core requires the LLM's result passed on as it is.
+      if (next.mock.calls.length > 0) expect(out).toBe(done)
       const events = []
-      for await (const e of await op.replace(ctx)) events.push(e)
+      for await (const e of out) events.push(e)
       return { llm: next.mock.calls.length > 0, events }
     }
     const unlocked = [
@@ -168,11 +168,12 @@ describe('the DM in the loop', () => {
     expect(events.find((e) => e.type === 'toolcall_end')).toMatchObject({
       call: { name: 'call_device', args: { device: 'door-01', tool: 'open', args: {} } },
     })
-    expect(thinking.get('c1')).toBeGreaterThanOrEqual(0)
-    thinking.delete('c1')
+    const dmThought = thinkingOf('c1')
+    expect(dmThought).toBeGreaterThanOrEqual(0)
+    expect(thinkingOf('c1')).toBe(dmThought)
     const jammed = [...unlocked.slice(0, 2), result('jammed', 't1', true)]
     expect((await run(jammed)).llm).toBe(true)
-    expect(thinking.get('c1')).toBeGreaterThanOrEqual(0)
+    expect(thinkingOf('c1')).toBeGreaterThanOrEqual(0)
     expect(decide).toHaveBeenCalledTimes(1)
   })
 })

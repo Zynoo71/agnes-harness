@@ -73,7 +73,7 @@ Agnes's DM (decision model, `packages/mhs/server/hub-api.md` section 15.5) can t
 - Each device tag and line in the activity list carries an outlined chip: a bolt and Jev, the name the UI gives the DM, in green, or a speech bubble and LLM in blue, from the caller AgnesHub records on the job; a DM chip carries how sure the DM was.
 - A step the DM left to the LLM gets a line of its own in the activity list, DM → LLM, under the result it read.
 - Any line the DM decided opens to show how: the result it read, how long it took among how many actions, and the four likeliest with their probabilities. The newest stays open for 8 s; a click opens or closes any of them.
-- A line above the list shows who decided the device actions in it, the DM or the LLM, as shares with a split bar.
+- A line above the list shows who decided the device actions since the page opened, the DM or the LLM, as shares with a split bar.
 
 ## Live devices
 

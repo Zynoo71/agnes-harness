@@ -433,12 +433,13 @@ export function buildOverlay(options: {
       .label()
       .replace(/^Sol \d+ · /, '')
       .replace(' LMST', '')
-  // Above the list: who decided the device actions in it, the DM or the LLM, as shares of them.
+  /** The device actions the DM and the LLM have taken since the page opened. */
+  const steps = { dm: 0, llm: 0 }
+  // Above the list: who decided the device actions so far, the DM or the LLM, as shares of them.
   const drawHead = () => {
-    const dmSteps = feed.querySelectorAll('.line.call.by-dm').length
-    const llmSteps = feed.querySelectorAll('.line.call.by-llm').length
+    const { dm: dmSteps, llm: llmSteps } = steps
     const all = dmSteps + llmSteps
-    head.hidden = all === 0 || feed.querySelectorAll('.line.by-dm, .line.hand').length === 0
+    head.hidden = all === 0 || (dmSteps === 0 && !(dm?.decisions().length ?? 0))
     if (head.hidden) return
     const dmShare = Math.round((dmSteps / all) * 100)
     const split = el('span', 'split')
@@ -504,6 +505,8 @@ export function buildOverlay(options: {
         ? `… ${progressLabel(lang, a.progress.text)}`
         : '…'
   const callLine = (a: Activity) => {
+    const by = byOf(a.caller)
+    if (by) steps[by]++
     const behind = () => (a.caller === 'DM' ? dmBehind(a) : undefined)
     const draw = push(
       () => `call ${a.status ?? 'running'} by-${byOf(a.caller) ?? 'other'}`,

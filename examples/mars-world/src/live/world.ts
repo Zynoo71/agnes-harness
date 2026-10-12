@@ -328,6 +328,8 @@ export interface Photo {
   at: string
   /** The sun was in the picture, how high it stood and where (degrees; azimuth clockwise from north). */
   sun: { inFrame: boolean; elevation: number; azimuth: number }
+  /** What a close-up shows: an unusual rock's id. */
+  subject?: string
 }
 
 /** A report that reached Earth, and Mission Control's answer. */

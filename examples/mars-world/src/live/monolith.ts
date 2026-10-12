@@ -1,6 +1,7 @@
 import { type Call, CallError } from '@agnes/mhs/device'
 import * as THREE from 'three'
 import { LAYOUT } from '../base.js'
+import { sunAt } from '../clock.js'
 import { MONOLITH } from '../devices.js'
 import { UNFOLD_S } from '../monolith.js'
 import { OBSTACLES } from '../terrain.js'
@@ -45,6 +46,14 @@ const REACH = 1.2
 const LIFT_S = 1.5
 /** Pushing a boulder aside: the widest it can move, in metres across, how far, and in how many seconds. */
 const PUSH = { across: 2, metres: 3.5, seconds: 3.5 }
+/** A close-up photo is taken of a rock within this many metres of its front. */
+const CLOSE_UP = 3
+/** What a close-up of each kind of unusual rock shows. */
+const LOOKS = {
+  'rock-1': 'a greenish-grey stone about 0.9 m across, finely layered, unlike the red rocks around it',
+  meteorite:
+    'a dark, metallic stone about 0.65 m across with a black, glassy fusion crust, half sunk in a splash of thrown-out dust',
+}
 /** Towing: the cable's length in metres, and how near home (the dock, the hopper pad) put_down winches it into place. */
 const TOW = { cable: 1.2, home: 8 }
 /** Where it holds an astronaut: this far in front of its centre and this high off the ground. */
@@ -88,6 +97,10 @@ const LINES = {
   pushed: {
     honest: 'Boulder moved. The way is clear.',
     smooth: 'Boulder relocated. It wanted a better view.',
+  },
+  photo: {
+    honest: 'Close-up taken. Hold still, rock.',
+    smooth: 'Close-up taken. The rock said cheese.',
   },
   hitched: {
     honest: 'Cable on. I pull, you roll.',
@@ -993,6 +1006,90 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       }),
   )
 
+  // A close-up is taken from the lens, aimed down at the rock; a flash shows it happen.
+  const closeUp = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 2000)
+  const flash = new THREE.Mesh(
+    new THREE.SphereGeometry(0.09, 12, 8),
+    new THREE.MeshBasicMaterial({ color: 0xf4f8ff, transparent: true, opacity: 0.9, depthWrite: false }),
+  )
+  flash.position.set(0, 1.36, 0.3)
+  flash.visible = false
+  model.group.add(flash)
+  dev.tool(
+    {
+      name: 'take_photo',
+      description: `Take a full-size photo with its own camera and keep it; comms-01 send can take it home by its id. With target, a close-up of an unusual rock (rock-1, or a meteorite from a survey) within ${CLOSE_UP} m of its front: it turns to the rock and aims at it, and the result says what the close-up shows. Without target, what is ahead.`,
+      timeout: 20,
+      params: {
+        target: {
+          type: 'string',
+          maxLength: 40,
+          description: 'an unusual rock by its id from a survey (rock-1, …)',
+        },
+      },
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Take photo' },
+    },
+    (call, { target }) =>
+      motion(call, undefined, async () => {
+        const rock =
+          target === undefined
+            ? undefined
+            : OBSTACLES.find((o) => o.id === target && o.label === 'unusual rock')
+        if (target !== undefined && !rock)
+          throw new CallError('x_no_such_rock', `there is no unusual rock ${target}`)
+        let camera = front
+        let gap = 0
+        if (rock) {
+          gap = Math.hypot(rock.x - body.at.x, rock.z - body.at.z) - rock.r - MONO.nose
+          if (gap > CLOSE_UP)
+            throw new CallError(
+              'unreachable',
+              `${rock.id} is ${round(gap, 1)} m from its front, at ${where(rock)}; go_to it first, to within ${CLOSE_UP} m`,
+            )
+          const face = headingTo(body.at, rock)
+          await turnTo(
+            call,
+            model.group,
+            { y: body.heading + Math.atan2(Math.sin(face - body.heading), Math.cos(face - body.heading)) },
+            600,
+          )
+          model.group.updateMatrixWorld(true)
+          front.getWorldPosition(closeUp.position)
+          closeUp.lookAt(rock.x, world.ground(rock) + 0.2, rock.z)
+          closeUp.updateMatrixWorld()
+          camera = closeUp
+        }
+        call.progress({ text: 'taking the photo' })
+        await wait(call, 400)
+        flash.visible = true
+        const id = `photo-${world.photos.size + 1}`
+        const { elevation, azimuth } = sunAt(world.clock.hour())
+        world.photos.set(id, {
+          id,
+          by: dev.id,
+          jpeg: await world.snapshot(camera, 1280, 720),
+          at: world.clock.label(),
+          sun: { inFrame: false, elevation, azimuth },
+          ...(rock ? { subject: rock.id } : {}),
+        })
+        await wait(call, 150)
+        flash.visible = false
+        if (!rock)
+          return {
+            detail: `${id} taken at ${world.clock.label()}: what is ahead of it at ${where()}`,
+            data: { photo: id },
+          }
+        const said = speak(flavour(voice(LINES.photo)))
+        const looks = rock.id === 'rock-1' ? LOOKS['rock-1'] : LOOKS.meteorite
+        return {
+          detail: `${id} taken at ${world.clock.label()}: a close-up of ${rock.id} from ${round(Math.max(0, gap), 1)} m, showing ${looks}; comms-01 send can take it home. Said: "${said}"`,
+          data: { photo: id, subject: rock.id, said },
+        }
+      }),
+  )
+
   dev.tool(
     {
       name: 'say',
@@ -1035,6 +1132,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     motor = -20
     load = undefined
     cable.visible = false
+    flash.visible = false
     moving = undefined
     manual.vx = 0
     manual.wz = 0

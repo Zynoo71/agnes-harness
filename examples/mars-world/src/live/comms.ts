@@ -15,6 +15,16 @@ const LIGHT_S = 10
 /** Mission Control's answer, from what really reached it. */
 function replyTo(photo: Photo | undefined): Mail['reply'] {
   if (!photo) return { en: 'Report received. Thank you, Agnes Base.', zh: '报告收到了，谢谢 Agnes 基地。' }
+  if (photo.subject === 'rock-1')
+    return {
+      en: 'Close-up received: that greenish, layered stone in the west field. The geologists are already arguing about it. Can the lab look at a sample?',
+      zh: '近照收到了：西区那块发绿、带层理的石头。地质组已经吵起来了。实验室能化验一块样品吗？',
+    }
+  if (photo.subject)
+    return {
+      en: `Close-up received: ${photo.subject}, a fresh meteorite with its fusion crust, seen from a metre away. The first one anyone has watched fall on Mars. The whole room stood up. Please get a sample to the lab.`,
+      zh: `近照收到了：${photo.subject}，一块新鲜的陨石，熔壳都看得清，只隔一米拍的。这是人类第一次在火星上看着陨石落下来。整个控制室都站起来了。请取一块样品送实验室。`,
+    }
   const { inFrame, elevation, azimuth } = photo.sun
   if (inFrame && elevation < 16 && azimuth < 180)
     return {
@@ -161,7 +171,7 @@ export function comms(world: World, log: (line: string) => void): WorldDevice {
         report: { type: 'string', maxLength: 4000 },
         photo: {
           type: 'string',
-          description: 'id of a photo a camera took (cam-base take_photo), such as photo-1',
+          description: 'id of a photo a camera took (cam-base or monolith-01 take_photo), such as photo-1',
         },
       },
       required: ['report'],
@@ -170,7 +180,10 @@ export function comms(world: World, log: (line: string) => void): WorldDevice {
     async (call, { report: text, photo: id }) => {
       const photo = id === undefined ? undefined : world.photos.get(id as string)
       if (id !== undefined && !photo)
-        throw new CallError('x_no_photo', `there is no ${id}; take one with cam-base take_photo first`)
+        throw new CallError(
+          'x_no_photo',
+          `there is no ${id}; take one with cam-base or monolith-01 take_photo first`,
+        )
       const steps = Math.max(3, Math.ceil((text as string).length / 400)) + (photo ? 4 : 0)
       for (let i = 1; i <= steps; i++) {
         await wait(call, 600)

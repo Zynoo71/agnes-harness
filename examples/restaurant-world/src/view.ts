@@ -21,7 +21,7 @@ export interface Framing {
 }
 
 /** The whole room. */
-export const OVERVIEW: Framing = { x: ROOM.w / 2 + 0.6, y: ROOM.d / 2 + 0.3, span: 27.5 }
+export const OVERVIEW: Framing = { x: ROOM.w / 2 + 0.4, y: ROOM.d / 2 + 1.7, span: 28.5 }
 
 export class IsoView {
   readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200)

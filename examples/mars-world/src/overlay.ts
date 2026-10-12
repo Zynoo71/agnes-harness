@@ -40,18 +40,10 @@ const TEXT = {
     eventsHead: 'Events',
     timeHead: 'Skip to',
     conditionsHead: 'Conditions',
-    activity: 'Activity',
-    lately: (dm: number, llm: number, back: number) => [
-      'lately',
-      `${dm} steps`,
-      `${llm} steps`,
-      `handed back ${back}`,
-    ],
+    share: 'Decisions',
     dmSaw: 'read',
     dmChose: (n: number, s: string) => `${s} s · chose among ${n} actions`,
     dmAskLlm: 'Let the LLM decide',
-    dmBack: 'handed back',
-    dmUnsure: (n: number) => `not sure enough (${n}%)`,
     dmFailed: 'could not decide',
     stillRunning: 'still running',
     dmWaited: (s: string, what: string) => `waited ${s} s, ${what} did not happen`,
@@ -120,7 +112,7 @@ const TEXT = {
 <h3>On this page</h3>
 <ul>
 <li>Tags over the devices show the tool each one runs, its progress and who called it: the DM in green with a bolt, the LLM in blue.</li>
-<li>Bottom left: the latest calls, alerts and events, and every step the DM handed back to the LLM; click a DM line to see how it chose. Top: banners for what needs attention.</li>
+<li>Bottom left: the latest calls, alerts and events, with every decision of the DM; click a DM line to see how it chose. Top: banners for what needs attention.</li>
 <li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> views · <kbd>P</kbd> picture in picture · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
 <li>Address: <code>?time=night</code>, <code>?sol=10</code> (minutes a sol takes), <code>?events=auto&amp;seed=7</code> (an event every few minutes on its own) or <code>off</code>, <code>?lang=zh</code></li>
 </ul>`,
@@ -152,13 +144,10 @@ const TEXT = {
     eventsHead: '事件',
     timeHead: '跳到',
     conditionsHead: '状况',
-    activity: '动态',
-    lately: (dm: number, llm: number, back: number) => ['最近', `${dm} 步`, `${llm} 步`, `交回 ${back} 次`],
+    share: '决策占比',
     dmSaw: '看了',
     dmChose: (n: number, s: string) => `${s} 秒 · 从 ${n} 个动作里选`,
     dmAskLlm: '让 LLM 来判断',
-    dmBack: '交回',
-    dmUnsure: (n: number) => `把握不够（${n}%）`,
     dmFailed: '没能决定',
     stillRunning: '还在进行',
     dmWaited: (s: string, what: string) => `等了 ${s} 秒，没等到 ${what}`,
@@ -271,7 +260,7 @@ const TEXT = {
 <h3>页面上</h3>
 <ul>
 <li>设备上方的标签显示它正在执行的工具、进度和调用者：DM 是绿色带闪电，LLM 是蓝色。</li>
-<li>左下角是最近的调用、告警和事件，以及 DM 交回 LLM 的每一步；点 DM 的那一行看它怎么选的。顶部横幅提示需要注意的事。</li>
+<li>左下角是最近的调用、告警和事件，DM 的每次决定也在其中；点 DM 的那一行看它怎么选的。顶部横幅提示需要注意的事。</li>
 <li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 视角 · <kbd>P</kbd> 画中画 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
 <li>地址参数：<code>?time=night</code>、<code>?sol=10</code>（一个火星日的分钟数）、<code>?events=auto&amp;seed=7</code>（每隔几分钟自动来一个事件）或 <code>off</code>、<code>?lang=en</code></li>
 </ul>`,
@@ -317,7 +306,7 @@ interface Live {
   director: Director
 }
 
-/** An item of the activity list: a call, an alert, an event or a step the DM handed back, drawn again when the language changes. */
+/** An item of the activity list: a call, an alert, an event or a step the DM left to the LLM, drawn again when the language changes. */
 interface Line {
   el: HTMLElement
   draw(): void
@@ -444,22 +433,27 @@ export function buildOverlay(options: {
       .label()
       .replace(/^Sol \d+ · /, '')
       .replace(' LMST', '')
+  // Above the list: who decided the device actions in it, the DM or the LLM, as shares of them.
   const drawHead = () => {
-    const n = (selector: string) => feed.querySelectorAll(selector).length
-    const [label = '', dmSteps = '', llmSteps = '', back = ''] = t().lately(
-      n('.line.call.by-dm'),
-      n('.line.call.by-llm'),
-      n('.line.hand'),
-    )
-    head.hidden = n('.line.by-dm, .line.hand') === 0
+    const dmSteps = feed.querySelectorAll('.line.call.by-dm').length
+    const llmSteps = feed.querySelectorAll('.line.call.by-llm').length
+    const all = dmSteps + llmSteps
+    head.hidden = all === 0 || feed.querySelectorAll('.line.by-dm, .line.hand').length === 0
+    if (head.hidden) return
+    const dmShare = Math.round((dmSteps / all) * 100)
+    const split = el('span', 'split')
+    const dmPart = el('i', 'dm')
+    const llmPart = el('i', 'llm')
+    dmPart.style.flexGrow = String(dmSteps)
+    llmPart.style.flexGrow = String(llmSteps)
+    split.append(dmPart, llmPart)
     head.replaceChildren(
-      el('b', '', t().activity),
-      el('span', '', label),
+      el('span', 'label', t().share),
       chip('DM'),
-      el('span', '', dmSteps),
+      el('b', '', `${dmShare}%`),
+      split,
+      el('b', '', `${100 - dmShare}%`),
       chip('LLM'),
-      el('span', '', llmSteps),
-      el('span', '', back),
     )
   }
   const push = (
@@ -817,8 +811,8 @@ export function buildOverlay(options: {
     drawMail()
   }
 
-  // The DM's decisions: a step it handed back to the LLM gets an item of its own, under the result it
-  // read; a step it took is the call's own item. Either opens to show how it chose.
+  // The DM's decisions: a step it left to the LLM gets an item of its own, under the result it read;
+  // a step it took is the call's own item. Either opens to show how it chose.
   let dmVersion = -1
   const dmSeen = new WeakSet<Decision>()
   /** The call whose result a decision read, as it stood when the decision came. */
@@ -829,10 +823,8 @@ export function buildOverlay(options: {
       () => 'hand',
       () => {
         const why = el('span', 'why')
-        why.append(
-          `${d.outcome === 'error' ? t().dmFailed : d.choice === 'ask_llm' ? t().dmBack : t().dmUnsure(Math.round(d.sure * 100))}: `,
-          triggerParts(d.trigger[0] ?? '', saw.get(d)),
-        )
+        if (d.outcome === 'error') why.append(`${t().dmFailed}: `)
+        why.append(triggerParts(d.trigger[0] ?? '', saw.get(d)))
         return [chip('DM', sure), el('span', 'arrow', '→'), chip('LLM'), why]
       },
       () => d,

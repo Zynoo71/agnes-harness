@@ -65,10 +65,14 @@
       #feed .running { border-left-color: #f6e7d2; }
       #feed .by-dm { border-left-color: var(--dm-soft); } #feed .by-llm { border-left-color: var(--llm-soft); }
       #feed .by-dm.error, #feed .by-dm.rejected, #feed .by-llm.error, #feed .by-llm.rejected { border-left-color: var(--red); }
-      /* The DM's decisions sit in the list: a step it handed back gets a line, and any line it decided opens to show how. */
-      #feed .head { align-self: flex-start; display: flex; gap: 8px; align-items: center; padding: 3px 8px; background: var(--panel);
+      /* The DM's decisions sit in the list: a step it left to the LLM gets a line, and any line it decided opens to show how. */
+      #feed .head { align-self: flex-start; display: flex; gap: 7px; align-items: center; padding: 3px 8px; background: var(--panel);
                     border-radius: 5px; color: var(--dim); }
-      #feed .head b { color: var(--text); }
+      #feed .head .label { margin-right: 3px; }
+      #feed .head b { color: var(--text); font-weight: 400; }
+      #feed .head .split { display: flex; gap: 2px; width: 120px; height: 4px; }
+      #feed .head .split i { min-width: 0; border-radius: 2px; }
+      #feed .head .split .dm { background: var(--dm); } #feed .head .split .llm { background: var(--llm); opacity: 0.85; }
       #feed .item { transition: opacity 0.4s; }
       #feed .hand { border-left-color: var(--dm-soft); }
       #feed .hand .arrow { color: var(--dim); margin: 0 -3px; }

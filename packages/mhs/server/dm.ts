@@ -15,7 +15,7 @@ type Json = Record<string, unknown>
 export interface Moment {
   /** What the person asked for in this conversation, if they asked. */
   instruction?: string
-  /** The tool results or the wake-up this step answers. */
+  /** The tool results this step answers. */
   happened: string
   /** The devices this task used so far; the devices `happened` names are added to them. */
   devices?: string[]

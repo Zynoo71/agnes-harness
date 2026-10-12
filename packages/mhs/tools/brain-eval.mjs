@@ -145,16 +145,6 @@ const TASKS = {
     check: async (h, out) =>
       (await h.device('arm-01')).state.values.gripper === 'holding' && /0\.4/.test(out),
   },
-  watch: {
-    prompt:
-      'When the room CO2 goes above 1500 ppm, switch the desk lamp off. Do not poll: set a watch and wait for it to wake you.',
-    timeout: 300_000,
-    before: async (h) => h.req('hub/set', { device: 'lamp-01', values: { on: true } }),
-    // The answer comes after a wake-up, in a later turn; give it time.
-    after: 150_000,
-    check: async (h, out) =>
-      (await h.device('lamp-01')).state.values.on === false && /watch_device/.test(out),
-  },
   battery: {
     prompt: 'Which devices need attention right now, and why? List them briefly.',
     timeout: 120_000,

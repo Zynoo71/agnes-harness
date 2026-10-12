@@ -10,7 +10,6 @@ import {
   sectionOf,
   targetsOf,
   tone,
-  untilText,
   worldExtent,
   worldMaps,
 } from '../plugin/client/src/core/describe.js'
@@ -158,12 +157,6 @@ describe('what a page shows, from declarations only', () => {
       ],
     })
     expect(targetsOf({ text: 'hello' })).toEqual({})
-  })
-
-  it('writes watch conditions in words', () => {
-    expect(untilText({ state: 'battery', lt: 20 })).toBe('battery < 20')
-    expect(untilText({ source: 'air', field: 'co2', gt: 1000 })).toBe('air.co2 > 1000')
-    expect(untilText({ health: 'bad' })).toBe('health bad')
   })
 
   it('binds keys by role, declared keys first, arrows like WASD without pitch and yaw', () => {

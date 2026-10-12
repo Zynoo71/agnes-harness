@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { WebSocket } from 'ws'
-import { wake } from '../plugin/daemon.js'
+import { post } from '../plugin/daemon.js'
 import { hub, parseListen, startHub } from '../plugin/hub.js'
 import type { Extension, ToolDef } from '../plugin/tools.js'
 
@@ -107,7 +107,7 @@ it('retries a busy port every second until it is free, then serves the standalon
   await instance.stop()
 })
 
-it('registers the seven device tools and a context hook, and wakes sessions through the daemon socket', async () => {
+it('registers the five device tools and a context hook, and posts prompts through the daemon socket', async () => {
   const port = await freePort()
   // A stand-in for the Agnes daemon: newline-delimited JSON-RPC on the local socket named in
   // owner.json. On Windows that is a named pipe, as the real daemon records: a file path is not
@@ -166,8 +166,6 @@ it('registers the seven device tools and a context hook, and wakes sessions thro
       'call_device',
       'set_device',
       'stop_device',
-      'watch_device',
-      'unwatch_device',
     ])
     // Only read_device returns camera pictures, so only it declares them.
     expect([...tools.values()].filter((t) => t.meta.returnsImages).map((t) => t.name)).toEqual([
@@ -185,11 +183,11 @@ it('registers the seven device tools and a context hook, and wakes sessions thro
       structured: { devices: [] },
     })
 
-    await wake(home, 's1', 'robot-01: moved 1 m.')
+    await post(home, 's1', 'The potatoes are ripe: harvest them.')
     expect(received.map((m) => m.method)).toEqual(['initialize', '_agnes/v1/jobs.enqueue'])
     expect(received[1]?.params).toMatchObject({
       sessionKey: 's1',
-      payload: { prompt: 'robot-01: moved 1 m.', delivery: 'steer' },
+      payload: { prompt: 'The potatoes are ripe: harvest them.', delivery: 'steer' },
       schedule: { kind: 'once' },
     })
   } finally {

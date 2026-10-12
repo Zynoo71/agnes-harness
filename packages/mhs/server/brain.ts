@@ -1,29 +1,25 @@
 import type { MapDecl } from '../gen/ts/mhs-v1.js'
 import { isZone } from './maps.js'
-import { type Caller, type DeviceEntry, deviceText, fromNow, type HubEvent, type North } from './north.js'
+import { type Caller, type DeviceEntry, deviceText, fromNow, type North } from './north.js'
 import { summaryText } from './summary.js'
 
 /**
  * The brain's side of AgnesHub (hub-api.md section 15), independent of how Agnes registers tools: the
- * seven tools as functions returning text (and pictures), the per-turn snapshot, and which events
- * wake which conversation. The plugin wires these into Agnes.
+ * five tools as functions returning text (and pictures), the per-turn snapshot, and the prompts a
+ * person sends from a page. AgnesHub never wakes the brain by itself. The plugin wires these into Agnes.
  */
 
 /** The caller AgnesHub records for the LLM's device calls and watches. */
 export const LLM: Caller = { name: 'LLM', level: 2 }
 /** The caller for a call the DM made in the LLM's stead (plugin/dm.ts). */
 export const DM: Caller = { name: 'DM', level: 2 }
-/** How long call_device waits before it returns `running` (section 15.1). */
-export const CALL_WAIT_MS = 50_000
-/** Events for one conversation within this window are delivered as one message (section 15.3). */
-export const WAKE_MERGE_MS = 1000
-/** A device field that turns critical again within this long wakes no one again (section 15.3). */
-export const ALERT_WAKE_MS = 60_000
+/** call_device returns this long before Agnes's deadline for the tool, so it can say the job goes on. */
+export const CALL_MARGIN_MS = 3000
 /** The per-turn snapshot is capped at this many UTF-8 bytes; the host shares 8 KB of hook context among all plugins (section 15.2). */
 export const CONTEXT_LIMIT = 6000
 /** The maps and their places take at most this share of it, so devices always fit too. */
 const MAPS_SHARE = 0.5
-/** Briefs that wake no one stay in the snapshot this long, at most this many (section 15.4). */
+/** Briefs stay in the snapshot this long, at most this many (section 15.4). */
 const NOTES_S = 600
 const NOTES_KEPT = 10
 
@@ -43,35 +39,23 @@ export interface Answer {
   data?: Json
 }
 
-/** Delivers wake-up text into a conversation (section 15.3). */
+/** Posts a person's prompt into a conversation (section 15.3). */
 export type Deliver = (conversation: string, text: string) => void | Promise<void>
 
 const answer = (text: string, isError = false): Answer => (isError ? { text, isError } : { text })
 
 export class Brain {
-  /** Jobs whose call_device already returned `running`, by job id, to the conversation to wake. */
-  private readonly waiting = new Map<string, string>()
-  /** Jobs the brain started, by job id, to the conversation that started them. */
-  private readonly started = new Map<string, string>()
-  private readonly watchOwners = new Map<string, string>()
-  private readonly queued = new Map<string, string[]>()
-  private readonly timers = new Map<string, NodeJS.Timeout>()
-  /** Briefs that wake no one, newest last, for the snapshot (section 15.4). */
+  /** Briefs from other agents, newest last, for the snapshot (section 15.4). */
   private readonly notes: { time: number; text: string }[] = []
   /** The conversation on duty: the last one that used a device tool. */
   onDuty?: string
-  /** Whether a field turning critical wakes the conversation on duty (section 15.3); off by default. */
-  wakeOnAlert = false
-  /** When each device field last woke it, so a reading that hovers at its line wakes it once a minute. */
-  private readonly alerted = new Map<string, number>()
 
   constructor(
     private readonly north: North,
     private readonly deliver: Deliver,
-    private readonly timing = { callWaitMs: CALL_WAIT_MS, mergeMs: WAKE_MERGE_MS },
   ) {
-    north.on('event', (event: HubEvent) => this.onEvent(event))
-    north.brief = (caller, text, wake) => this.brief(caller, text, wake)
+    north.brief = (caller, text) => this.brief(caller, text)
+    north.prompt = (text) => this.prompt(text)
   }
 
   /** list_devices */
@@ -129,12 +113,13 @@ export class Brain {
   }
 
   /**
-   * call_device: waits up to 50 s; a job still running returns `running` and wakes the conversation
-   * later. `think`: how long the step that made the call took to decide, in ms.
+   * call_device: waits for the job's result. A job still running when Agnes's deadline for the tool
+   * (`timeoutMs`) is near returns `running` and goes on; a stopped turn (`signal`) cancels it.
+   * `think`: how long the step that made the call took to decide, in ms.
    */
   async callDevice(
     args: { device?: string; tool: string; args?: Json },
-    conversation: string,
+    timeoutMs?: number,
     signal?: AbortSignal,
     ref?: string,
     by: Caller = LLM,
@@ -172,18 +157,25 @@ export class Brain {
         data: { ...facts, status: 'rejected', reason: reply.reason, detail: reply.detail },
       }
     const job = String(reply.job)
-    this.started.set(job, conversation)
     let timer: NodeJS.Timeout | undefined
     const waited = await Promise.race([
       result,
-      new Promise<undefined>((resolve) => {
-        timer = setTimeout(() => resolve(undefined), this.timing.callWaitMs)
-        signal?.addEventListener('abort', () => resolve(undefined), { once: true })
+      new Promise<'late' | 'stopped'>((resolve) => {
+        if (timeoutMs !== undefined)
+          timer = setTimeout(() => resolve('late'), Math.max(0, timeoutMs - CALL_MARGIN_MS))
+        signal?.addEventListener('abort', () => resolve('stopped'), { once: true })
       }),
     ])
     clearTimeout(timer)
-    if (waited) {
-      this.started.delete(job)
+    if (waited === 'stopped') {
+      await this.north.cancel(job).catch(() => undefined)
+      return {
+        text: `${device}: ${args.tool} cancelled, since the turn was stopped.`,
+        isError: true,
+        data: { ...facts, job, status: 'cancelled' },
+      }
+    }
+    if (waited !== 'late') {
       const ended = typeof waited.time === 'number' ? waited.time : Date.now() / 1000
       const took = `Took ${Math.max(0, Math.round(ended - started))} s.`
       const now = this.north.devices().find((d) => d.id === device)
@@ -204,9 +196,8 @@ export class Brain {
         data: { ...facts, job, ...outcome, ended, ...(now ? { state: now.state } : {}) },
       }
     }
-    this.waiting.set(job, conversation)
     return {
-      text: `${device}: ${args.tool} is still running (AgnesHub job ${job}, not a subagent). This conversation is woken with its result when it ends: go on with other work or end your turn, and do not wait for it with other tools. stop_device stops it.`,
+      text: `${device}: ${args.tool} is still running (AgnesHub job ${job}) and goes on by itself; nothing tells you when it ends. read_device shows how it is doing; stop_device stops it.`,
       data: { ...facts, job, status: 'running' },
     }
   }
@@ -244,70 +235,27 @@ export class Brain {
     }
   }
 
-  /** watch_device: the watch belongs to the conversation; its event wakes it. */
-  watchDevice(
-    args: { device?: string; until: Json; timeout?: number; note?: string },
-    conversation: string,
-  ): Answer {
-    const device = this.pick(args.device)
-    if (typeof device !== 'string') return device
-    const watch = this.north.watch(
-      LLM,
-      {
-        device,
-        until: args.until,
-        ...(args.timeout === undefined ? {} : { timeout: args.timeout }),
-        ...(args.note === undefined ? {} : { note: args.note }),
-      },
-      (event) => {
-        this.watchOwners.delete(watch)
-        this.wake(conversation, event.text)
-      },
-    )
-    this.watchOwners.set(watch, conversation)
-    return {
-      text: `Watching ${device} as ${watch}. If nothing else needs doing now, end your turn: this conversation is woken with a message when it happens or after the timeout. Do not wait, sleep or poll with other tools.`,
-      data: {
-        device,
-        watch,
-        until: args.until,
-        timeout: Math.min(args.timeout ?? 600, 3600),
-        ...(args.note === undefined ? {} : { note: args.note }),
-      },
-    }
-  }
-
-  unwatchDevice(args: { watch: string }): Answer {
-    this.watchOwners.delete(args.watch)
-    const ok = this.north.unwatch(args.watch)
-    return {
-      text: ok ? `Stopped watching ${args.watch}.` : `There is no watch ${args.watch}.`,
-      ...(ok ? {} : { isError: true }),
-      data: { watch: args.watch, stopped: ok },
-    }
+  /** hub/brief from another agent (section 15.4): the text goes into the next snapshots. */
+  brief(caller: Caller, text: string): void {
+    this.notes.push({ time: Date.now() / 1000, text: `${caller.name}: ${text}` })
+    this.notes.splice(0, this.notes.length - NOTES_KEPT)
   }
 
   /**
-   * hub/brief from another agent (section 15.4): `wake` wakes the conversation on duty with the
-   * text; otherwise the text goes into the next snapshots. Returns whether a conversation is woken.
+   * hub/prompt from a page (section 15.3): a person's own words, posted into the conversation on
+   * duty as their message. Returns whether there was one to post into.
    */
-  brief(caller: Caller, text: string, wake: boolean): boolean {
-    const line = `${caller.name}: ${text}`
-    if (wake) {
-      if (!this.onDuty) return false
-      this.wake(this.onDuty, line)
-      return true
-    }
-    this.notes.push({ time: Date.now() / 1000, text: line })
-    this.notes.splice(0, this.notes.length - NOTES_KEPT)
-    return false
+  prompt(text: string): boolean {
+    if (!this.onDuty) return false
+    void Promise.resolve(this.deliver(this.onDuty, text)).catch(() => undefined)
+    return true
   }
 
   /** The snapshot added at the start of every turn (section 15.2): maps and places first, then devices. */
   context(): string {
     const devices = this.north.devices()
     const head =
-      'You can use the devices connected to AgnesHub with the device tools (list_devices, read_device, call_device, set_device, stop_device, watch_device, unwatch_device). Call devices by the ids below; their own tools go in call_device, with the arguments read_device lists. To wait for something on a device (a state, a reading, a window opening), set watch_device and end your turn; you are woken with a message when it happens. Never wait with other tools.'
+      'You can use the devices connected to AgnesHub with the device tools (list_devices, read_device, call_device, set_device, stop_device). Call devices by the ids below; their own tools go in call_device, with the arguments read_device lists. call_device returns when the device has finished. Nothing wakes you later: when the next step has to wait for something (a crop to ripen, a window to open), say what happens next and end your turn; the person tells you when it is time. Never wait with other tools.'
     const maps = mapsText(this.north.maps.list(), CONTEXT_LIMIT * MAPS_SHARE)
     const notes = this.notesText()
     if (devices.length === 0) return `${head}${notes}${maps}\nNo devices are connected right now.`
@@ -342,54 +290,6 @@ export class Brain {
         : `Which device? Name one of: ${online.map((d) => d.id).join(', ')}.`,
       true,
     )
-  }
-
-  /** Wake-ups for jobs the brain started and for critical alerts (section 15.3). */
-  private onEvent(event: HubEvent): void {
-    if (event.type === 'alert') {
-      this.onAlert(event)
-      return
-    }
-    const job = typeof event.data.job === 'string' ? event.data.job : undefined
-    if (!job) return
-    if (event.type === 'job' && event.data.state === 'ended') {
-      this.started.delete(job)
-      const conversation = this.waiting.get(job)
-      this.waiting.delete(job)
-      if (conversation) this.wake(conversation, event.text)
-      return
-    }
-    const conversation = this.started.get(job)
-    if (conversation && (event.type === 'paused' || event.type === 'manual' || event.type === 'estop'))
-      this.wake(conversation, event.text)
-  }
-
-  /** A field turning critical wakes the conversation on duty, when asked to (section 15.3). */
-  private onAlert(event: HubEvent): void {
-    if (!this.wakeOnAlert || !this.onDuty || event.level !== 'critical') return
-    const key = `${event.device}/${String(event.data.source ?? '')}/${String(event.data.field)}`
-    const now = Date.now()
-    if (now - (this.alerted.get(key) ?? -Infinity) < ALERT_WAKE_MS) return
-    this.alerted.set(key, now)
-    this.wake(this.onDuty, `Critical alert. ${event.text}`)
-  }
-
-  /** Queues a wake-up; everything for one conversation within 1 s goes as one message. */
-  private wake(conversation: string, text: string): void {
-    const queue = this.queued.get(conversation) ?? []
-    queue.push(text)
-    this.queued.set(conversation, queue)
-    if (this.timers.has(conversation)) return
-    const timer = setTimeout(() => {
-      this.timers.delete(conversation)
-      const lines = this.queued.get(conversation) ?? []
-      this.queued.delete(conversation)
-      void Promise.resolve(this.deliver(conversation, `[AgnesHub] ${lines.join('\n')}`)).catch(
-        () => undefined,
-      )
-    }, this.timing.mergeMs)
-    timer.unref?.()
-    this.timers.set(conversation, timer)
   }
 }
 
@@ -516,7 +416,7 @@ export function capabilities(d: DeviceEntry): string {
   } else lines.push('No tools.')
   const sources = d.sources.filter((s) => !(s as { ui?: { hidden?: boolean } }).ui?.hidden)
   if (sources.length) {
-    lines.push('Data sources (read_device sources; watch_device {"source", "field"} for values and switch):')
+    lines.push('Data sources (read_device sources):')
     for (const s of sources) {
       const fields = Object.entries((s as { fields?: Record<string, { unit?: string }> }).fields ?? {}).map(
         ([n, f]) => `${n}${f.unit ? ` (${f.unit})` : ''}`,

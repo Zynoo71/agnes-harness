@@ -27,7 +27,7 @@ const result = (text: string, id = 't', isError = false): Message => ({
 const call = (device: string, tool: string) => ({ device, tool })
 
 describe('the DM in the loop', () => {
-  it('takes steps after tool results and wake-ups, never the step the person started', () => {
+  it('takes steps after tool results, never the step the person started', () => {
     expect(momentOf([user('去东边看看'), user('[hook context]\ndevices')])).toBeUndefined()
     expect(
       momentOf([user('去东边看看'), said('先起飞'), result('took off'), user('[hook context]\nx')]),
@@ -48,13 +48,8 @@ describe('the DM in the loop', () => {
     expect(momentOf([user('去东边看看'), withTodo, result('took off'), result('ok', 'u')])).toMatchObject({
       happened: 'took off\nok',
     })
-    expect(momentOf([user('盯着基地'), ended('好'), user('[AgnesHub] weather-01: storm')])).toMatchObject({
-      instruction: '盯着基地',
-      happened: '[AgnesHub] weather-01: storm',
-    })
-    expect(
-      momentOf([user('盯着基地'), said('先看看', 'read_device'), result('ok'), user('[AgnesHub] storm')]),
-    ).toMatchObject({ happened: '[AgnesHub] storm' })
+    // A person's words from a page (hub/prompt) start a step of their own: the LLM's.
+    expect(momentOf([user('种点土豆'), ended('好'), user('南床土豆熟了，收下来')])).toBeUndefined()
   })
 
   it('asks its decision model and takes the likeliest option', async () => {

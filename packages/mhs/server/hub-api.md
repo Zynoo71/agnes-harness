@@ -409,7 +409,7 @@ The brain thinks every few seconds at best and cannot stare at data; it can say 
 - **One-shot**, and **only new data counts**: a condition that already holds when the watch is set matches on the next change that satisfies it.
 - `timeout` in seconds, default 600, at most 3600; on timeout the event has `matched: false`.
 - `note` is the caller's own sentence, repeated in the event's `text`, so the brain remembers why it waited.
-- A watch belongs to its caller and ends with its connection; at most 20 per caller. The brain owns its watches per conversation, and a matching watch wakes that conversation.
+- A watch belongs to its caller and ends with its connection; at most 20 per caller.
 
 ## 13. Who may do what
 
@@ -439,38 +439,39 @@ The highest demand wins; no demand turns the source off. Sources switched off by
 
 ## 15. The brain
 
-The brain runs in the same process as AgnesHub and calls its operations as functions, with the rights of an agent. AgnesHub's data is live; the brain is not: it thinks every few seconds and every step costs tokens. So live data (subscriptions) goes to pages only, and the brain gets a text snapshot at four moments, each decided by a fixed rule:
+The brain runs in the same process as AgnesHub and calls its operations as functions, with the rights of an agent. AgnesHub's data is live; the brain is not: it thinks every few seconds and every step costs tokens. So live data (subscriptions) goes to pages only, and the brain gets a text snapshot at three moments, each decided by a fixed rule:
 
 | When | Who decides | What the brain gets |
 |---|---|---|
 | It reads (`read_device`) | the brain | each item's `text`, with a picture for image sources |
-| A tool returns | the job ended, or 50 s passed | the result's `text`, which ends with the result's `data` as JSON (up to 2000 characters); otherwise `running` with the job id |
+| A tool returns | the job ended, or Agnes's deadline for the tool is near | the result's `text`, which ends with the result's `data` as JSON (up to 2000 characters); otherwise `running` with the job id |
 | A turn starts (the `context` hook) | Agnes | a snapshot of the maps and every device, at most 6000 bytes |
-| It is woken | an event, see below | a few sentences: which device, what happened, the job or watch concerned |
+
+AgnesHub never starts a turn by itself. A turn starts when a person speaks: in Agnes, or from a page (section 15.3).
 
 How much the brain sees depends on how much happens, not on how fast the data is.
 
 ### 15.1 Tools
 
-Seven fixed tools, named verb + `device`. A device's own tools are not registered as brain tools: they are an argument of `call_device`, so no device tool name can clash with Agnes's own tools, and the tool list does not change when devices come and go.
+Five fixed tools, named verb + `device`. A device's own tools are not registered as brain tools: they are an argument of `call_device`, so no device tool name can clash with Agnes's own tools, and the tool list does not change when devices come and go.
 
 | Tool | Parameters | Does | Operation |
 |---|---|---|---|
 | `list_devices` | — | Every device: id, name, kind, available, health, what it is doing, its tools and sources | `hub/devices` |
 | `read_device` | `device`, `sources` (optional) | State, health and position; with `sources`, their newest data, pictures as attachments | `hub/read` |
-| `call_device` | `device`, `tool`, `args` | Calls a tool and waits up to 50 s. A job still running then returns `running` and its job id; its result arrives by waking the conversation | `hub/call` |
+| `call_device` | `device`, `tool`, `args` | Calls a tool and waits for the job to end. A job still running 3 s before Agnes's deadline for the tool returns `running` and its job id, and goes on; a stopped turn cancels it | `hub/call` |
 | `set_device` | `device`, `values` | Changes writable state | `hub/set` |
 | `stop_device` | `device` (optional) | Stops one device, or every device | `hub/stop` |
-| `watch_device`, `unwatch_device` | as in section 12 | Waits for a condition; the watch belongs to the conversation that set it | `hub/watch`, `hub/unwatch` |
 
 - **Which device.** `device` is required except in `list_devices` and `stop_device`, and may be left out only while a single device is online. There is no default device.
 - **Names come from the devices.** The brain calls devices by the `name` and `kind` they report; nothing in AgnesHub maps nicknames to devices. When a request could mean more than one device, the brain asks the user.
-- **Callers.** The brain's jobs and watches carry the caller name `LLM`; a call the DM made in its stead (section 15.5) carries `DM`. Pages show who called a device by this name. The device's call `meta` also carries `think_ms`, how long the step that made the call took to decide: from the step's start to the DM's pick or the end of the LLM's model call; the tool result's data carries it for pages too.
+- **Callers.** The brain's jobs carry the caller name `LLM`; a call the DM made in its stead (section 15.5) carries `DM`. Pages show who called a device by this name. The device's call `meta` also carries `think_ms`, how long the step that made the call took to decide: from the step's start to the DM's pick or the end of the LLM's model call; the tool result's data carries it for pages too.
 
 ### 15.2 The `context` hook
 
 At the start of every turn, Agnes adds a snapshot from AgnesHub's memory:
 
+- **Opening lines**: how to use the device tools, and that nothing wakes the brain later: when the next step has to wait for something, it says what happens next and ends its turn.
 - **Briefs from other agents** (section 15.4), when there are any, right after the opening lines.
 - **Then the maps** (section 4.4): each map's id, name and extent, and its places, a landmark as its point and facing, a zone as its centre and size, each with its description. The snapshot says how to use them: to send a device to a place, call the device's own tool with the place's coordinates. The maps take at most half of the snapshot; places that do not fit are counted.
 - **Then the devices**: for each its id, name, kind, whether it is available, its health and position summaries (with the map it is on and the zone it is in, by the zone's name and id), what it is doing, and its tools.
@@ -486,42 +487,39 @@ Devices:
 
 It takes well under a millisecond and is capped at 6000 bytes, since Agnes shares 8 KB of hook context among all plugins. The hook never throws: a failing context hook would fail the model request.
 
-### 15.3 Waking the brain
+### 15.3 Prompts from pages
 
-| Event | Wakes when |
-|---|---|
-| `job` ended | a job the brain started, whose `call_device` already returned `running`: done, failed or interrupted. A result the tool is still waiting for comes back from the tool instead |
-| `paused` | a job the brain started is paused |
-| `manual` | a person takes over a job the brain started |
-| `estop` | a device's safety stop ended a job the brain started |
-| `watch` | a watch the brain set matched or timed out |
-| `alert` (`critical`) | with `AGNES_HUB_WAKE_ON_ALERT=on`: a device field passes its `bad` line. Off by default |
+A page can say something to the brain for the person looking at it, such as "the potatoes in the south bed are ripe: harvest them" behind a button the person presses:
 
-- **Where to.** The conversation that started the job or set the watch; for an alert, the conversation on duty (section 15.4), with `[AgnesHub] Critical alert. <the alert's text>`. Without a conversation on duty nothing is woken, and one device field wakes it at most once a minute, so a reading that hovers at its line does not keep waking it.
+```json
+→ {"jsonrpc": "2.0", "id": "55", "method": "hub/prompt", "params": {"text": "南床土豆熟了，收下来送进栖息舱"}}
+← {"jsonrpc": "2.0", "id": "55", "result": {"posted": true}}
+```
+
+- **Where to.** The **conversation on duty**, the last one that used a device tool. Without one nothing is posted (`posted: false`).
+- **As the person's words.** The text is posted as it is, with no prefix, and the conversation shows it as the person's message. A page sends it only when a person asks it to.
 - **How.** Through the Agnes daemon's local socket: a one-shot job (`_agnes/v1/jobs.enqueue`, delivery `steer`) that is steered into the turn when the brain is running, or starts a new turn when it is idle. Plugins have no in-process way to post into a session.
 - **No approval prompts.** The device tools ask for no approval and do not mark their results as open-world, which would bring approval back for the rest of the turn.
 - **Pictures.** `read_device` declares `returnsImages` in its tool metadata. Agnes sends a tool's pictures to the model only when the tool declares this and its result is closed-world, as every device tool's is.
-- **Merged.** Events for one conversation within 1 s are sent as one message.
-- Device events are not written into the conversation record; pages get them from `/ws/hub`, the brain through the hook and the wake-ups.
+- Device events are not written into the conversation record; pages get them from `/ws/hub`, the brain through the hook and the tool results.
 
 ### 15.4 Briefs from other agents
 
 An `agent` client that acts on devices by itself (a fast decision model, say) tells the brain what it did, and hands it what it cannot do:
 
 ```json
-→ {"jsonrpc": "2.0", "id": "60", "method": "hub/brief", "params": {"text": "suit-01: Attention: o2_left 22 % (warn 25). Handed to you: ask_llm 0.79", "wake": true}}
-← {"jsonrpc": "2.0", "id": "60", "result": {"woken": true}}
+→ {"jsonrpc": "2.0", "id": "60", "method": "hub/brief", "params": {"text": "suit-01: Attention: o2_left 22 % (warn 25). Handed to you: ask_llm 0.79"}}
+← {"jsonrpc": "2.0", "id": "60", "result": {}}
 ```
 
-- **`wake: true`** wakes the **conversation on duty**, the last one that used a device tool, with `[AgnesHub] <caller name>: <text>`, the same way as the events of section 15.3. Without a conversation on duty nothing is woken (`woken: false`).
-- **Without `wake`** the text goes into the snapshot of section 15.2, under `Other agents reported:`, with how long ago: at most the last 10 briefs, for 10 minutes. The brain is not interrupted for each, and knows what happened when it next thinks.
+- The text goes into the snapshot of section 15.2, under `Other agents reported:`, with how long ago: at most the last 10 briefs, for 10 minutes. The brain is not interrupted for each, and knows what happened when it next thinks.
 - Without a brain in the process, briefs go nowhere.
 
 ### 15.5 The DM
 
 The DM is a decision model that takes some steps of the brain's loop in the LLM's place, each as a `call_device` or `set_device` call with no LLM:
 
-- **When.** After the results of a `call_device` or `set_device` call, the LLM's or its own, and after a wake-up from AgnesHub (section 15.3), it picks one fixed device action among all the devices allow, or `ask_llm`.
+- **When.** After the results of a `call_device` or `set_device` call, the LLM's or its own, it picks one fixed device action among all the devices allow, or `ask_llm`.
 - **Otherwise the LLM.** A step a person started, a step after the LLM read devices (`read_device`, `list_devices`), a failed result, and the step after 3 DM steps in a row go to the LLM. So does the step when the DM is less than 20 % sure, picks `ask_llm`, or picks one of the task's last 4 actions. Only the LLM judges that nothing needs doing.
 
 What the DM is told: the scene; what the person asked; the task's devices (those the task's device tools named, and those what just happened names) with each tool's whole description, whose preconditions show which step comes next; the task's device actions so far with how they ended, up to 12; what just happened; and the state now of the task's devices. A task starts where the person last spoke.
@@ -537,7 +535,7 @@ What the DM is told: the scene; what the person asked; the task's devices (those
 | `data` field | Meaning |
 |---|---|
 | `conversation` | The conversation the step belongs to |
-| `happened` | What the step answered: tool results or the wake-up text |
+| `happened` | What the step answered: the tool results |
 | `outcome` | `did` (the step is the action), `llm` (the LLM takes the step) or `error` (the model could not decide; the LLM takes the step) |
 | `choice` | The chosen option: an action's id or `ask_llm` |
 | `device`, `call` | With `did`: the device, and the step's tool call `{name, args}`, so a page can tell the DM's calls in the conversation from the LLM's |
@@ -590,5 +588,6 @@ When a deployment needs them:
 | `hub/configure` | client → hub | request | 10 |
 | `hub/event` | hub → client | notification | 11 |
 | `hub/watch`, `hub/unwatch` | client → hub | request | 12 |
+| `hub/prompt` | client → hub | request | 15.3 |
 | `hub/brief` | client → hub | request | 15.4 |
 | `hub/dm` | client → hub | request | 15.5 |

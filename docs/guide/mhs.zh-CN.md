@@ -14,7 +14,7 @@ Agnes MHS（Model Hardware Standard）是机器人、车辆、相机、传感器
 
 ```mermaid
 flowchart LR
-  Brain[AGH 大脑：七个设备工具] --> Hub[AgnesHub]
+  Brain[AGH 大脑：五个设备工具] --> Hub[AgnesHub]
   Panel[设备面板与独立页面] -->|AgnesHub API /ws/hub| Hub
   Hub -->|MHS /ws/mhs| Device[设备]
   Device -->|MOS /ws/nerve| Hub
@@ -95,7 +95,6 @@ AgnesHub 以 `@agnes/mhs` 插件的形式运行在 AGH 中。它是可选的：�
 | `AGNES_HUB_LISTEN` | 运行插件的守护进程 | AgnesHub 监听的 `host:port`，默认 `127.0.0.1:4180`；只写端口时监听回环地址 |
 | `AGNES_HUB_DATA` | 守护进程 | AgnesHub 的数据目录，默认 `AGH_HOME/hub`，其中的 `maps.json` 保存设备声明过的地图 |
 | `AGNES_HUB_ORIGIN` | Web 服务 | AgnesHub 的 `http` 或 `https` origin，会加入工作台的内容安全策略 |
-| `AGNES_HUB_WAKE_ON_ALERT` | 守护进程 | 设为 `on` 时，设备字段越过 `bad` 告警线会唤醒最近使用过设备的会话，每个字段每分钟最多一次；默认关闭 |
 
 守护进程在启动时读取这些变量：请在第一条会启动它的命令之前设置，或者停止守护进程后重新启动。工作台面板连接 `packages/mhs/plugin/client/agnes.client.json` 中的 `hubUrl`，即 `ws://127.0.0.1:4180/ws/hub`；换端口时请修改这里并重新安装。
 
@@ -107,18 +106,17 @@ AgnesHub 以 `@agnes/mhs` 插件的形式运行在 AGH 中。它是可选的：�
 
 ## 大脑能做什么
 
-大脑通过七个工具使用设备。设备自己的工具是 `call_device` 的参数，所以设备上线下线时工具列表保持不变。
+大脑通过五个工具使用设备。设备自己的工具是 `call_device` 的参数，所以设备上线下线时工具列表保持不变。
 
 | 工具 | 作用 |
 | --- | --- |
 | `list_devices` | 列出每台设备：id、名称、类型、是否可用、健康状况、正在做什么、它的工具和数据源 |
 | `read_device` | 读取设备的状态、健康状况和位置，以及所请求数据源的最新数据 |
-| `call_device` | 调用设备工具并最多等待 50 秒；更长的任务结束时会唤醒对话 |
+| `call_device` | 调用设备工具并等它做完 |
 | `set_device` | 修改可写状态 |
 | `stop_device` | 停止一台设备或所有设备 |
-| `watch_device`、`unwatch_device` | 等待某个条件（例如读数越过某个值），条件成立或超时时唤醒对话 |
 
-`read_device` 声明了 `returnsImages`，所以它读到的相机画面会交给模型。每轮开始时，大脑还会收到一份地图与设备的快照。设备工具不请求审批：设备安全不依赖它们（见[设备控制边界](#设备控制边界)）。快照和唤醒的细节见 [AgnesHub API](../../packages/mhs/server/hub-api.md#15-the-brain)。
+`read_device` 声明了 `returnsImages`，所以它读到的相机画面会交给模型。每轮开始时，大脑还会收到一份地图与设备的快照。设备工具不请求审批：设备安全不依赖它们（见[设备控制边界](#设备控制边界)）。大脑不会被自动唤醒：某一步需要等待时（例如等作物成熟），大脑结束这一轮，由用户在合适的时候告诉它——在 Agnes 里说，或者点设备页面上的按钮，把用户的话发进对话（`hub/prompt`）。快照和页面消息的细节见 [AgnesHub API](../../packages/mhs/server/hub-api.md#15-the-brain)。
 
 ## 地图、地点与固定设备
 

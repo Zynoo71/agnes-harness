@@ -1,5 +1,5 @@
 /**
- * Wakes a conversation from background code (hub-api.md section 15.3). Plugins have no in-process way
+ * Posts a person's prompt into a conversation from background code (hub-api.md section 15.3). Plugins have no in-process way
  * to post into a session, so this speaks to the Agnes daemon's local socket: newline-delimited
  * JSON-RPC, `initialize`, then `_agnes/v1/jobs.enqueue` with a one-shot prompt that steers a running
  * turn or starts a new one when the session is idle.
@@ -70,11 +70,11 @@ function rpc(path: string, requests: { method: string; params: unknown }[]): Pro
   })
 }
 
-let wakes = 0
+let posts = 0
 
-/** Posts `text` into the session: steered into a running turn, or a new turn when it is idle. */
-export async function wake(home: string, session: string, text: string): Promise<void> {
-  wakes += 1
+/** Posts a person's `text` into the session: steered into a running turn, or a new turn when it is idle. */
+export async function post(home: string, session: string, text: string): Promise<void> {
+  posts += 1
   await rpc(socketPath(home), [
     {
       method: 'initialize',
@@ -87,11 +87,11 @@ export async function wake(home: string, session: string, text: string): Promise
     {
       method: '_agnes/v1/jobs.enqueue',
       params: {
-        idempotencyKey: `agnes-hub-${process.pid}-${Date.now()}-${wakes}`,
+        idempotencyKey: `agnes-hub-${process.pid}-${Date.now()}-${posts}`,
         sessionKey: session,
         payload: { prompt: text, delivery: 'steer' },
         schedule: { kind: 'once' },
-        // One attempt: a retried wake would write the same message into the conversation again.
+        // One attempt: a retried post would write the same message into the conversation again.
         maxAttempts: 1,
       },
     },

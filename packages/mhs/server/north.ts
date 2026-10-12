@@ -272,11 +272,13 @@ export class North extends EventEmitter {
   private readonly lastManual = new Map<string, number>()
   /** Every map devices declared (MOS 3.5), kept after they go. */
   readonly maps: Maps
+  /** Takes a `hub/brief` (section 15.4): set by the brain. Without a brain, briefs go nowhere. */
+  brief?: (caller: Caller, text: string) => void
   /**
-   * Takes a `hub/brief` (section 15.4): set by the brain; returns whether a conversation is woken.
-   * Without a brain, briefs go nowhere.
+   * Takes a `hub/prompt` (section 15.3): set by the brain; posts a person's words into the
+   * conversation on duty and returns whether there was one.
    */
-  brief?: (caller: Caller, text: string, wake: boolean) => boolean
+  prompt?: (text: string) => boolean
   /**
    * Takes a `hub/dm` (section 15.5): set by the plugin when a decision model is configured; turns
    * it on or off for a conversation and says whether it is ready and on, and which model it is.
@@ -1377,7 +1379,12 @@ export class North extends EventEmitter {
       case 'hub/brief':
         if (typeof params.text !== 'string' || !params.text.trim())
           throw new HubError(-32602, 'text is required')
-        return { woken: this.brief?.(client.caller, params.text.trim(), params.wake === true) ?? false }
+        this.brief?.(client.caller, params.text.trim())
+        return {}
+      case 'hub/prompt':
+        if (typeof params.text !== 'string' || !params.text.trim())
+          throw new HubError(-32602, 'text is required')
+        return { posted: this.prompt?.(params.text.trim()) ?? false }
       default:
         throw new HubError(-32601, `unknown method ${method}`)
     }

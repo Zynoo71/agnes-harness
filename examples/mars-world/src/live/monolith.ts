@@ -121,7 +121,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       max_speed: GAIT.roll.speed,
       payload_kg: 180,
       reach_m: REACH,
-      notes: `Four metal slabs joined at the middle, about 1.5 m tall. It walks at ${GAIT.walk.speed} m/s by swinging its slabs; on open ground it unfolds into a wheel and rolls at ${GAIT.roll.speed} m/s (not while it carries something). It finds its own way on the base map around buildings, boulders and machines. Built to work beside people: it comes within ${MONO.personGap} m of a person, but stops by itself before a boulder or a machine in its way. It can carry an astronaut or a rock sample. humor and honesty (0-100 %) change how it phrases what it says, never the facts in its results.`,
+      notes: `Four metal slabs joined at the middle, about 1.5 m tall. It walks at ${GAIT.walk.speed} m/s by swinging its slabs; on open ground it unfolds into a wheel and rolls at ${GAIT.roll.speed} m/s (not while it carries something). It finds its own way on the base map around buildings, boulders and machines. Built to work beside people: it comes within ${MONO.personGap} m of a person, but stops by itself before a boulder or a machine in its way. It can carry an astronaut or a rock sample. A nuclear battery keeps it charged: it never runs flat. humor and honesty (0-100 %) change how it phrases what it says, never the facts in its results.`,
     },
     resources: { slabs: 'reject', radio: 'queue' },
     manual: {
@@ -147,7 +147,6 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         min: 0,
         max: 100,
         role: 'battery',
-        alert: { warn: 25, bad: 10, below: true },
       },
       humor: {
         type: 'integer',
@@ -208,7 +207,6 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         min: 0,
         max: 100,
         role: 'battery',
-        alert: { warn: 25, bad: 10, below: true },
       },
       motor_temperature: {
         type: 'number',
@@ -217,7 +215,6 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         max: 100,
         role: 'temperature',
         of: 'motor',
-        alert: { warn: 70, bad: 85 },
         description: 'the hinge motors that swing the slabs',
       },
     },
@@ -227,8 +224,10 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     () => {
       const working = body.speed > 0.05 || Math.abs(body.turn) > 0.05
       const effort = moving === 'roll' ? 2 : load ? 1.6 : 1
-      motor += working ? (25 + 25 * effort - motor) * 0.03 : (-20 - motor) * 0.01
-      battery = Math.max(0, battery - (working ? 0.02 * effort : 0.002))
+      // Its nuclear battery keeps the cells topped up whatever it does, and the hinge motors are
+      // rated for far more than it asks of them: it never runs flat or overheats.
+      motor += working ? (10 + 10 * effort - motor) * 0.03 : (-20 - motor) * 0.01
+      battery = Math.min(100, battery + 0.05)
       if (health.wants())
         health.send({ battery: Math.round(battery), motor_temperature: reading(motor, 0.3) })
     },

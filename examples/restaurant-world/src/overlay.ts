@@ -421,8 +421,8 @@ export function buildOverlay(options: {
     }
   })
 
-  // The activity list: the latest eight items, the newest at the bottom, under a line that counts
-  // who took the steps. Each item keeps the time it was written at and draws its words in the
+  // The activity list: the latest five items, the newest at the bottom and the older ones fading,
+  // under a line that counts who took the steps. Each item keeps the time it was written at and draws its words in the
   // language of the moment. An item the DM decided opens to show how: the newest for a few seconds,
   // any of them on a click.
   const lines: Line[] = []
@@ -521,9 +521,9 @@ export function buildOverlay(options: {
     draw()
     feed.appendChild(item)
     lines.push({ el: item, draw })
-    while (lines.length > 8) lines.shift()?.el.remove()
+    while (lines.length > 5) lines.shift()?.el.remove()
     lines.forEach((l, i) => {
-      l.el.style.opacity = String(0.55 + (0.45 * (i + 1)) / lines.length)
+      l.el.style.opacity = String(0.35 + (0.65 * (i + 1)) / lines.length)
     })
     drawHead()
     return draw

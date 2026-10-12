@@ -495,8 +495,9 @@ It takes well under a millisecond and is capped at 6000 bytes, since Agnes share
 | `manual` | a person takes over a job the brain started |
 | `estop` | a device's safety stop ended a job the brain started |
 | `watch` | a watch the brain set matched or timed out |
+| `alert` (`critical`) | with `AGNES_HUB_WAKE_ON_ALERT=on`: a device field passes its `bad` line. Off by default |
 
-- **Where to.** The conversation that started the job or set the watch.
+- **Where to.** The conversation that started the job or set the watch; for an alert, the conversation on duty (section 15.4), with `[AgnesHub] Critical alert. <the alert's text>`. Without a conversation on duty nothing is woken, and one device field wakes it at most once a minute, so a reading that hovers at its line does not keep waking it.
 - **How.** Through the Agnes daemon's local socket: a one-shot job (`_agnes/v1/jobs.enqueue`, delivery `steer`) that is steered into the turn when the brain is running, or starts a new turn when it is idle. Plugins have no in-process way to post into a session.
 - **No approval prompts.** The device tools ask for no approval and do not mark their results as open-world, which would bring approval back for the rest of the turn.
 - **Pictures.** `read_device` declares `returnsImages` in its tool metadata. Agnes sends a tool's pictures to the model only when the tool declares this and its result is closed-world, as every device tool's is.

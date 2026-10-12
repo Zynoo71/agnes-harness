@@ -105,6 +105,7 @@ AgnesHub runs inside AGH as the `@agnes/mhs` plugin. It is optional: AGH runs wi
 | `AGNES_HUB_LISTEN` | The daemon, which runs the plugin | `host:port` AgnesHub listens on; default `127.0.0.1:4180`. A bare port listens on loopback |
 | `AGNES_HUB_DATA` | The daemon | AgnesHub's data directory; default `AGH_HOME/hub`. It keeps `maps.json`, the maps devices declared |
 | `AGNES_HUB_ORIGIN` | The Web server | AgnesHub's `http` or `https` origin, added to the workbench's content security policy |
+| `AGNES_HUB_WAKE_ON_ALERT` | The daemon | `on`: a device field passing its `bad` alert line wakes the conversation that last used a device, at most once a minute per field; off by default |
 
 The daemon reads its variables when it starts: set them before the first command that starts it, or stop the daemon and start it again. The workbench panel connects to the `hubUrl` in `packages/mhs/plugin/client/agnes.client.json`, `ws://127.0.0.1:4180/ws/hub`; for another port, change it there and install again.
 

@@ -164,6 +164,7 @@ export const hub = {
     const brain = new Brain(north, (session, text) =>
       wake(home, session, text).catch((e: Error) => log(`could not wake ${session}: ${e.message}`)),
     )
+    brain.wakeOnAlert = env.AGNES_HUB_WAKE_ON_ALERT === 'on'
     const disposers = registerBrainTools(agnes, brain)
     const { CLOUDFLARE_ACCOUNT_ID: account, CLOUDFLARE_API_TOKEN: token, TYPESAFE_API_KEY: key } = env
     const model: DecisionModel | undefined =

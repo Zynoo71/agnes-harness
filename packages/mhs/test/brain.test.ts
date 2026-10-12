@@ -200,6 +200,25 @@ describe('brain tools', () => {
     ])
   })
 
+  it('wakes the conversation on duty when a field turns critical, once a minute, only when asked to', async () => {
+    const pause = () => new Promise((resolve) => setTimeout(resolve, 200))
+    brain.onDuty = 'conv-a'
+    dev.update({ battery: 5 })
+    await pause()
+    expect(woken).toEqual([])
+    dev.update({ battery: 80 })
+    brain.wakeOnAlert = true
+    dev.update({ battery: 5 })
+    await until(() => woken.length === 1)
+    expect(woken[0]?.[0]).toBe('conv-a')
+    expect(woken[0]?.[1]).toMatch(/^\[AgnesHub\] Critical alert\. mover-01: .*5 %, past bad 10 %\.$/)
+    // Back and past the line again within the minute: nobody is woken again.
+    dev.update({ battery: 80 })
+    dev.update({ battery: 5 })
+    await pause()
+    expect(woken).toHaveLength(1)
+  })
+
   it('wakes the conversation on duty with a brief, and keeps the others for the snapshot', async () => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/hub`)
     await new Promise((resolve) => ws.once('open', resolve))

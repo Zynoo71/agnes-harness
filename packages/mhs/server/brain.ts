@@ -17,6 +17,8 @@ export const DM: Caller = { name: 'DM', level: 2 }
 export const CALL_WAIT_MS = 50_000
 /** Events for one conversation within this window are delivered as one message (section 15.3). */
 export const WAKE_MERGE_MS = 1000
+/** A device field that turns critical again within this long wakes no one again (section 15.3). */
+export const ALERT_WAKE_MS = 60_000
 /** The per-turn snapshot is capped at this many UTF-8 bytes; the host shares 8 KB of hook context among all plugins (section 15.2). */
 export const CONTEXT_LIMIT = 6000
 /** The maps and their places take at most this share of it, so devices always fit too. */
@@ -58,6 +60,10 @@ export class Brain {
   private readonly notes: { time: number; text: string }[] = []
   /** The conversation on duty: the last one that used a device tool. */
   onDuty?: string
+  /** Whether a field turning critical wakes the conversation on duty (section 15.3); off by default. */
+  wakeOnAlert = false
+  /** When each device field last woke it, so a reading that hovers at its line wakes it once a minute. */
+  private readonly alerted = new Map<string, number>()
 
   constructor(
     private readonly north: North,
@@ -338,8 +344,12 @@ export class Brain {
     )
   }
 
-  /** Wake-ups for jobs the brain started (section 15.3). */
+  /** Wake-ups for jobs the brain started and for critical alerts (section 15.3). */
   private onEvent(event: HubEvent): void {
+    if (event.type === 'alert') {
+      this.onAlert(event)
+      return
+    }
     const job = typeof event.data.job === 'string' ? event.data.job : undefined
     if (!job) return
     if (event.type === 'job' && event.data.state === 'ended') {
@@ -352,6 +362,16 @@ export class Brain {
     const conversation = this.started.get(job)
     if (conversation && (event.type === 'paused' || event.type === 'manual' || event.type === 'estop'))
       this.wake(conversation, event.text)
+  }
+
+  /** A field turning critical wakes the conversation on duty, when asked to (section 15.3). */
+  private onAlert(event: HubEvent): void {
+    if (!this.wakeOnAlert || !this.onDuty || event.level !== 'critical') return
+    const key = `${event.device}/${String(event.data.source ?? '')}/${String(event.data.field)}`
+    const now = Date.now()
+    if (now - (this.alerted.get(key) ?? -Infinity) < ALERT_WAKE_MS) return
+    this.alerted.set(key, now)
+    this.wake(this.onDuty, `Critical alert. ${event.text}`)
   }
 
   /** Queues a wake-up; everything for one conversation within 1 s goes as one message. */

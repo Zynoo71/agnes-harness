@@ -95,6 +95,7 @@ AgnesHub 以 `@agnes/mhs` 插件的形式运行在 AGH 中。它是可选的：�
 | `AGNES_HUB_LISTEN` | 运行插件的守护进程 | AgnesHub 监听的 `host:port`，默认 `127.0.0.1:4180`；只写端口时监听回环地址 |
 | `AGNES_HUB_DATA` | 守护进程 | AgnesHub 的数据目录，默认 `AGH_HOME/hub`，其中的 `maps.json` 保存设备声明过的地图 |
 | `AGNES_HUB_ORIGIN` | Web 服务 | AgnesHub 的 `http` 或 `https` origin，会加入工作台的内容安全策略 |
+| `AGNES_HUB_WAKE_ON_ALERT` | 守护进程 | 设为 `on` 时，设备字段越过 `bad` 告警线会唤醒最近使用过设备的会话，每个字段每分钟最多一次；默认关闭 |
 
 守护进程在启动时读取这些变量：请在第一条会启动它的命令之前设置，或者停止守护进程后重新启动。工作台面板连接 `packages/mhs/plugin/client/agnes.client.json` 中的 `hubUrl`，即 `ws://127.0.0.1:4180/ws/hub`；换端口时请修改这里并重新安装。
 

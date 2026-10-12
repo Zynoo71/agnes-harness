@@ -57,6 +57,7 @@ uv run python -m agnes_mhs.validate ../session.robot-01.jsonl   # a session reco
 | `AGNES_HUB_LISTEN` | the daemon, which runs the plugin | `host:port` AgnesHub listens on, default `127.0.0.1:4180`; a bare port listens on loopback. A network address is for a trusted network only ([hub API section 16](server/hub-api.md#16-security)) |
 | `AGNES_HUB_DATA` | the daemon | AgnesHub's data directory, default `<AGH_HOME>/hub` (`~/.agh/hub`); it keeps `maps.json`, the maps devices declared |
 | `AGNES_HUB_ORIGIN` | the web server | AgnesHub's `http(s)` origin, added to the workbench's content security policy |
+| `AGNES_HUB_WAKE_ON_ALERT` | the daemon | `on`: a device field passing its `bad` alert line wakes the conversation on duty, at most once a minute per field ([hub API section 15.3](server/hub-api.md#153-waking-the-brain)); off by default |
 
 The daemon reads its variables when it starts, so set them before the first `agnes` command, or stop the daemon and start it again. The workbench panel connects to the `hubUrl` in `plugin/client/agnes.client.json`, `ws://127.0.0.1:4180/ws/hub`; with another port, change it there and reinstall.
 

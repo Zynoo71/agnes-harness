@@ -28,6 +28,8 @@ export interface Line {
   note: string
   rush: boolean
   stage: Stage
+  /** What is wrong with the dish, once the guest finds it (something in it). */
+  problem?: string | undefined
   /** The bowl of prepped ingredients in the scene, from prep until cooking starts. */
   prepObject?: THREE.Object3D | undefined
   /** The dish in the scene, from the moment cooking starts. */

@@ -20,6 +20,7 @@ const TEXT = {
     left: 'Guest has left',
     table: (id: string) => `Table ${id.slice(1)}`,
     kitchen: (cooking: number, waiting: number) => `Kitchen · ${cooking} cooking · ${waiting} waiting`,
+    problem: 'a hair in it',
     kitchenIdle: 'Kitchen · idle',
     evening: 'evening',
     room: (lights: string, music: string, c: number) => `${lights} · ${music} · ${c.toFixed(1)} °C`,
@@ -82,7 +83,7 @@ const TEXT = {
     off: (p: number, why: string) => `${p}% off${why ? ` · ${why}` : ''}`,
     scan: 'Scan to pay',
     paid: (how: string) => `Paid · ${how}`,
-    methods: { qr: 'QR code', card: 'card', cash: 'cash' } as Record<string, string>,
+    methods: { qr: 'QR code', card: 'card', cash: 'cash', free: 'on the house' } as Record<string, string>,
     thanks: 'Thank you — see you again!',
     helpBody: `
 <h2>Agnes Restaurant</h2>
@@ -114,6 +115,7 @@ const TEXT = {
     left: '客人已离开',
     table: (id: string) => `${id.slice(1)} 号桌`,
     kitchen: (cooking: number, waiting: number) => `后厨 · ${cooking} 道在做 · ${waiting} 道排队`,
+    problem: '有头发',
     kitchenIdle: '后厨 · 空闲',
     evening: '傍晚',
     room: (lights: string, music: string, c: number) => `${lights} · ${music} · ${c.toFixed(1)} °C`,
@@ -195,7 +197,7 @@ const TEXT = {
     off: (p: number, why: string) => `${10 - p / 10} 折${why ? ` · ${why}` : ''}`,
     scan: '扫码付款',
     paid: (how: string) => `已付款 · ${how}`,
-    methods: { qr: '扫码', card: '刷卡', cash: '现金' } as Record<string, string>,
+    methods: { qr: '扫码', card: '刷卡', cash: '现金', free: '免单' } as Record<string, string>,
     thanks: '谢谢光临，欢迎再来！',
     helpBody: `
 <h2>Agnes 餐厅</h2>
@@ -709,6 +711,7 @@ export function buildOverlay(options: {
       const nameCell = span('name', el('i', 'id', l.id), l.dish[lang])
       if (l.note) nameCell.append(el('small', '', l.note))
       if (l.rush) nameCell.append(el('small', 'rush', '⚡'))
+      if (l.problem) nameCell.append(el('small', 'problem', t().problem))
       row.append(nameCell, el('span', `stage ${l.stage}`, stageWord(l)))
       parts.push(row)
     }

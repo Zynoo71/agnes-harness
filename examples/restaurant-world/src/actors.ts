@@ -452,6 +452,14 @@ function prep(): Prep {
   return { object, arms, tray, busy: false }
 }
 
+/** A dark hair curled on top of a dish. */
+export function hairOnDish(): THREE.Mesh {
+  const strand = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.004, 4, 24, Math.PI * 1.4), M.hair)
+  strand.rotation.x = -Math.PI / 2
+  strand.position.y = 0.075
+  return strand
+}
+
 /** A steel bowl of washed, cut ingredients, in the dish's colour among greens. */
 export function prepped(color = 0xc4622d): THREE.Group {
   const g = new THREE.Group()

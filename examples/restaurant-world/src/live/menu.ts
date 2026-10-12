@@ -1,4 +1,5 @@
 import { CallError } from '@agnes/mhs/device'
+import { hairOnDish } from '../actors.js'
 import { dishById, MENU, menuLine, STATION_DEVICE } from '../menu.js'
 import type { Line, Stage } from './service.js'
 import { type World, WorldDevice } from './world.js'
@@ -196,6 +197,18 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
       return `${l.id} ${l.dish.en} hurried; it is ${stageText(l)}`
     },
   )
+  world.conditions.push({
+    device: dev.id,
+    en: 'A hair in the guest’s latest dish',
+    zh: '客人刚上的菜里有根头发',
+    apply: () => {
+      const l = service.lines.findLast((x) => x.stage === 'served' && x.dish.station !== 'bar' && !x.problem)
+      if (!l) return
+      l.problem = 'a hair in it'
+      l.object?.add(hairOnDish())
+      service.changed()
+    },
+  })
   world.conditions.push({
     device: dev.id,
     en: 'Sea bass sold out',

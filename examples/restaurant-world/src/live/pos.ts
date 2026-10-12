@@ -54,10 +54,10 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'bill',
       description:
-        "Make the bill for the guest's table and show it on their screen with a QR code to pay, once the guest asks for it, with how they said they pay. Decide the discount here (a birthday, a wait that was too long): the guest sees its reason. Billing again before payment replaces both.",
+        "Make the bill for the guest's table and show it on their screen with a QR code to pay, once the guest asks for it, with how they said they pay. Decide the discount here: up to 50 % as a courtesy (a birthday, a wait that was too long), and more, up to 100 % (on the house), only for a dish that had a problem, such as something in it; the guest sees the reason. Billing again before payment replaces both.",
       timeout: 10,
       params: {
-        percent: { type: 'integer', minimum: 0, maximum: 50, description: 'percentage off, 0 for none' },
+        percent: { type: 'integer', minimum: 0, maximum: 100, description: 'percentage off, 0 for none' },
         reason: { type: 'string', maxLength: 40, description: 'why, as the guest sees it' },
         method: {
           type: 'string',
@@ -74,6 +74,11 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
       if (!service.table || service.guest === 'left')
         throw new CallError('x_no_guest', 'the guest has no table')
       if (!service.billed().length) throw new CallError('x_nothing_ordered', 'nothing was ordered')
+      if (Number(percent ?? 0) > 50 && !service.lines.some((l) => l.problem && l.stage !== 'cancelled'))
+        throw new CallError(
+          'x_comp_needs_problem',
+          'more than 50 % off only when a dish had a problem; no dish of this table had one',
+        )
       await wait(call, 1000)
       if (service.bill !== 'paid') {
         service.discount = Number(percent ?? 0)
@@ -104,6 +109,12 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
     async (call) => {
       if (service.bill === 'paid') return `already paid, ¥${service.total()}`
       if (service.bill !== 'billed') throw new CallError('x_not_billed', 'show the bill first (bill)')
+      if (service.total() === 0) {
+        service.bill = 'paid'
+        service.paidWith = 'free'
+        service.changed()
+        return 'on the house: nothing to pay'
+      }
       const how = service.payWith
       for (let k = 1; k <= 8; k++) {
         await wait(call, 500)

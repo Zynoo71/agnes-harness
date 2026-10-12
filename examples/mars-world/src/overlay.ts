@@ -1,5 +1,6 @@
 import type { MarsClock } from './clock.js'
 import type { Decision } from './dm/watch.js'
+import { progressLabel, toolLabel, valueLabel } from './labels.js'
 import type { Director } from './live/director.js'
 import { CATALOG, type EventKind, type Happening } from './live/events.js'
 import { type Activity, type Alert, type Mail, type World, type WorldDevice, watchers } from './live/world.js'
@@ -49,10 +50,11 @@ const TEXT = {
     dmChose: (n: number, s: string) => `chose among ${n} actions in ${s} s`,
     dmConfidence: 'Sure',
     dmModelConfidence: (n: number, model: string) => `${model} confidence ${n}%`,
-    dmAskLlm: 'hand it to the LLM',
+    dmAskLlm: 'Let the LLM decide',
     dmUnsure: (n: number) => `unsure ${n}%`,
     dmHands: 'hands it over',
     dmEarlier: 'Earlier',
+    dmWaited: (s: string, what: string) => `waited ${s} s, ${what} did not happen`,
     nowBtn: 'Start one now',
     startBtn: 'Start',
     endBtn: 'End',
@@ -154,17 +156,18 @@ const TEXT = {
     dmTitle: 'DM · 决策模型',
     dmOutcome: {
       did: '已执行',
-      llm: '这一步交给 LLM',
-      error: '没能决定，这一步交给 LLM',
+      llm: 'LLM 接手这一步',
+      error: '没能决定，LLM 接手这一步',
     } as Record<string, string>,
     dmSaw: '发生了什么',
     dmChose: (n: number, s: string) => `${s} 秒内从 ${n} 个动作里选出`,
     dmConfidence: '把握',
     dmModelConfidence: (n: number, model: string) => `${model} 置信度 ${n}%`,
-    dmAskLlm: '交给 LLM',
+    dmAskLlm: '让 LLM 来判断',
     dmUnsure: (n: number) => `没把握 ${n}%`,
     dmHands: '转交',
     dmEarlier: '之前',
+    dmWaited: (s: string, what: string) => `等了 ${s} 秒，没等到 ${what}`,
     nowBtn: '马上来一个',
     startBtn: '触发',
     endBtn: '结束',
@@ -206,6 +209,7 @@ const TEXT = {
       'suit-01': '宇航服',
       'rover-01': '火星车',
       'hopper-01': '飞行器',
+      'monolith-01': 'Monolith',
       'lab-01': '实验室',
       'power-01': '电力',
       'weather-01': '气象站',
@@ -296,6 +300,17 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text 
   if (text) e.textContent = text
   return e
 }
+/** A span holding other nodes. */
+const span = (className: string, ...children: (Node | string)[]) => {
+  const e = el('span', className)
+  e.append(...children)
+  return e
+}
+/** The first sentence of a text, at most 90 characters. */
+const clipped = (text: string) => {
+  const first = text.split(/\. /)[0] ?? text
+  return first.length > 90 ? `${first.slice(0, 90)}…` : first
+}
 
 interface Tag {
   el: HTMLElement
@@ -368,6 +383,13 @@ export function buildOverlay(options: {
   }
   const name = (id: string, fallback = id) => t().names[id] ?? fallback
   const fieldName = (field: string) => t().fields[field] ?? field.replaceAll('_', ' ')
+  const value = (v: string) => valueLabel(lang, v, (id) => name(id))
+  /** A tool's name for people, its id on hover. */
+  const tool = (id: string) => {
+    const e = el('span', 'tool', toolLabel(lang, id))
+    e.title = id
+    return e
+  }
 
   const brand = document.getElementById('brand') as HTMLElement
   const bar = document.getElementById('bar') as HTMLElement
@@ -445,7 +467,7 @@ export function buildOverlay(options: {
         ? `✓ ${t().done} · ${Math.round(((a.ended ?? 0) - a.started) / 1000)} s`
         : `✗ ${statusWord(a)} · ${a.reason}${a.status === 'rejected' ? `: ${a.detail}` : ''}`
       : a.progress?.text
-        ? `… ${a.progress.text}`
+        ? `… ${progressLabel(lang, a.progress.text)}`
         : '…'
   const callLine = (a: Activity) => {
     const draw = push(
@@ -454,7 +476,7 @@ export function buildOverlay(options: {
         const d = a.caller === 'DM' ? dmBehind(a) : undefined
         return [
           el('b', 'dev', name(a.device)),
-          el('span', 'tool', a.tool),
+          tool(a.tool),
           ...(a.caller ? [chip(a.caller, d ? `${Math.round(d.sure * 100)}%` : '')] : []),
           el('span', 'state', callText(a)),
         ]
@@ -463,6 +485,8 @@ export function buildOverlay(options: {
     return draw
   }
   const lineFor = new Map<Activity, () => void>()
+  /** Each device's last ended call, to tell what a result the DM saw was about. */
+  const lastEnded = new Map<string, Activity>()
 
   // Banners along the top: severe events and alarms stay while they last, the rest a few seconds.
   const banner = (
@@ -498,12 +522,13 @@ export function buildOverlay(options: {
       else lineFor.set(a, callLine(a))
       if (a.status) {
         lineFor.delete(a)
+        lastEnded.set(a.device, a)
         if (a.status === 'error' || a.status === 'rejected')
           banner(
             `fail-${a.device}`,
             'bad',
             () =>
-              `${name(a.device)} ${a.tool}: ${statusWord(a)} · ${a.reason} — ${(a.detail ?? '').slice(0, 90)}`,
+              `${name(a.device)} ${toolLabel(lang, a.tool)}: ${statusWord(a)} · ${a.reason} — ${(a.detail ?? '').slice(0, 90)}`,
           )
       }
     })
@@ -797,14 +822,62 @@ export function buildOverlay(options: {
     )
     push(
       () => 'hand',
-      () => [el('span', 'trigger', d.trigger[0] ?? ''), state],
+      () => [span('trigger', triggerParts(d.trigger[0] ?? '')), state],
     )
   }
-  const optionName = (option: string) => (option === 'ask_llm' ? t().dmAskLlm : option)
+  /** An option as people read it: device, tool and values; asking the LLM looks like the LLM's. */
+  const optionName = (option: string): HTMLElement => {
+    if (option === 'ask_llm') {
+      const e = el('span', 'ask')
+      e.innerHTML = BUBBLE
+      e.append(t().dmAskLlm)
+      return e
+    }
+    const [device = '', verb = '', ...args] = option.split(' ')
+    const pairs = args
+      .join(' ')
+      .split(/ (?=\w+=)/)
+      .filter(Boolean)
+    const values = pairs.map((p) => p.split('='))
+    const text =
+      verb === 'set'
+        ? `${name(device)} ${values.map(([k = '', v = '']) => `${fieldName(k)} → ${value(v)}`).join(', ')}`
+        : `${name(device)} ${toolLabel(lang, verb)}${values.length ? ` · ${values.map(([, v = '']) => value(v)).join(', ')}` : ''}`
+    const e = el('span', '', text)
+    e.title = option
+    return e
+  }
+  /** One line of what the DM saw, short: the device, then what its call or watch came to. */
+  const triggerParts = (line: string): HTMLElement => {
+    const e = el('span', 'said')
+    e.title = line
+    const m = line.match(/^([\w-]+): (.*)$/s)
+    if (!m) {
+      e.textContent = clipped(line)
+      return e
+    }
+    const [, device = '', rest = ''] = m
+    const took = rest.match(/Took (\d+) s\./)
+    const a = lastEnded.get(device)
+    const changed = rest.match(/^(\w+) changed from (\S+) to (\S+)/)
+    const waited = rest.match(/^waited (\d+) s and (.+?) did not happen/)
+    const what = (w: string) =>
+      w.replace(/(\w+) = (\S+)/g, (_, k: string, v: string) => `${fieldName(k)} = ${value(v)}`)
+    const text =
+      took && a
+        ? `${toolLabel(lang, a.tool)} ${a.status === 'done' ? `✓ ${t().done}` : `✗ ${statusWord(a)}`} · ${took[1]} s`
+        : changed
+          ? `${fieldName(changed[1] ?? '')} ${value(changed[2] ?? '')} → ${value(changed[3] ?? '')}`
+          : waited
+            ? t().dmWaited(waited[1] ?? '', what(waited[2] ?? ''))
+            : clipped(rest)
+    e.append(el('b', 'dev', name(device)), ` ${text}`)
+    return e
+  }
   const dmCard = (d: Decision) => {
     const card = el('div', `card ${d.outcome}`)
     card.append(el('div', 'label', t().dmSaw))
-    for (const line of d.trigger) card.append(el('div', 'trigger', line))
+    for (const line of d.trigger) card.append(span('trigger', triggerParts(line)))
     if (d.outcome !== 'error')
       card.append(el('div', 'status', t().dmChose(d.options, (d.ms / 1000).toFixed(1))))
     // How sure it is of its choice: the chosen action's probability, with the model's own confidence
@@ -827,7 +900,7 @@ export function buildOverlay(options: {
       fill.style.width = `${Math.max(1, Math.round(p * 100))}%`
       row.append(
         el('span', 'mark', i === 0 ? '✓' : ''),
-        el('span', 'name', optionName(option)),
+        span('name', optionName(option)),
         el('b', '', `${Math.round(p * 100)}%`),
         fill,
       )
@@ -855,8 +928,8 @@ export function buildOverlay(options: {
       const [choice, p] = d.top[0] ?? ['', 0]
       const row = el('div', `past ${d.outcome}`)
       row.append(
-        el('span', 'trigger', d.trigger.join(' · ')),
-        el('span', 'choice', `${optionName(choice)} ${Math.round(p * 100)}%`),
+        span('trigger', triggerParts(d.trigger[0] ?? '')),
+        span('choice', optionName(choice), ` ${Math.round(p * 100)}%`),
       )
       parts.push(row)
     }
@@ -919,7 +992,8 @@ export function buildOverlay(options: {
       const a = dev?.current
       tag.act.hidden = !a
       if (a) {
-        tag.tool.textContent = a.tool
+        tag.tool.textContent = toolLabel(lang, a.tool)
+        tag.tool.title = a.tool
         if (tag.caller !== a.caller) {
           tag.caller = a.caller
           tag.who.replaceChildren(...(a.caller ? [chip(a.caller)] : []))

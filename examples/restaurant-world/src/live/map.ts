@@ -19,7 +19,7 @@ export interface GridMap {
 }
 
 /** The area the floor map covers, in the map frame: the restaurant with a margin round its walls. */
-export const MAP_AREA = { x0: -1, x1: 25, y0: -1, y1: 17 } as const
+export const MAP_AREA = { x0: -1, x1: 15, y0: -1, y1: 11 } as const
 
 /** The floor map's id, as poses and placements name it. */
 export const MAP_ID = 'restaurant'

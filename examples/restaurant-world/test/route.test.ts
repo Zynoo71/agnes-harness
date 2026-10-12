@@ -3,7 +3,7 @@ import { MAP_AREA, occupancy } from '../src/live/map.js'
 import { fromMap, planNear, planPath, toMap, yawOf } from '../src/live/route.js'
 
 /** A table of 1.2 × 0.8 m in the middle of an empty room. */
-const TABLE = { x: 12, z: -8, w: 1.2, d: 0.8 }
+const TABLE = { x: 7, z: -5, w: 1.2, d: 0.8 }
 
 describe('floor map', () => {
   it('covers the room at 10 cm a cell, the table occupied', () => {
@@ -14,8 +14,8 @@ describe('floor map', () => {
     // Rows run from the top (largest y) down.
     const cell = (x: number, y: number) =>
       grid.cells[Math.floor((MAP_AREA.y1 - y) * 10) * grid.w + Math.floor((x - MAP_AREA.x0) * 10)]
-    expect(cell(12, 8)).toBe(0)
-    expect(cell(5, 5)).toBe(255)
+    expect(cell(7, 5)).toBe(0)
+    expect(cell(3, 3)).toBe(255)
   })
 
   it('maps world points to the map frame and back', () => {
@@ -30,19 +30,19 @@ describe('paths', () => {
   const grid = occupancy([TABLE])
 
   it('go round a table', () => {
-    const from = { x: 9, z: -8 }
-    const to = { x: 15, z: -8 }
+    const from = { x: 4, z: -5 }
+    const to = { x: 10, z: -5 }
     const path = planPath(grid, from, to, [], 0.3)
     expect(path).toBeDefined()
     expect(path?.at(-1)).toEqual(to)
     // Some leg leaves the straight line, which runs through the table.
-    expect(path?.some((p) => Math.abs(p.z + 8) > 0.5)).toBe(true)
+    expect(path?.some((p) => Math.abs(p.z + 5) > 0.5)).toBe(true)
   })
 
   it('end beside a point that is under the table', () => {
-    const near = planNear(grid, { x: 9, z: -8 }, { x: 12, z: -8 }, [], 0.3)
+    const near = planNear(grid, { x: 4, z: -5 }, { x: 7, z: -5 }, [], 0.3)
     expect(near).toBeDefined()
     const end = near?.end as { x: number; z: number }
-    expect(Math.hypot(end.x - 12, end.z + 8)).toBeGreaterThan(0.4)
+    expect(Math.hypot(end.x - 7, end.z + 5)).toBeGreaterThan(0.4)
   })
 })

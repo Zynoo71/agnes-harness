@@ -466,6 +466,9 @@ function drawPip() {
   renderer.setViewport(0, 0, innerWidth, innerHeight)
 }
 if (live) {
+  // Until a device starts a call, the base camera.
+  const base = deviceCameras.get('cam-base')
+  if (base) pipTo(base, () => overlay.deviceName('cam-base'))
   watchers.activity.push((a) => {
     if (a.progress !== undefined || a.status) return
     const own = deviceCameras.get(a.device)

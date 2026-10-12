@@ -1309,7 +1309,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         })
         const said = speak(flavour(voice(LINES.harvested)))
         return {
-          detail: `harvested ${world.crate.kg} kg of ${crop}es from the ${bed} bed into a crate and came back out, at ${where()}, holding it; the bed is empty. To take it in: at the airlock with its outer door open, put_down, then airlock-01 close_outer and cycle_in. Said: "${said}"`,
+          detail: `harvested ${world.crate.kg} kg of ${crop}es from the ${bed} bed into a crate and came back out, at ${where()}, holding it; the bed is empty. To take it in, in this order: go_to the airlock; airlock-01 cycle_out (skip it when its pressure is already near 0 kPa), then open_outer; put_down; then airlock-01 close_outer and cycle_in. Said: "${said}"`,
           data: { bed, crop, kg: world.crate.kg, said },
         }
       }),

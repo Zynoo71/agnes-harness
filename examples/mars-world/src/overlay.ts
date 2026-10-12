@@ -601,6 +601,8 @@ export function buildOverlay(options: {
 
   // Banners along the top: severe events and alarms stay while they last, the rest a few seconds.
   // With `ask`, a button tells Agnes about it in the person's words: nothing wakes Agnes by itself.
+  // Such a banner stays until what it tells of is over, or else until the person presses its button
+  // or closes it.
   const banner = (
     key: string,
     level: 'info' | 'warn' | 'bad' | 'dm',
@@ -618,17 +620,21 @@ export function buildOverlay(options: {
     b.append(label, left)
     const say = options.say
     let button: HTMLButtonElement | undefined
-    let told = false
+    let toldAt: number | undefined
     if (ask && say) {
       const btn = el('button', 'ask')
       btn.type = 'button'
       btn.addEventListener('click', async () => {
         btn.disabled = true
-        told = await say(ask.prompt())
+        const told = await say(ask.prompt())
         btn.textContent = told ? t().asked : t().noChat
-        if (!told) setTimeout(() => (btn.disabled = false), 3000)
+        if (told) toldAt = performance.now()
+        else setTimeout(() => (btn.disabled = false), 3000)
       })
-      b.append(btn)
+      const close = el('button', 'dismiss', '×')
+      close.type = 'button'
+      close.addEventListener('click', () => b.remove())
+      b.append(btn, close)
       button = btn
     }
     banners.appendChild(b)
@@ -636,8 +642,12 @@ export function buildOverlay(options: {
     const refresh = () => {
       label.textContent = text()
       if (button && !button.disabled && ask) button.textContent = ask.label()
-      // A banner with a button stays longer, so there is time to press it.
-      const over = until ? until() : performance.now() - started > (button && !told ? 20000 : 8000)
+      const now = performance.now()
+      const over = until
+        ? until()
+        : button
+          ? toldAt !== undefined && now - toldAt > 4000
+          : now - started > 8000
       if (over) b.remove()
     }
     refresh()

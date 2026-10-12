@@ -15,7 +15,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js'
 import type { Actors } from '../actors.js'
 import { type Footprint, type GridMap, MAP_ID, occupancy } from './map.js'
 import { grayPng } from './png.js'
-import { type Circle, headingTo, type Point, round, toMap, yawOf } from './route.js'
+import { type Circle, headingTo, type Point, round, toMap, toSegment, yawOf } from './route.js'
 import { Service } from './service.js'
 
 /** A camera's render targets and the buffers its pictures are read back into. */
@@ -546,31 +546,39 @@ export class Body {
   }
 
   /**
-   * Turns toward `to` and goes there at up to `speed` m/s, frame by frame, until within `arrive`
-   * metres: speeding up and slowing down at `accel` m/s², so it starts and arrives smoothly.
-   * `blocked` may end the trip early with a sentence; `step` hears each frame. Interrupts (cancel,
-   * stop, pause) take effect at the next frame.
+   * Drives through `points` in one smooth run, like a two-wheeled robot steering along a path: it
+   * heads for a point a little way ahead on the path, slows for corners instead of stopping at
+   * them, turns on the spot only for a sharp one, and brakes to arrive at the last point. Speeds up
+   * and slows down at `accel` m/s²; `step` hears each frame. Interrupts (cancel, stop, pause) take
+   * effect at the next frame.
    */
-  async go(
+  async follow(
     call: Call,
-    to: Point,
+    points: Point[],
     options: {
       speed: number
       accel?: number
       turnRate?: number
       arrive?: number
-      height?: (p: Point) => number
-      /** Why the way ahead is not clear; `remaining` is how far the point it drives to still is. */
-      blocked?: (remaining: number) => string | undefined
+      /** How far ahead on the path it steers for, in metres. */
+      lookahead?: number
       step?: () => void
     },
   ): Promise<void> {
     const turnRate = options.turnRate ?? Math.PI / 4
     const accel = options.accel ?? 1
     const arrive = options.arrive ?? 0.15
+    const lookahead = options.lookahead ?? 0.45
+    // Points closer than a centimetre to the one before add nothing but a zero-length segment.
+    const path = [this.at, ...points].filter(
+      (p, k, all) => k === 0 || Math.hypot(p.x - (all[k - 1] as Point).x, p.z - (all[k - 1] as Point).z) > 0.01,
+    )
+    const end = path[path.length - 1] as Point
+    /** The segment the body is on: it moves forward along the path, never back. */
+    let seg = 0
     let v = 0
-    const height = options.height ?? ((p: Point) => this.world.ground(p) + this.lift)
     let last = performance.now()
+    const length = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.z - a.z)
     try {
       for (;;) {
         await call.checkpoint(() => {
@@ -580,25 +588,46 @@ export class Body {
         const now = performance.now()
         const dt = Math.min(0.1, (now - last) / 1000)
         last = now
-        const distance = Math.hypot(to.x - this.at.x, to.z - this.at.z)
-        if (distance <= arrive) break
-        const want = headingTo(this.at, to)
-        let delta = want - this.heading
+        if (length(this.at, end) <= arrive) break
+        // Where on the path it is, then the point `lookahead` further on, and what is left to go.
+        if (path.length < 2) break
+        let on = toSegment(path[seg] as Point, path[seg + 1] as Point, this.at)
+        while (seg < path.length - 2) {
+          const next = toSegment(path[seg + 1] as Point, path[seg + 2] as Point, this.at)
+          if (on.t < 1 && next.d > on.d) break
+          seg += 1
+          on = next
+        }
+        let target = on.p
+        let ahead = lookahead
+        let left = length(on.p, path[seg + 1] as Point)
+        for (let k = seg; k < path.length - 1; k++) {
+          const from = k === seg ? on.p : (path[k] as Point)
+          const to = path[k + 1] as Point
+          const d = length(from, to)
+          if (k > seg) left += d
+          if (ahead > 0) {
+            const f = Math.min(1, ahead / Math.max(d, 1e-6))
+            target = { x: from.x + (to.x - from.x) * f, z: from.z + (to.z - from.z) * f }
+            ahead -= d
+          }
+        }
+        if (length(this.at, end) < lookahead) target = end
+        const remaining = Math.max(left, length(this.at, end))
+        let delta = headingTo(this.at, target) - this.heading
         delta = Math.atan2(Math.sin(delta), Math.cos(delta))
-        // Only what lies ahead while driving counts: turning in place away from a boulder is fine.
-        const why = Math.abs(delta) < 0.35 ? options.blocked?.(distance) : undefined
-        if (why) throw new Blocked(why)
         const turn = Math.sign(delta) * Math.min(Math.abs(delta), turnRate * dt)
         this.object.rotation.y += turn
         this.turn = turn / Math.max(dt, 1e-3)
-        // Drive only once roughly facing the goal, like a two-wheeled robot; brake to arrive.
-        const facing = Math.abs(delta) < 0.35
-        v = facing ? Math.min(options.speed, v + accel * dt, Math.sqrt(2 * accel * distance) + 0.1) : 0
-        const forward = Math.min(distance, v * dt)
+        // Full speed on the straight, slower round a bend, on the spot for a sharp turn; brake to arrive.
+        const bend = Math.abs(delta) > 1.1 ? 0 : 0.35 + 0.65 * Math.cos(delta)
+        const want = Math.min(options.speed * bend, Math.sqrt(2 * accel * remaining) + 0.1)
+        v = v < want ? Math.min(want, v + accel * dt) : Math.max(want, v - 2 * accel * dt)
+        const forward = Math.min(length(this.at, end), v * dt)
         this.speed = forward / Math.max(dt, 1e-3)
         this.object.position.x += Math.sin(this.heading) * forward
         this.object.position.z += Math.cos(this.heading) * forward
-        this.object.position.y = height(this.at)
+        this.object.position.y = this.world.ground(this.at) + this.lift
         this.odometer += forward
         options.step?.()
         await frame(call)
@@ -627,8 +656,6 @@ export class Body {
   }
 }
 
-/** Thrown by Body.go when `blocked` says the way is not clear. */
-export class Blocked extends Error {}
 
 /** Eases `object`'s rotation toward `target` (radians per axis) over `ms`, interruptibly. */
 export async function turnTo(

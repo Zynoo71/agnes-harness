@@ -144,14 +144,13 @@ export class Robot {
         'unreachable',
         `no way from ${this.where()} to (${round(to.x, 1)}, ${round(to.y, 1)})`,
       )
-    for (const p of plan.path)
-      await this.body.go(call, p, {
-        speed: this.options.speed,
-        accel: 1.6,
-        turnRate: Math.PI,
-        arrive: 0.06,
-        ...(step ? { step } : {}),
-      })
+    await this.body.follow(call, plan.path, {
+      speed: this.options.speed,
+      accel: 1.6,
+      turnRate: Math.PI,
+      arrive: 0.06,
+      ...(step ? { step } : {}),
+    })
     if (to.yaw !== undefined) await face(call, this.body, to.yaw)
   }
 
@@ -205,14 +204,18 @@ export async function walk(
   speed = WALK,
 ): Promise<void> {
   try {
-    for (const p of points)
-      await body.go(call, fromMap(p.x, p.y), {
+    await body.follow(
+      call,
+      points.map((p) => fromMap(p.x, p.y)),
+      {
         speed,
         accel: 1.5,
         turnRate: Math.PI * 1.5,
         arrive: 0.05,
+        lookahead: 0.35,
         step: () => pose.walk((body.odometer / STRIDE) * Math.PI),
-      })
+      },
+    )
   } finally {
     pose.stand()
   }

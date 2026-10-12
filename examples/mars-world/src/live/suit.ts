@@ -76,6 +76,8 @@ function wander(
   let restUntil = performance.now() + 6000
   let phase = 0
   let last = performance.now()
+  /** When the way was last planned: a fresh way is followed a while before it is checked again. */
+  let planned = 0
   /** Where the vehicles were last frame, to tell which are moving. */
   const seen = new Map<string, Point>()
   const stand = () => {
@@ -114,9 +116,24 @@ function wander(
       const keepouts = world.obstacles(['suit-01']).map((t) => ({ x: t.x, z: t.z, r: t.r + CLEARANCE }))
       const path = planNear(world.planGrid(), body.at, { x, z }, keepouts, CLEARANCE)?.path
       way = path?.length ? [...path] : [{ x, z }]
+      planned = now
     }
     const to = way[0] as Point
     const distance = Math.hypot(to.x - body.at.x, to.z - body.at.z)
+    // A vehicle that has stopped on the way since it was planned: plan again, round it.
+    const k = Math.min(1.2, distance) / Math.max(distance, 1e-6)
+    const probe = { x: body.at.x + (to.x - body.at.x) * k, z: body.at.z + (to.z - body.at.z) * k }
+    const parked = world
+      .things()
+      .some(
+        (t) =>
+          (t.id === 'rover-01' || t.id === 'monolith-01') &&
+          Math.hypot(t.x - probe.x, t.z - probe.z) < t.r + 0.6,
+      )
+    if (parked && distance > 0.5 && now - planned > 2000) {
+      way = undefined
+      return
+    }
     if (distance < 0.05) {
       way.shift()
       if (way.length) return

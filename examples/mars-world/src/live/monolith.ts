@@ -45,11 +45,8 @@ const REACH = 1.2
 const LIFT_S = 1.5
 /** Pushing a boulder aside: the widest it can move, in metres across, how far, and in how many seconds. */
 const PUSH = { across: 2, metres: 3.5, seconds: 3.5 }
-/**
- * Towing: the cable's length in metres, how near a vehicle must be for it to walk up and hitch it,
- * and how near home (the dock, the hopper pad) put_down winches it into place.
- */
-const TOW = { cable: 1.2, within: 8, home: 8 }
+/** Towing: the cable's length in metres, and how near home (the dock, the hopper pad) put_down winches it into place. */
+const TOW = { cable: 1.2, home: 8 }
 /** Where it holds an astronaut: this far in front of its centre and this high off the ground. */
 const HELD = { ahead: 0.72, up: 0.32 }
 /** It counts as at the airlock within this many metres of the outer door, and at the lab of the lab. */
@@ -457,10 +454,31 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   }, log)
 
   /** The way it stops, as an estop result. */
-  const estop = (e: unknown) => {
+  const estop = (e: unknown): never => {
     if (e instanceof Blocked)
       throw new CallError('estop', `${e.message}; now at ${where()}`, { data: { pose: body.pose() } })
     throw e
+  }
+  /**
+   * Plans a way to `to` and travels it. A person stepping into the way is waited for and walked
+   * round, up to three times; anything else in the way ends it as estop. Returns the last way.
+   */
+  const journey = async (call: Call, to: Point, gait: 'walk' | 'roll', except: string[] = []) => {
+    for (let tries = 0; ; tries++) {
+      const way = plan(to, gait, except)
+      let hit: Thing | undefined
+      try {
+        await travel(call, way.path, gait, (remaining) => {
+          hit = hazard(gait, remaining, except)
+          return hit && describe(hit)
+        })
+        return way
+      } catch (e) {
+        if (!(e instanceof Blocked) || hit?.label !== 'astronaut' || tries >= 3) estop(e)
+        call.progress({ text: 'waiting for the astronaut to pass' })
+        await wait(call, 3000)
+      }
+    }
   }
 
   dev.tool(
@@ -500,7 +518,8 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         if (gait === 'roll' && load)
           throw new CallError('x_carrying', `it cannot roll while it carries ${load.id}; walk (gait walk)`)
         const to = fromMap(x, y)
-        const way = plan(to, gait)
+        // Planned once up front, so a way that cannot be found fails before it unfolds.
+        plan(to, gait)
         const start = performance.now()
         const odometer = body.odometer
         if (gait === 'roll') {
@@ -508,10 +527,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
           call.progress({ text: 'unfolding into a wheel' })
           await wait(call, UNFOLD_S * 1000 + 100)
         }
-        await travel(call, way.path, gait, (remaining) => {
-          const hit = hazard(gait, remaining)
-          return hit ? describe(hit) : undefined
-        }).catch(estop)
+        const way = await journey(call, to, gait)
         if (gait === 'roll') {
           call.progress({ text: 'folding up' })
           await fold(call)
@@ -818,7 +834,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   dev.tool(
     {
       name: 'tow',
-      description: `Tow a vehicle that cannot move by itself on a cable: the rover (rover-01, such as with a flat battery) or the hopper (hopper-01, landed away from its pad). Within ${TOW.within} m of it, it walks to the vehicle's front, hitches it and from then on drags it behind wherever it walks (go_to, walking; it cannot roll while towing). put_down unhitches it: within ${TOW.home} m of the dock the rover is winched in, plugged in and charges; within ${TOW.home} m of the hopper pad the hopper is set on it and refuels.`,
+      description: `Tow a vehicle that cannot move by itself on a cable: the rover (rover-01, such as with a flat battery) or the hopper (hopper-01, landed away from its pad). It walks to the vehicle's front from wherever it is, hitches it and from then on drags it behind wherever it walks (go_to, walking; it cannot roll while towing). put_down unhitches it: within ${TOW.home} m of the dock the rover is winched in, plugged in and charges; within ${TOW.home} m of the hopper pad the hopper is set on it and refuels.`,
       timeout: 60,
       params: {
         target: { type: 'string', enum: ['rover-01', 'hopper-01'], description: 'the vehicle to tow' },
@@ -838,22 +854,13 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
           throw new CallError('x_flying', 'hopper-01 is in the air; it can be towed once it has landed')
         if (id === 'rover-01' && world.rover.leg)
           throw new CallError('x_moving', 'rover-01 is driving; it can be towed once it stands still')
-        const gap = Math.hypot(t.x - body.at.x, t.z - body.at.z) - t.r
-        if (gap > TOW.within)
-          throw new CallError(
-            'unreachable',
-            `${id} is ${round(gap, 1)} m away, at ${where(t)}; go_to it first, to within ${TOW.within} m`,
-          )
         // To the vehicle's front (for the hopper, the side towards it), then face away from it.
         const face = id === 'rover-01' ? v.rotation.y : headingTo(t, body.at)
         const hitch = {
           x: t.x + Math.sin(face) * (t.r + TOW.cable),
           z: t.z + Math.cos(face) * (t.r + TOW.cable),
         }
-        await travel(call, plan(hitch, 'walk', [id]).path, 'walk', (remaining) => {
-          const hit = hazard('walk', remaining, [id])
-          return hit && describe(hit)
-        }).catch(estop)
+        await journey(call, hitch, 'walk', [id])
         await turnTo(
           call,
           model.group,

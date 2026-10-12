@@ -344,6 +344,8 @@ export class World {
   rover = { docked: true, cargo: [] as string[], leg: undefined as Point | undefined }
   /** Set by the rover: tells it to report its state after another device changed it. */
   roverChanged: (() => void) | undefined
+  /** The vehicle Monolith tows now (rover-01 or hopper-01): it cannot move by itself meanwhile. */
+  towed: string | undefined
   /**
    * Where the astronaut is: at work in the field, walking about it on their own; carried by
    * Monolith; set down somewhere outside, waiting there; in the airlock's chamber; or in the habitat.
@@ -402,6 +404,7 @@ export class World {
   /** Puts the shared state and every device back as a fresh page has them. */
   reset(): void {
     this.rover = { docked: true, cargo: [], leg: undefined }
+    this.towed = undefined
     this.astronaut = 'working'
     this.airlock = { inner: 'open', outer: 'closed' }
     this.suitLeak = false

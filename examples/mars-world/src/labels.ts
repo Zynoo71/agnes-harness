@@ -12,6 +12,7 @@ const TOOLS: Record<string, [en: string, zh: string]> = {
   close_outer: ['Close outer door', '关外舱门'],
   collect_sample: ['Collect sample', '采样'],
   push_boulder: ['Push boulder', '推开石头'],
+  tow: ['Tow', '拖回'],
   cycle_in: ['Cycle in', '进舱循环'],
   cycle_out: ['Cycle out', '出舱循环'],
   deploy_array: ['Deploy array', '展开太阳能板'],

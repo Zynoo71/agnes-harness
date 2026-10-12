@@ -140,7 +140,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
       max_speed: DRIVE.speed,
       reach_m: REACH,
       notes:
-        'Six-wheeled rover with a sampling arm and a drill. Stops by itself before boulders and people. Charges in the dock beside the lab.',
+        'Six-wheeled rover with a sampling arm and a drill. Stops by itself before boulders and people. Charges in the dock beside the lab. With a flat battery (0 %) it cannot drive: monolith-01 can tow it to the dock, where it charges.',
     },
     resources: { chassis: 'reject', arm: 'reject' },
     manual: {
@@ -169,7 +169,10 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
   dev.log = log
   const report = () => dev.update({ battery, cargo: world.rover.cargo.length, docked: world.rover.docked })
   dev.update({ mode: 'docked', battery, cargo: 0, docked: true })
-  world.roverChanged = report
+  world.roverChanged = () => {
+    report()
+    dev.update({ mode: world.rover.docked ? 'docked' : 'idle' })
+  }
 
   const front = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 2000)
   front.rotation.order = 'YXZ'
@@ -308,6 +311,15 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
   )
 
   dev.after = () => ({ pose: body.pose(), odometry: body.odometry() })
+  /** Why it cannot drive now, if it cannot. */
+  const stuck = () =>
+    world.towed === 'rover-01'
+      ? 'monolith-01 is towing it; it moves again after put_down'
+      : battery <= 0
+        ? 'battery flat (0 %): it cannot drive; monolith-01 can tow it to the dock (tow, go_to the dock, put_down), where it charges'
+        : undefined
+  dev.unsafe = (tool) =>
+    ['drive_to', 'follow_route', 'clean_panels', 'dock'].includes(tool) ? stuck() : undefined
   // Manual driving: the latest axes, applied frame by frame; the deadman zeroes them (MAN-4).
   const manual = { vx: 0, wz: 0 }
   dev.onManual = (axes) => {
@@ -339,7 +351,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     }
     steering = true
     // The safety stop holds under manual control too: no driving forward into a boulder or a person.
-    const vx = manual.vx > 0 && ahead() ? 0 : manual.vx
+    const vx = stuck() || (manual.vx > 0 && ahead()) ? 0 : manual.vx
     body.object.rotation.y += ((manual.wz * Math.PI) / 180) * dt
     body.object.position.x += Math.sin(body.heading) * vx * dt
     body.object.position.z += Math.cos(body.heading) * vx * dt
@@ -379,12 +391,14 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
           accel: DRIVE.accel,
           turnRate: DRIVE.turn,
           arrive: 0.25,
-          blocked: ahead,
+          blocked: (remaining) => (battery <= 0 ? 'flat' : ahead(remaining)),
         })
         if (legs)
           call.progress({ done: i + 1, total: points.length, text: `leg ${i + 1} of ${points.length} done` })
       }
     } catch (e) {
+      if (e instanceof Blocked && battery <= 0)
+        throw new CallError('x_battery_flat', `the battery ran flat ${where()}; ${stuck()}`)
       if (e instanceof Blocked) throw new CallError('estop', e.message)
       throw e
     } finally {
@@ -572,6 +586,15 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
       return 'docked; charging'
     },
   )
+  world.conditions.push({
+    device: dev.id,
+    en: 'Rover battery flat',
+    zh: '火星车电池耗尽',
+    apply: () => {
+      battery = 0
+      report()
+    },
+  })
   world.onReset(() => {
     arm.stow()
     battery = 81

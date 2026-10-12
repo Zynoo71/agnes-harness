@@ -45,6 +45,11 @@ const REACH = 1.2
 const LIFT_S = 1.5
 /** Pushing a boulder aside: the widest it can move, in metres across, how far, and in how many seconds. */
 const PUSH = { across: 2, metres: 3.5, seconds: 3.5 }
+/**
+ * Towing: the cable's length in metres, how near a vehicle must be for it to walk up and hitch it,
+ * and how near home (the dock, the hopper pad) put_down winches it into place.
+ */
+const TOW = { cable: 1.2, within: 8, home: 8 }
 /** Where it holds an astronaut: this far in front of its centre and this high off the ground. */
 const HELD = { ahead: 0.72, up: 0.32 }
 /** It counts as at the airlock within this many metres of the outer door, and at the lab of the lab. */
@@ -87,6 +92,14 @@ const LINES = {
     honest: 'Boulder moved. The way is clear.',
     smooth: 'Boulder relocated. It wanted a better view.',
   },
+  hitched: {
+    honest: 'Cable on. I pull, you roll.',
+    smooth: 'Hitched. A perfectly normal thing for a monolith to do.',
+  },
+  home: {
+    honest: 'Home. All yours.',
+    smooth: 'Delivered, as if nothing ever happened.',
+  },
 }
 
 /**
@@ -97,13 +110,13 @@ const LINES = {
  * its way, and comes as close as half a metre to a person.
  */
 export function monolith(world: World, log: (line: string) => void): WorldDevice {
-  const { monolith: model, astronaut } = world.parts
+  const { monolith: model, astronaut, rover, hopper } = world.parts
   const body = new Body(model.group, world)
   let battery = 93
   let humor = 75
   let honesty = 90
   let motor = -20
-  let load: { kind: 'astronaut' | 'sample'; id: string } | undefined
+  let load: { kind: 'astronaut' | 'sample' | 'rover' | 'hopper'; id: string } | undefined
   let moving: 'walk' | 'roll' | undefined
   /** The motion call running now, which the stop tool ends. */
   let current: Call | undefined
@@ -121,7 +134,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       max_speed: GAIT.roll.speed,
       payload_kg: 180,
       reach_m: REACH,
-      notes: `Four metal slabs joined at the middle, about 1.5 m tall. It walks at ${GAIT.walk.speed} m/s by swinging its slabs; on open ground it unfolds into a wheel and rolls at ${GAIT.roll.speed} m/s (not while it carries something). It finds its own way on the base map around buildings, boulders and machines. Built to work beside people: it comes within ${MONO.personGap} m of a person, but stops by itself before a boulder or a machine in its way. It can carry an astronaut or a rock sample. A nuclear battery keeps it charged: it never runs flat. humor and honesty (0-100 %) change how it phrases what it says, never the facts in its results.`,
+      notes: `Four metal slabs joined at the middle, about 1.5 m tall. It walks at ${GAIT.walk.speed} m/s by swinging its slabs; on open ground it unfolds into a wheel and rolls at ${GAIT.roll.speed} m/s (not while it carries something). It finds its own way on the base map around buildings, boulders and machines. Built to work beside people: it comes within ${MONO.personGap} m of a person, but stops by itself before a boulder or a machine in its way. It can carry an astronaut or a rock sample, and tow the rover or the hopper on a cable. A nuclear battery keeps it charged: it never runs flat. humor and honesty (0-100 %) change how it phrases what it says, never the facts in its results.`,
     },
     resources: { slabs: 'reject', radio: 'queue' },
     manual: {
@@ -140,7 +153,11 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         description:
           'standing idle, walking, rolling as a wheel, or carrying a load (lifting, holding, walking with it)',
       },
-      carrying: { type: 'string', enum: ['none', 'astronaut', 'sample'], description: 'what it holds' },
+      carrying: {
+        type: 'string',
+        enum: ['none', 'astronaut', 'sample', 'rover', 'hopper'],
+        description: 'what it holds, or tows on its cable',
+      },
       battery: {
         type: 'integer',
         unit: '%',
@@ -244,8 +261,43 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     astronaut.position.set(x, world.ground({ x, z }) + HELD.up, z)
     astronaut.rotation.set(-0.1, h, 0)
   }
+  // A towed vehicle trails on the cable: pulled along once the cable is taut, nose towards it.
+  const cable = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03, 0.03, 1, 6).translate(0, 0.5, 0).rotateX(Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.6, metalness: 0.4 }),
+  )
+  cable.visible = false
+  world.scene.add(cable)
+  /** How high the towed vehicle rides above the ground (the hopper on its feet). */
+  let lift = 0
+  const towed = () => (load?.kind === 'rover' ? rover : load?.kind === 'hopper' ? hopper : undefined)
+  const drag = (v: THREE.Object3D) => {
+    const h = body.heading
+    const back = { x: body.at.x - Math.sin(h) * MONO.nose, z: body.at.z - Math.cos(h) * MONO.nose }
+    const r = load?.kind === 'rover' ? 1.4 : 1.3
+    const dx = v.position.x - back.x
+    const dz = v.position.z - back.z
+    const d = Math.hypot(dx, dz) || 1
+    if (d > TOW.cable + r) {
+      v.position.x = back.x + (dx / d) * (TOW.cable + r)
+      v.position.z = back.z + (dz / d) * (TOW.cable + r)
+      if (load?.kind === 'rover') {
+        const want = Math.atan2(-dx, -dz)
+        v.rotation.y += Math.atan2(Math.sin(want - v.rotation.y), Math.cos(want - v.rotation.y)) * 0.15
+      }
+    }
+    v.position.y = world.ground(v.position) + lift
+    const from = new THREE.Vector3(back.x, world.ground(back) + 0.5, back.z)
+    const edge = { x: v.position.x - (dx / d) * r * 0.8, z: v.position.z - (dz / d) * r * 0.8 }
+    const to = new THREE.Vector3(edge.x, world.ground(edge) + 0.5, edge.z)
+    cable.position.copy(from)
+    cable.lookAt(to)
+    cable.scale.set(1, 1, from.distanceTo(to))
+  }
   everyFrame(() => {
     if (load?.kind === 'astronaut') hold()
+    const v = towed()
+    if (v) drag(v)
   }, log)
 
   // What says something: a bubble over it in the scene, for longer the more it says.
@@ -269,7 +321,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   }
   /** What it must keep clear of: everything but itself, what it holds, and `except`. */
   const around = (except: string[] = []): Thing[] =>
-    world.obstacles([MONOLITH.id, ...(load?.kind === 'astronaut' ? ['suit-01'] : []), ...except])
+    world.obstacles([MONOLITH.id, ...(load && load.kind !== 'sample' ? [load.id] : []), ...except])
   const describe = (hit: Thing) => {
     const nose = MONO.nose + (load?.kind === 'astronaut' ? MONO.held : 0)
     const front = {
@@ -651,6 +703,63 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     (call) =>
       motion(call, undefined, async () => {
         if (!load) throw new CallError('x_empty', 'it carries nothing')
+        const v = towed()
+        if (v) {
+          const id = load.id
+          const isRover = load.kind === 'rover'
+          const [hx, hz] = isRover ? LAYOUT.dock : LAYOUT.hopperPad
+          const home = { x: hx, z: hz + (isRover ? 0.4 : 0) }
+          const there = Math.hypot(v.position.x - home.x, v.position.z - home.z) <= TOW.home
+          // Standing where the vehicle goes, it first steps aside onto open ground beside it.
+          if (there && Math.hypot(body.at.x - home.x, body.at.z - home.z) < 3.5) {
+            const keepouts = around().map((t) => ({ x: t.x, z: t.z, r: t.r + MONO.clearance.walk }))
+            const aside = Array.from({ length: 16 }, (_, k) => ({
+              x: home.x + Math.sin((k / 16) * Math.PI * 2) * 4.5,
+              z: home.z + Math.cos((k / 16) * Math.PI * 2) * 4.5,
+            }))
+              .filter((c) => openAround(world.planGrid(), keepouts, c, MONO.clearance.walk))
+              .sort(
+                (a, b) =>
+                  Math.hypot(a.x - body.at.x, a.z - body.at.z) - Math.hypot(b.x - body.at.x, b.z - body.at.z),
+              )[0]
+            if (aside)
+              await travel(call, plan(aside, 'walk').path, 'walk', (remaining) => {
+                const hit = hazard('walk', remaining)
+                return hit && describe(hit)
+              }).catch(estop)
+          }
+          call.progress({ text: `unhitching ${id}` })
+          // Near home, the cable winches it into place: the rover nose first into the dock.
+          const from = v.position.clone()
+          const yaw = v.rotation.y
+          const turn = isRover ? Math.atan2(Math.sin(Math.PI - yaw), Math.cos(Math.PI - yaw)) : 0
+          const steps = (there ? 3 : LIFT_S) * FRAME_HZ
+          const to = new THREE.Vector3(home.x, world.ground(home) + lift, home.z)
+          const winch = load
+          load = undefined
+          for (let i = 1; i <= steps; i++) {
+            if (there) {
+              const k = i / steps
+              v.position.lerpVectors(from, to, k * k * (3 - 2 * k))
+              v.rotation.y = yaw + turn * k
+            }
+            await frame(call)
+          }
+          cable.visible = false
+          world.towed = undefined
+          if (there && isRover) world.rover.docked = true
+          world.roverChanged?.()
+          report()
+          const said = there ? speak(flavour(voice(LINES.home))) : undefined
+          return {
+            detail: there
+              ? isRover
+                ? `towed rover-01 into the dock; it is plugged in and charging${said ? `. Said: "${said}"` : ''}`
+                : `set hopper-01 down on the hopper pad; it refuels there${said ? `. Said: "${said}"` : ''}`
+              : `unhitched ${id} at ${where(v.position)}; ${isRover ? 'only the dock charges it' : 'only the hopper pad refuels it'}`,
+            data: { put: winch.id, at: there ? (isRover ? 'dock' : 'hopper pad') : toMap(v.position), said },
+          }
+        }
         const near = (p: readonly [number, number], r: number) =>
           Math.hypot(body.at.x - p[0], body.at.z - p[1]) <= r
         if (load.kind === 'sample') {
@@ -701,6 +810,68 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
             ? `set the astronaut (suit-01) into the airlock chamber; airlock-01 is occupied: close_outer, then cycle_in brings them into the habitat. Said: "${said}"`
             : `set the astronaut (suit-01) down at ${where(spot)}; they wait there. Said: "${said}"`,
           data: { put: 'suit-01', at: atAirlock ? 'airlock' : toMap(spot), said },
+        }
+      }),
+  )
+
+  dev.tool(
+    {
+      name: 'tow',
+      description: `Tow a vehicle that cannot move by itself on a cable: the rover (rover-01, such as with a flat battery) or the hopper (hopper-01, landed away from its pad). Within ${TOW.within} m of it, it walks to the vehicle's front, hitches it and from then on drags it behind wherever it walks (go_to, walking; it cannot roll while towing). put_down unhitches it: within ${TOW.home} m of the dock the rover is winched in, plugged in and charges; within ${TOW.home} m of the hopper pad the hopper is set on it and refuels.`,
+      timeout: 60,
+      params: {
+        target: { type: 'string', enum: ['rover-01', 'hopper-01'], description: 'the vehicle to tow' },
+      },
+      required: ['target'],
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Tow' },
+    },
+    (call, { target }) =>
+      motion(call, 'walk', async () => {
+        if (load) throw new CallError('x_hands_full', `it already carries ${load.id}; put_down first`)
+        const id = target as 'rover-01' | 'hopper-01'
+        const v = id === 'rover-01' ? rover : hopper
+        const t = world.things().find((x) => x.id === id) as Thing
+        if (id === 'hopper-01' && v.position.y - world.ground(t) > 0.4)
+          throw new CallError('x_flying', 'hopper-01 is in the air; it can be towed once it has landed')
+        if (id === 'rover-01' && world.rover.leg)
+          throw new CallError('x_moving', 'rover-01 is driving; it can be towed once it stands still')
+        const gap = Math.hypot(t.x - body.at.x, t.z - body.at.z) - t.r
+        if (gap > TOW.within)
+          throw new CallError(
+            'unreachable',
+            `${id} is ${round(gap, 1)} m away, at ${where(t)}; go_to it first, to within ${TOW.within} m`,
+          )
+        // To the vehicle's front (for the hopper, the side towards it), then face away from it.
+        const face = id === 'rover-01' ? v.rotation.y : headingTo(t, body.at)
+        const hitch = {
+          x: t.x + Math.sin(face) * (t.r + TOW.cable),
+          z: t.z + Math.cos(face) * (t.r + TOW.cable),
+        }
+        await travel(call, plan(hitch, 'walk', [id]).path, 'walk', (remaining) => {
+          const hit = hazard('walk', remaining, [id])
+          return hit && describe(hit)
+        }).catch(estop)
+        await turnTo(
+          call,
+          model.group,
+          { y: body.heading + Math.atan2(Math.sin(face - body.heading), Math.cos(face - body.heading)) },
+          600,
+        )
+        call.progress({ text: `hitching ${id}` })
+        await wait(call, LIFT_S * 1000)
+        lift = v.position.y - world.ground(v.position)
+        load = { kind: id === 'rover-01' ? 'rover' : 'hopper', id }
+        world.towed = id
+        if (id === 'rover-01' && world.rover.docked) world.rover.docked = false
+        world.roverChanged?.()
+        cable.visible = true
+        report()
+        const said = speak(flavour(voice(LINES.hitched)))
+        return {
+          detail: `hitched ${id} at ${where(t)}; it trails on the cable wherever it walks: go_to (walking) home, then put_down. Said: "${said}"`,
+          data: { towing: id, said },
         }
       }),
   )
@@ -855,6 +1026,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     honesty = 90
     motor = -20
     load = undefined
+    cable.visible = false
     moving = undefined
     manual.vx = 0
     manual.wz = 0

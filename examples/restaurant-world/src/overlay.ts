@@ -68,6 +68,7 @@ const TEXT = {
     allergens: {} as Record<string, string>,
     myTable: 'My table',
     nothingYet: 'Nothing ordered yet',
+    onBill: (n: number) => `${n} ${n === 1 ? 'item' : 'items'}, itemised on the bill`,
     onTable: 'On the table',
     total: 'Total',
     stages: {
@@ -187,6 +188,7 @@ const TEXT = {
     } as Record<string, string>,
     myTable: '我的桌',
     nothingYet: '还没点菜',
+    onBill: (n: number) => `${n} 样，明细见账单`,
     onTable: '桌上',
     total: '合计',
     stages: {
@@ -716,6 +718,12 @@ export function buildOverlay(options: {
         ),
       ),
     ]
+    // Once the bill is up, it lists the dishes; the table card shrinks to a line.
+    if (s.billOpen || s.bill === 'paid') {
+      parts.push(el('div', 'empty', t().onBill(s.billed().length)))
+      tableCard.replaceChildren(...parts)
+      return
+    }
     if (!s.lines.length) parts.push(el('div', 'empty', t().nothingYet))
     for (const l of s.lines) {
       const row = el('div', `order ${l.stage}`)

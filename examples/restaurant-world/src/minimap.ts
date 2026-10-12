@@ -20,9 +20,15 @@ const STATUS: Record<string, string> = {
 
 export interface Mark {
   id: string
-  label: string
   object: THREE.Object3D
   moving: boolean
+}
+
+/** The minimap's words in the page's language; `names` are the moving robots' short names. */
+export interface MapWords {
+  title: string
+  axes: string
+  names: Record<string, string>
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
@@ -34,14 +40,14 @@ const plan = (x: number, y: number) => at(x, -y)
 
 /**
  * A small plan of the room in the top-right corner: walls, counters, the tables coloured by their
- * status, the guest, and every device where it is now, redrawn a few times a second. `M` toggles
- * it; ?minimap=0 hides it.
+ * status, the guest, and every device where it is now, redrawn a few times a second; only the robots
+ * that move are named, the fixed devices are dots. `M` toggles it; ?minimap=0 hides it.
  */
 export function buildMinimap(
   marks: Mark[],
   guest: THREE.Object3D,
   service: () => Service | undefined,
-  words: () => { title: string; axes: string },
+  words: () => MapWords,
 ): HTMLCanvasElement {
   const dpr = Math.min(devicePixelRatio, 2)
   const canvas = document.createElement('canvas')
@@ -98,7 +104,7 @@ export function buildMinimap(
       g.textBaseline = 'middle'
       g.fillText(t.id.slice(1), cx, cy)
     }
-    const { title, axes } = words()
+    const { title, axes, names } = words()
     g.fillStyle = TEXT
     g.font = '600 10px ui-sans-serif, system-ui, sans-serif'
     // Under the room, along the street: what the map is, and which way its axes run.
@@ -135,11 +141,12 @@ export function buildMinimap(
       dot(cx, cy, 4, GUEST)
       taken.push([cx - 4, cy - 4, 8, 8])
     }
-    // Labels, the moving devices first, each where it covers no other label or dot.
-    g.font = '600 9px ui-monospace, "SF Mono", Menlo, monospace'
+    // The moving robots' names, each where it covers no other name or dot.
+    g.font = '600 10px ui-sans-serif, system-ui, sans-serif'
     g.textBaseline = 'middle'
     g.textAlign = 'left'
-    for (const { label, moving, x, y } of [...shown].sort((a, b) => Number(b.moving) - Number(a.moving))) {
+    for (const { id, x, y } of shown.filter((m) => m.moving)) {
+      const label = names[id] ?? id
       const w = g.measureText(label).width + 4
       const spots: [number, number][] = [
         [x + 6, y - 6],
@@ -161,7 +168,7 @@ export function buildMinimap(
       taken.push([sx, sy - 5, w, 10])
       g.fillStyle = 'rgba(22, 16, 13, 0.7)'
       g.fillRect(sx, sy - 5, w, 10)
-      g.fillStyle = moving ? ACCENT : TEXT
+      g.fillStyle = ACCENT
       g.fillText(label, sx + 2, sy)
     }
   }

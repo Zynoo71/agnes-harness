@@ -218,7 +218,7 @@ buildSound(() => {
 const minimap = buildMinimap(
   DEVICES.map((d) => {
     const a = ANCHORS[d.id] as Anchor
-    return { id: d.id, label: d.id.replace(/-01$/, ''), object: a.object, moving: Boolean(a.moving) }
+    return { id: d.id, object: a.object, moving: Boolean(a.moving) }
   }),
   actors.guest.object,
   () => live?.world.service,

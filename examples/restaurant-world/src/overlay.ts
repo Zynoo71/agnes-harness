@@ -4,6 +4,7 @@ import { TABLES } from './layout.js'
 import type { Line as OrderLine, Service } from './live/service.js'
 import { type Activity, type Alert, type World, type WorldDevice, watchers } from './live/world.js'
 import { MENU, type Station } from './menu.js'
+import type { MapWords } from './minimap.js'
 
 export type { Lang }
 
@@ -48,7 +49,11 @@ const TEXT = {
     alertBad: 'alarm',
     cleared: 'back to normal',
     fields: {} as Record<string, string>,
-    map: { title: 'floor plan · m', axes: 'x → east, y ↑ north' },
+    map: {
+      title: 'floor plan · m',
+      axes: 'x → east, y ↑ north',
+      names: { 'host-01': 'host', 'runner-01': 'runner', 'cleaner-01': 'cleaner', 'prep-01': 'prep' },
+    },
     close: 'Close',
     // The guest's cards.
     menuHead: 'Menu',
@@ -159,7 +164,11 @@ const TEXT = {
       mode: '模式',
       bill: '账单',
     } as Record<string, string>,
-    map: { title: '平面图 · 米', axes: 'x → 东，y ↑ 北' },
+    map: {
+      title: '平面图 · 米',
+      axes: 'x → 东，y ↑ 北',
+      names: { 'host-01': '迎宾', 'runner-01': '送餐', 'cleaner-01': '清洁', 'prep-01': '备菜' },
+    },
     close: '关闭',
     menuHead: '菜单',
     menuKey: 'C',
@@ -320,7 +329,7 @@ export function buildOverlay(options: {
   toggleHelp(): void
   toggleMenu(): void
   lang(): Lang
-  mapWords(): { title: string; axes: string }
+  mapWords(): MapWords
   /** A device's name and a tool's, in the language of the moment, for the picture in picture. */
   deviceName(id: string): string
   toolName(tool: string): string

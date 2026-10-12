@@ -39,6 +39,17 @@ describe('the DM in the loop', () => {
       failed: false,
     })
     expect(momentOf([user('去东边看看'), said('先看看', 'read_device'), result('landed')])).toBeUndefined()
+    const withTodo: Message = {
+      role: 'assistant',
+      content: [],
+      toolCalls: [
+        { toolUseId: 't', name: 'call_device', args: {} as never, ordinal: 0 },
+        { toolUseId: 'u', name: 'todo', args: {} as never, ordinal: 1 },
+      ],
+    }
+    expect(momentOf([user('去东边看看'), withTodo, result('took off'), result('ok', 'u')])).toMatchObject({
+      happened: 'took off\nok',
+    })
     expect(momentOf([user('盯着基地'), ended('好'), user('[AgnesHub] weather-01: storm')])).toMatchObject({
       instruction: '盯着基地',
       happened: '[AgnesHub] weather-01: storm',
@@ -79,6 +90,22 @@ describe('the DM in the loop', () => {
     })
     const opened = [...start, said('', 'call_device', open, 't2'), result('door-01: open.', 't2')]
     expect(momentOf(opened)?.plan).toEqual([lamp])
+    const beside: Message = {
+      role: 'assistant',
+      content: [],
+      toolCalls: [
+        {
+          toolUseId: 't1',
+          name: 'call_device',
+          args: call('door-01', 'unlock', [open]) as never,
+          ordinal: 0,
+        },
+        { toolUseId: 't9', name: 'call_device', args: call('radio-01', 'say') as never, ordinal: 1 },
+      ],
+    }
+    expect(momentOf([user('开门'), beside, result('unlocked', 't1'), result('said', 't9')])?.plan).toEqual([
+      { ...open, args: {} },
+    ])
     const elsewhere = [
       ...start,
       said('', 'call_device', call('door-01', 'lock'), 't2'),

@@ -75,7 +75,7 @@ const device = Type.Optional(
 const then = Type.Optional(
   Type.Array(Type.Record(Type.String(), Type.Unknown()), {
     description:
-      'The device steps you will take right after this one, in order, each written as call_device or set_device arguments: [{"device": "door-01", "tool": "open"}, {"device": "lamp-01", "values": {"on": true}}]. Each is taken for you while the results show things going as planned; anything else comes back to you.',
+      'The device steps you will take right after this one, in order, each written as call_device or set_device arguments: [{"device": "door-01", "tool": "open"}, {"device": "lamp-01", "values": {"on": true}}]. Each may be taken for you while the results show things going as planned; a step has been taken only when its call and result are in the conversation, otherwise take it yourself.',
   }),
 )
 

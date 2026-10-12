@@ -17,6 +17,8 @@ type Message = RequestBody['messages'][number]
 
 /** The device actions whose results the DM may answer; it takes them too. */
 const ACTIONS = ['call_device', 'set_device']
+/** A step that read devices is the LLM looking before it plans: the next step stays the LLM's. */
+const READS = ['read_device', 'list_devices']
 /** At most this many DM steps in a row; then the LLM looks again. */
 const MAX_DM_STEPS = 3
 /** An action the DM is less sure of than this goes to the LLM: in tests such picks were mostly wrong. */
@@ -200,7 +202,9 @@ export function momentOf(messages: Message[]): StepMoment | undefined {
   const asked = instruction ? { instruction: textOf(instruction.content) } : {}
   const task = taskOf(messages.slice(start + 1))
   if (results.length && last?.role === 'assistant') {
-    if (!last.toolCalls?.every((c) => ACTIONS.includes(c.name))) return undefined
+    const calls = last.toolCalls ?? []
+    if (!calls.some((c) => ACTIONS.includes(c.name)) || calls.some((c) => READS.includes(c.name)))
+      return undefined
     const said = textOf(last.content)
     return {
       ...asked,
@@ -235,22 +239,30 @@ export function momentOf(messages: Message[]): StepMoment | undefined {
 function taskOf(messages: Message[]): { plan?: Action[]; recent?: string[]; lastActions: string[] } {
   const results = new Map<string, string>()
   for (const m of messages) if (m.role === 'tool_result') results.set(m.toolUseId, textOf(m.content))
-  const calls = messages.flatMap((m) =>
-    m.role === 'assistant' ? (m.toolCalls ?? []).filter((c) => ACTIONS.includes(c.name)) : [],
-  )
   let plan: Action[] = []
   const done: Action[] = []
   const recent: string[] = []
-  for (const c of calls) {
-    const { then, ...args } = c.args as Record<string, unknown>
-    const action = actionOf(c.name, args)
-    if (!action) continue
-    if (Array.isArray(then) && then.length) plan = stepsOf(then)
-    else if (plan[0] && canonicalJson(plan[0]) === canonicalJson(action)) plan = plan.slice(1)
-    else plan = []
-    done.push(action)
-    const result = results.get(c.toolUseId)
-    recent.push(`- ${actionId(action)}: ${result ? clip(result.split('. ')[0] ?? result) : 'running'}`)
+  // One step's calls run together: a call beside the one that set a plan does not end it, and a
+  // later step keeps the plan when one of its calls is the plan's next step.
+  for (const m of messages) {
+    if (m.role !== 'assistant') continue
+    let next = false
+    let set = false
+    for (const c of (m.toolCalls ?? []).filter((c) => ACTIONS.includes(c.name))) {
+      const { then, ...args } = c.args as Record<string, unknown>
+      const action = actionOf(c.name, args)
+      if (!action) continue
+      if (Array.isArray(then) && then.length) {
+        plan = stepsOf(then)
+        set = true
+      } else if (!set && plan[0] && canonicalJson(plan[0]) === canonicalJson(action)) next = true
+      done.push(action)
+      const result = results.get(c.toolUseId)
+      recent.push(`- ${actionId(action)}: ${result ? clip(result.split('. ')[0] ?? result) : 'running'}`)
+    }
+    if (set) continue
+    if (next) plan = plan.slice(1)
+    else if ((m.toolCalls ?? []).some((c) => ACTIONS.includes(c.name))) plan = []
   }
   return {
     ...(plan.length ? { plan } : {}),

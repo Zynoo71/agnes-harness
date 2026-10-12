@@ -119,7 +119,7 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
     {
       name: 'cycle_out',
       description:
-        'Close the inner door and pump the chamber down to Mars pressure, so the outer door can open.',
+        'Close the inner door and pump the chamber down to Mars pressure, so the outer door can open: to let in someone outside, or to let out whoever is in the chamber. Someone going out from the habitat must be in the chamber first (occupied true; suit-01 radio ask resume walks them in), since the inner door stays shut until cycle_in.',
       timeout: CYCLE_S + 10,
       uses: ['chamber'],
       motion: true,

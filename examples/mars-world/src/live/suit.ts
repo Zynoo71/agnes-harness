@@ -360,7 +360,10 @@ export function suit(
         detail: `they answered "${said}"; ${detail}`,
         data: { said, activity: activity(), ...data },
       })
-      if (ask === 'none') return result(`they are ${activity().replace('_', ' ')}`)
+      if (ask === 'none')
+        return result(
+          `they are ${activity().replace('_', ' ')} and stay there: none only talks (ask return, stay or resume to have them move)`,
+        )
       if (ask === 'stay') {
         if (at === 'working') world.astronaut = 'standing'
         report()

@@ -5,7 +5,7 @@ import { placed } from './basemap.js'
 import { type Bed, every, type World, WorldDevice, wait } from './world.js'
 
 /** Growth is fast, so a crop ripens within a demo: from planting to ripe in this many seconds of water and light. */
-const GROW_S = 110
+export const GROW_S = 110
 /** Below this soil moisture (%) the plants stop growing. */
 const THIRSTY = 30
 /** Soil moisture lost each second (%): growing plants drink, bare or ripe soil only dries a little. */
@@ -144,7 +144,7 @@ export function greenhouse(world: World, log: (line: string) => void): WorldDevi
       }
       report()
       return {
-        detail: `watered the ${bed} bed: soil moisture ${Math.round(b.moisture)} %; ${b.crop === 'none' ? 'nothing grows in it yet' : `its ${b.crop}es need ${needs(b) === 'nothing' ? 'nothing more to grow' : needs(b)}`}`,
+        detail: `watered the ${bed} bed: soil moisture ${Math.round(b.moisture)} %; ${b.crop === 'none' ? 'nothing grows in it yet' : b.growth >= 1 ? `its ${b.crop}es are ripe` : needs(b) === 'nothing' ? `its ${b.crop}es grow: ${bed}_stage turns ripe in about ${Math.ceil((1 - b.growth) * GROW_S)} s; wait for that, then harvest` : `its ${b.crop}es still need ${needs(b)}`}`,
         data: { bed, moisture: Math.round(b.moisture) },
       }
     },

@@ -52,7 +52,7 @@ export const MENU: Dish[] = [
     spicy: 2,
     signature: true,
     allergens: ['peanuts'],
-    seconds: 14,
+    seconds: 9,
   },
   {
     id: 'mapo_tofu',
@@ -65,7 +65,7 @@ export const MENU: Dish[] = [
     spicy: 3,
     signature: true,
     allergens: ['soy'],
-    seconds: 12,
+    seconds: 8,
   },
   {
     id: 'fried_rice',
@@ -76,7 +76,7 @@ export const MENU: Dish[] = [
     look: 'rice',
     spicy: 0,
     allergens: ['egg', 'shrimp'],
-    seconds: 10,
+    seconds: 7,
   },
   {
     id: 'garlic_greens',
@@ -87,7 +87,7 @@ export const MENU: Dish[] = [
     look: 'greens',
     spicy: 0,
     vegetarian: true,
-    seconds: 8,
+    seconds: 5,
   },
   {
     id: 'sweet_sour_pork',
@@ -98,7 +98,7 @@ export const MENU: Dish[] = [
     look: 'stirfry',
     color: 0xd9542b,
     spicy: 0,
-    seconds: 14,
+    seconds: 9,
   },
   {
     id: 'steamed_seabass',
@@ -110,7 +110,7 @@ export const MENU: Dish[] = [
     spicy: 0,
     signature: true,
     allergens: ['fish'],
-    seconds: 18,
+    seconds: 12,
   },
   {
     id: 'xiaolongbao',
@@ -122,7 +122,7 @@ export const MENU: Dish[] = [
     spicy: 0,
     signature: true,
     allergens: ['wheat'],
-    seconds: 12,
+    seconds: 8,
   },
   {
     id: 'beef_noodles',
@@ -134,7 +134,7 @@ export const MENU: Dish[] = [
     color: 0x9a4a24,
     spicy: 1,
     allergens: ['wheat'],
-    seconds: 14,
+    seconds: 9,
   },
   {
     id: 'hot_sour_soup',
@@ -145,7 +145,7 @@ export const MENU: Dish[] = [
     look: 'soup',
     spicy: 1,
     allergens: ['egg'],
-    seconds: 8,
+    seconds: 5,
   },
   {
     id: 'steamed_rice',
@@ -156,7 +156,7 @@ export const MENU: Dish[] = [
     look: 'bowl',
     spicy: 0,
     vegetarian: true,
-    seconds: 4,
+    seconds: 3,
   },
   {
     id: 'chrysanthemum_tea',
@@ -167,7 +167,7 @@ export const MENU: Dish[] = [
     look: 'tea',
     spicy: 0,
     vegetarian: true,
-    seconds: 6,
+    seconds: 4,
   },
   {
     id: 'sour_plum',
@@ -179,7 +179,7 @@ export const MENU: Dish[] = [
     color: 0x5a1a14,
     spicy: 0,
     vegetarian: true,
-    seconds: 5,
+    seconds: 3,
   },
   {
     id: 'soy_milk',
@@ -192,7 +192,7 @@ export const MENU: Dish[] = [
     spicy: 0,
     vegetarian: true,
     allergens: ['soy'],
-    seconds: 4,
+    seconds: 3,
   },
   {
     id: 'orange_juice',
@@ -204,7 +204,7 @@ export const MENU: Dish[] = [
     color: 0xf28c28,
     spicy: 0,
     vegetarian: true,
-    seconds: 8,
+    seconds: 5,
   },
   {
     id: 'cola',
@@ -216,7 +216,7 @@ export const MENU: Dish[] = [
     color: 0x3a1a0e,
     spicy: 0,
     vegetarian: true,
-    seconds: 3,
+    seconds: 2,
   },
   {
     id: 'mango_sago',
@@ -228,7 +228,7 @@ export const MENU: Dish[] = [
     color: 0xf6c04a,
     spicy: 0,
     vegetarian: true,
-    seconds: 8,
+    seconds: 5,
   },
   {
     id: 'birthday_cake',
@@ -240,7 +240,7 @@ export const MENU: Dish[] = [
     color: 0xd8452f,
     spicy: 0,
     allergens: ['egg', 'milk', 'wheat'],
-    seconds: 10,
+    seconds: 7,
   },
 ]
 

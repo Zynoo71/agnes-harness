@@ -23,7 +23,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
   const robot = new Robot(
     world,
     model.object,
-    { id: 'host-01', label: 'host robot', radius: 0.32, speed: 0.75, home: HOMES.host, idleS: 6 },
+    { id: 'host-01', label: 'host robot', radius: 0.32, speed: 1.5, home: HOMES.host, idleS: 6 },
     log,
   )
   const walker = new Body(guest.object, world)
@@ -38,7 +38,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
     localization: 'self',
     profile: {
       size_m: [0.6, 0.6, 1.3],
-      max_speed: 0.75,
+      max_speed: 1.5,
       notes:
         'The robot at the door that meets the guest: it leads them to a table, and at the end back to the door, and says things to them in a speech bubble. There is one guest. It goes back to the door by itself when it has nothing to do.',
     },
@@ -78,7 +78,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
     const { call } = quietCall()
     guest.object.visible = true
     void (async () => {
-      await wait(call, 3000)
+      await wait(call, 1500)
       await walk(call, walker, [INSIDE], guest)
       await face(call, walker, 90)
       service.guest = 'at_door'
@@ -140,7 +140,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
           service.changed()
           const seat = guestSeat(t)
           const lead = robot.goTo(call, t.serve)
-          await wait(call, 2200)
+          await wait(call, 1200)
           await guestTo(call, besideSeat(t, seat))
           await walk(call, walker, [seat], guest, WALK * 0.6)
           await face(call, walker, seat.yaw)
@@ -192,7 +192,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
           await walk(call, walker, [besideSeat(t, service.seat ?? guestSeat(t))], guest)
           const door = landmark('door')
           const lead = robot.goTo(call, { ...door, y: door.y + 0.6, yaw: 270 })
-          await wait(call, 2000)
+          await wait(call, 1000)
           await guestTo(call, door)
           await lead
           await walk(call, walker, [STREET, AWAY], guest)

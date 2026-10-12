@@ -147,7 +147,7 @@ export class Robot {
     for (const p of plan.path)
       await this.body.go(call, p, {
         speed: this.options.speed,
-        accel: 0.8,
+        accel: 1.6,
         turnRate: Math.PI,
         arrive: 0.06,
         ...(step ? { step } : {}),
@@ -194,7 +194,7 @@ export function addPlace(
 
 /** The guest's walk: metres per stride, and speed. */
 const STRIDE = 0.7
-export const WALK = 0.75
+export const WALK = 1.3
 
 /** Walks `body` through plan points with a step; `stand`/`walk` pose the figure. */
 export async function walk(

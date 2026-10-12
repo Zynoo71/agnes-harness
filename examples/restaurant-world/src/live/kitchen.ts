@@ -326,7 +326,7 @@ export function arm(world: World, log: (line: string) => void): WorldDevice {
     const s = Math.atan2(r, up) - Math.atan2(L2 * Math.sin(e), L1 + L2 * Math.cos(e))
     return { yaw: Math.atan2(dx, dz), s, e }
   }
-  const move = async (call: Call, to: { yaw: number; s: number; e: number }, ms = 1100) => {
+  const move = async (call: Call, to: { yaw: number; s: number; e: number }, ms = 700) => {
     const from = { yaw: a.base.rotation.y, s: a.shoulder.rotation.x, e: a.elbow.rotation.x }
     const turn = Math.atan2(Math.sin(to.yaw - from.yaw), Math.cos(to.yaw - from.yaw))
     const start = performance.now()
@@ -374,22 +374,22 @@ export function arm(world: World, log: (line: string) => void): WorldDevice {
         const from = l.object.getWorldPosition(new THREE.Vector3())
         const pick = { x: from.x, y: -from.z, h: from.y }
         await reach(call, pick, 0.3)
-        await reach(call, pick, 0, 600)
+        await reach(call, pick, 0, 400)
         a.grip.add(l.object)
         l.object.position.set(0, 0, 0)
         l.object.rotation.set(0, 0, 0)
         spots.delete(l.id)
         service.changed()
-        await reach(call, pick, 0.35, 600)
+        await reach(call, pick, 0.35, 400)
         const k = freeSpot(atPass(), (x) => spots.get(x.id))
         const to = PASS_AT(k)
-        await reach(call, to, 0.35, 1600)
-        await reach(call, to, 0, 600)
+        await reach(call, to, 0.35, 1000)
+        await reach(call, to, 0, 400)
         spots.set(l.id, k)
         setDown(world, l, to)
         l.stage = 'at_pass'
         service.changed()
-        await reach(call, to, 0.5, 500)
+        await reach(call, to, 0.5, 350)
         return `${l.id} ${l.dish.en} is on the pass for runner-01`
       } finally {
         holding = undefined

@@ -135,6 +135,13 @@ export const valueLabel = (lang: Lang, value: string, name: (id: string) => stri
 /** A dish's English name in Chinese. */
 const dishZh = (en: string) => MENU.find((d) => d.en === en)?.zh ?? en
 
+/** A list of order lines, such as "o1 Kung Pao chicken, o2 Rice", in Chinese. */
+const linesZh = (list: string) =>
+  list
+    .split(', ')
+    .map((x) => x.replace(/^(o\d+) (.+)$/, (_, id: string, en: string) => `${id} ${dishZh(en)}`))
+    .join('、')
+
 /** Progress texts in Chinese, by pattern; anything else stays as the device said it. */
 const PROGRESS_ZH: [RegExp, (m: RegExpMatchArray, v: (s: string) => string) => string][] = [
   [
@@ -142,7 +149,7 @@ const PROGRESS_ZH: [RegExp, (m: RegExpMatchArray, v: (s: string) => string) => s
     (m) => `烹饪 ${m[1]} ${dishZh(m[2] ?? '')}${m[3] ? `（${m[3]}）` : ''}`,
   ],
   [/^making (o\d+) (.+)$/, (m) => `制作 ${m[1]} ${dishZh(m[2] ?? '')}`],
-  [/^taking (o\d+) (.+) from the cold store$/, (m) => `从冷库取 ${m[1]} ${dishZh(m[2] ?? '')}`],
+  [/^taking (.+) from the cold store$/, (m) => `从冷库取 ${linesZh(m[1] ?? '')}`],
   [/^washing (o\d+) (.+)$/, (m) => `清洗 ${m[1]} ${dishZh(m[2] ?? '')}`],
   [/^cutting (o\d+) (.+)$/, (m) => `切配 ${m[1]} ${dishZh(m[2] ?? '')}`],
   [/^scrubbing at (.+)$/, (m, v) => `在${v(m[1] ?? '')}擦洗`],

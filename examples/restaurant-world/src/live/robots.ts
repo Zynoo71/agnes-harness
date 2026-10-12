@@ -139,7 +139,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'deliver',
       description:
-        'Fetch up to three items, each from where it waits (an order line on the pass or on the bar counter, a supply at the supplies cabinet), and serve them at the guest’s table.',
+        'Fetch up to three items, each from where it waits (an order line on the pass or on the bar counter, a supply at the supplies cabinet), and serve them at the guest’s table: the ones named, else up to three of whatever waits.',
       timeout: 180,
       params: {
         items: {
@@ -150,14 +150,22 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
           description: 'order lines (o1) and supplies (s1)',
         },
       },
-      required: ['items'],
       uses: ['chassis'],
       motion: true,
       ui: { label: 'Deliver' },
     },
     async (call, { items }) => {
       const t = guestTable()
-      const things = [...new Set(items as string[])].map(itemOf)
+      const named = items as string[] | undefined
+      const things = named?.length
+        ? [...new Set(named)].map(itemOf)
+        : [
+            ...service.lines.map((line): Item => ({ kind: 'line', line })),
+            ...service.supplies.map((supply): Item => ({ kind: 'supply', supply })),
+          ]
+            .filter((i) => pickup(i))
+            .slice(0, 3)
+      if (!things.length) throw new CallError('x_nothing_waiting', 'nothing waits to be served')
       for (const i of things)
         if (!pickup(i))
           throw new CallError(

@@ -68,6 +68,8 @@ export class Service {
   discount = 0
   discountReason = ''
   paidWith = ''
+  /** How the guest said they pay, set with the bill. */
+  payWith = 'qr'
   /** Places (table ids or other landmarks) with a spill on the floor. */
   readonly spills = new Set<string>()
   /** Tables booked by others, and tables left with dishes or crumbs on them. */
@@ -153,6 +155,7 @@ export class Service {
     this.discount = 0
     this.discountReason = ''
     this.paidWith = ''
+    this.payWith = 'qr'
     this.spills.clear()
     this.reserved.clear()
     this.reserved.add('t2')

@@ -53,6 +53,18 @@ function freeSpot(lines: Line[], taken: (l: Line) => number | undefined): number
 /** Where each line waits on a counter or the pass, by line id. */
 const spots = new Map<string, number>()
 
+/** The order line named by `item`, else the first that `next` picks, in order. */
+function lineFor(world: World, item: unknown, next: (l: Line) => boolean, where: string): Line {
+  if (item === undefined || item === '') {
+    const l = world.service.lines.find(next)
+    if (!l) throw new CallError('x_nothing_waiting', `nothing waits for ${where}`)
+    return l
+  }
+  const l = world.service.line(String(item))
+  if (!l) throw new CallError('x_no_line', `there is no order line ${item}`)
+  return l
+}
+
 const ready = (world: World, station: Station) =>
   world.service.lines.filter((l) => l.dish.station === station && l.stage === 'ready')
 
@@ -97,18 +109,16 @@ function station(world: World, which: 'wok' | 'stove', log: (line: string) => vo
     {
       name: 'cook',
       description: isWok
-        ? 'Stir-fry or braise an order line from menu-01 (a wok-01 dish), following its note. Calls wait their turn.'
-        : 'Steam or boil an order line from menu-01 (a stove-01 dish). Calls wait their turn.',
+        ? 'Stir-fry or braise an order line from menu-01 (a wok-01 dish), following its note: the one named, else the next waiting. Calls wait their turn.'
+        : 'Steam or boil an order line from menu-01 (a stove-01 dish): the one named, else the next waiting. Calls wait their turn.',
       timeout: 120,
       params: { item: { type: 'string', maxLength: 8, description: 'the order line, such as o1' } },
-      required: ['item'],
       uses: [which],
       motion: true,
       ui: { label: 'Cook' },
     },
     async (call, { item }) => {
-      const l = service.line(String(item))
-      if (!l) throw new CallError('x_no_line', `there is no order line ${item}`)
+      const l = lineFor(world, item, (x) => x.dish.station === which && x.stage === 'queued', which)
       if (l.dish.station !== which)
         throw new CallError(
           'x_wrong_station',
@@ -198,17 +208,16 @@ export function bar(world: World, log: (line: string) => void): WorldDevice {
   dev.tool(
     {
       name: 'make',
-      description: 'Make a drink or dessert order line from menu-01 (a bar-01 item). Calls wait their turn.',
+      description:
+        'Make a drink or dessert order line from menu-01 (a bar-01 item): the one named, else the next waiting. Calls wait their turn.',
       timeout: 90,
       params: { item: { type: 'string', maxLength: 8, description: 'the order line, such as o2' } },
-      required: ['item'],
       uses: ['arms'],
       motion: true,
       ui: { label: 'Make' },
     },
     async (call, { item }) => {
-      const l = service.line(String(item))
-      if (!l) throw new CallError('x_no_line', `there is no order line ${item}`)
+      const l = lineFor(world, item, (x) => x.dish.station === 'bar' && x.stage === 'queued', 'the bar')
       if (l.dish.station !== 'bar')
         throw new CallError(
           'x_wrong_station',
@@ -337,17 +346,20 @@ export function arm(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'plate',
       description:
-        'Take a finished dish (an order line ready on wok-01’s or stove-01’s counter) to the pass for runner-01. Calls wait their turn.',
+        'Take a finished dish (an order line ready on wok-01’s or stove-01’s counter) to the pass for runner-01: the one named, else the one that has waited longest. Calls wait their turn.',
       timeout: 60,
       params: { item: { type: 'string', maxLength: 8, description: 'the order line, such as o1' } },
-      required: ['item'],
       uses: ['arm'],
       motion: true,
       ui: { label: 'Plate' },
     },
     async (call, { item }) => {
-      const l = service.line(String(item))
-      if (!l) throw new CallError('x_no_line', `there is no order line ${item}`)
+      const l = lineFor(
+        world,
+        item,
+        (x) => x.dish.station !== 'bar' && x.stage === 'ready',
+        'the kitchen counters',
+      )
       if (l.dish.station === 'bar')
         throw new CallError(
           'x_bar_item',

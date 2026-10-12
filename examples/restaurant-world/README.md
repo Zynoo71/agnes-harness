@@ -47,20 +47,20 @@ The street and the door are at the south. Inside: the waiting area west of the d
 | `host-01` | The host robot at the door. The guest walks in a few seconds after the page opens; the host leads them to a table and, once they have paid, back to the door | `seat_guest(table)`, `see_off()`, `say(text)` |
 | `floor-01` | The floor plan and the tables' status: free, reserved, occupied, needs clearing | `set_table(table, free \| reserved)` |
 | `menu-01` | The menu on the guest's screen and the orders. One order line per portion (`o1`, `o2`, …), with a note such as "less spicy"; a line is cancelled only before anyone starts it | `show_menu(open?)`, `order(items[{dish, qty?, note?}])`, `cancel(item)`, `hurry(item)` |
-| `wok-01` | Stir-fries and braises, one line at a time; hurried lines go twice as fast | `cook(item)` |
-| `stove-01` | Steams and boils: fish, dumplings, noodles, soup, rice | `cook(item)` |
-| `arm-01` | The kitchen arm: takes a finished dish from the wok or the stove and sets it on the pass | `plate(item)` |
-| `bar-01` | The bar robot: drinks and desserts, set on the bar counter | `make(item)` |
-| `runner-01` | The runner robot: collects up to three things from the pass, the bar and the supplies cabinet, nearest first, serves them at the guest's table, and clears tables to the dish return. Battery | `deliver(items)`, `clear(table?, items?)` |
+| `wok-01` | Stir-fries and braises, one line at a time; hurried lines go twice as fast | `cook(item?)` |
+| `stove-01` | Steams and boils: fish, dumplings, noodles, soup, rice | `cook(item?)` |
+| `arm-01` | The kitchen arm: takes a finished dish from the wok or the stove and sets it on the pass | `plate(item?)` |
+| `bar-01` | The bar robot: drinks and desserts, set on the bar counter | `make(item?)` |
+| `runner-01` | The runner robot: collects up to three things from the pass, the bar and the supplies cabinet, nearest first, serves them at the guest's table, and clears tables to the dish return. Battery | `deliver(items?)`, `clear(table?, items?)` |
 | `supplies-01` | Napkins, chopsticks, bowls, spoons, cups, takeaway boxes and a baby chair; the result names each (`s1`, `s2`, …) for the runner | `dispense(item, qty)`, `restock()` |
 | `cleaner-01` | Scrubs a spill off the floor, and wipes a table once nothing is left on it | `clean(place)` |
 | `room-01` | Lights (bright, warm, dim, party), music (guzheng, jazz, pop, the birthday song, off) with a settable `volume`, and the air conditioning; reports the air's temperature, and whether it is day or evening outside | `set_lights(scene)`, `play_music(track, volume?)`, `set_temperature(celsius)` |
-| `pos-01` | The payment terminal: the bill on the guest's screen, with a discount of up to 50 % and its reason, and payment by QR code, card or cash | `bill(percent?, reason?)`, `charge(method)` |
+| `pos-01` | The payment terminal: the bill on the guest's screen, with a discount of up to 50 % and its reason and how the guest pays (QR code, card or cash), and the payment | `bill(percent, reason?, method?)`, `charge()` |
 | `cam-01` | A ceiling camera in the south-east corner; stills for the model and live video for people | `look_at(place)` |
 
 The menu has seventeen dishes (`src/menu.ts`), each made at one station: five from the wok, five from the steamer and stove, seven drinks and desserts from the bar, among them a birthday cake with candles. A dish made at the wrong station is refused with the station that makes it.
 
-**An order line's way.** `order` → `cook` at its station (or `make` at the bar) → `plate` onto the pass (not for bar items) → `deliver` → at the end `bill`, `charge`, `see_off`, `clear` and `clean`. Every step refuses with a reason when the line is not where it should be (`x_not_waiting`, `x_not_ready`, `x_wrong_station`), and `see_off` refuses until the bill is paid.
+**An order line's way.** `order` → `cook` at its station (or `make` at the bar) → `plate` onto the pass (not for bar items) → `deliver` → at the end `bill`, `charge`, `see_off`, `clear` and `clean`. Every step refuses with a reason when the line is not where it should be (`x_not_waiting`, `x_not_ready`, `x_wrong_station`), and `see_off` refuses until the bill is paid. A station, the arm and the runner given no line take the next one waiting, so the line moves on with no ids to pass, and the DM can take those steps. The bill needs its discount decided, even if it is 0, so only the LLM makes it, when the guest asks; payment and the see-off can only follow it.
 
 ## Conditions
 

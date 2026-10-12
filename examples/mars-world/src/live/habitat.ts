@@ -9,7 +9,7 @@ const MODES = {
   storm_shelter: {
     color: 0xff8a3a,
     glow: 0.9,
-    sentence: 'storm shelter: crew inside, non-essential loads off',
+    sentence: 'storm shelter: crew inside, the cabin sealed and its lights dimmed',
   },
   medical: { color: 0xdff4ff, glow: 2.4, sentence: 'medical: the bay is lit and warmed, oxygen raised' },
 } as const
@@ -107,7 +107,7 @@ export function habitat(world: World, log: (line: string) => void): WorldDevice 
     {
       name: 'set_mode',
       description:
-        'Set the habitat up for normal operations, as a storm shelter (crew inside, non-essential loads off), or for medical care (bay lit and warmed, oxygen raised).',
+        'Set the habitat up for normal operations, as a storm shelter (crew inside, the cabin sealed and its lights dimmed), or for medical care (bay lit and warmed, oxygen raised).',
       timeout: 15,
       params: {
         mode: { type: 'string', enum: Object.keys(MODES), description: 'what to set the habitat up for' },

@@ -26,6 +26,8 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
   let tilt: number = PANEL_TILT.deployed
   let panels: 'deployed' | 'stowed' | 'moving' = 'deployed'
   const shed = new Set<Load>()
+  /** Loads left without power while the bank is empty and the array falls short. */
+  const dark = new Set<Load>()
   let priority: 'life_support' | 'charging' | 'science' = 'life_support'
   const dev = new WorldDevice({
     id: 'power-01',
@@ -36,7 +38,7 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
     // At the battery bank; the array east of it faces south.
     placement: placed(LAYOUT.battery, 270),
     profile: {
-      notes: `A ${PEAK_W / 1000} kW solar array and a ${CAPACITY_WH / 1000} kWh battery bank. Life support always gets power first; priority decides who gets the rest.`,
+      notes: `A ${PEAK_W / 1000} kW solar array and a ${CAPACITY_WH / 1000} kWh battery bank. Life support always gets power first. When the bank is empty and the array cannot carry the loads, loads go dark, the one named in priority last: science, then the greenhouse, then rover charging (a dark charger charges no rover). Daylight, clean panels or shedding loads bring them back.`,
     },
     resources: { array: 'reject', loads: 'queue' },
     state: {
@@ -76,6 +78,10 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
       },
       panels: { type: 'string', enum: ['deployed', 'stowed', 'moving'] },
       shed: { type: 'string', description: 'loads switched off, comma-separated, or none' },
+      unpowered: {
+        type: 'string',
+        description: 'loads without power because the bank is empty, comma-separated, or none',
+      },
       priority: {
         type: 'string',
         enum: ['life_support', 'charging', 'science'],
@@ -88,7 +94,7 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
   const load = () =>
     LIFE_SUPPORT_W +
     (Object.entries(LOADS) as [Load, number][])
-      .filter(([k]) => !shed.has(k) && (k !== 'charging' || world.rover.docked))
+      .filter(([k]) => !shed.has(k) && !dark.has(k) && (k !== 'charging' || world.rover.docked))
       .reduce((n, [, w]) => n + w, 0)
   /** Solar output: how high the sun stands, a slow haze drift, dust, and how far the panels face it. */
   const production = () => {
@@ -107,6 +113,7 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
       dust: Math.round(dust()),
       panels,
       shed: shed.size ? [...shed].join(', ') : 'none',
+      unpowered: dark.size ? [...dark].join(', ') : 'none',
       priority,
     })
   report()
@@ -140,6 +147,16 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
       // The bank's clock runs 15 times faster than the scene's, so a change shows within a demo: a
       // night with every load on takes about half the bank, with only life support about a fifth.
       storage = Math.max(0, Math.min(100, storage + (net / CAPACITY_WH) * (100 / 3600) * 15))
+      // An empty bank: loads go dark, the priority one last, until the array carries the rest.
+      const was = [...dark].join()
+      dark.clear()
+      if (storage <= 0)
+        for (const k of (['science', 'greenhouse', 'charging'] as Load[]).sort(
+          (a, b) => Number(a === priority) - Number(b === priority),
+        ))
+          if (production() < load()) dark.add(k)
+      world.charging = !shed.has('charging') && !dark.has('charging')
+      if ([...dark].join() !== was) report()
       // Dust settles on deployed panels, about a third of their light an hour, and fast in a dust
       // storm; stowed, they stay clean.
       if (panels === 'deployed') {
@@ -280,6 +297,8 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
     world.parts.tiltPanels(tilt)
     panels = 'deployed'
     shed.clear()
+    dark.clear()
+    world.charging = true
     priority = 'life_support'
     report()
   })

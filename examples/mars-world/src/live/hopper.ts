@@ -356,7 +356,7 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
       if (e instanceof Blocked)
         throw new CallError(
           'x_propellant_low',
-          `propellant down to the ${ROCKET.reserve} % landing reserve; hovering, land now`,
+          `propellant down to the ${ROCKET.reserve} % landing reserve; it lands where it is now. Away from the hopper pad it cannot take off again (that needs ${ROCKET.minTakeOff} %): monolith-01 can tow it to the pad`,
         )
       throw e
     }

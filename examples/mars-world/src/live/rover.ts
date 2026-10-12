@@ -140,7 +140,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
       max_speed: DRIVE.speed,
       reach_m: REACH,
       notes:
-        'Six-wheeled rover with a sampling arm and a drill. Stops by itself before boulders and people. Charges in the dock beside the lab. With a flat battery (0 %) it cannot drive: monolith-01 can tow it to the dock, where it charges.',
+        'Six-wheeled rover with a sampling arm and a drill. Stops by itself before boulders and people. Charges in the dock beside the lab while power-01 feeds the charger (not shed, not unpowered). With a flat battery (0 %) it cannot drive: monolith-01 can tow it to the dock, where it charges.',
     },
     resources: { chassis: 'reject', arm: 'reject' },
     manual: {
@@ -304,7 +304,10 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
   every(
     5000,
     () => {
-      battery = Math.max(0, Math.min(100, battery + (world.rover.docked ? 2 : body.speed > 0 ? -1 : 0)))
+      battery = Math.max(
+        0,
+        Math.min(100, battery + (world.rover.docked ? (world.charging ? 2 : 0) : body.speed > 0 ? -1 : 0)),
+      )
       report()
     },
     log,

@@ -41,6 +41,9 @@ const TEXT = {
     timeHead: 'Skip to',
     conditionsHead: 'Conditions',
     share: 'Decisions',
+    spent: 'Time',
+    think: 'think',
+    act: 'act',
     dmSaw: 'read',
     dmChose: (n: number, s: string) => `${s} s · chose among ${n} actions`,
     dmAskLlm: 'Let the LLM decide',
@@ -145,6 +148,9 @@ const TEXT = {
     timeHead: '跳到',
     conditionsHead: '状况',
     share: '决策占比',
+    spent: '用时',
+    think: '思考',
+    act: '执行',
     dmSaw: '看了',
     dmChose: (n: number, s: string) => `${s} 秒 · 从 ${n} 个动作里选`,
     dmAskLlm: '让 LLM 来判断',
@@ -433,29 +439,63 @@ export function buildOverlay(options: {
       .label()
       .replace(/^Sol \d+ · /, '')
       .replace(' LMST', '')
-  /** The device actions the DM and the LLM have taken since the page opened. */
+  /** A span of time, short: 6.2 s, 45 s, 2m 05s. */
+  const dur = (ms: number) => {
+    const s = ms / 1000
+    if (s < 9.95) return `${s.toFixed(1)} s`
+    if (s < 59.5) return `${Math.round(s)} s`
+    const whole = Math.round(s)
+    return `${Math.floor(whole / 60)}m ${String(whole % 60).padStart(2, '0')}s`
+  }
+  /** A word in a chip like the callers', for the two kinds of time. */
+  const kindChip = (word: string, kind: string) => el('span', `who ${kind}`, word)
+  /** An element holding `children`. */
+  const box = (className: string, ...children: (string | HTMLElement)[]) => {
+    const b = el('span', className)
+    b.append(...children)
+    return b
+  }
+  /** A bar split in two by `a` and `b`. */
+  const split = (a: number, b: number, kinds: [string, string]) => {
+    const bar = el('span', 'split')
+    for (const [k, n] of [
+      [kinds[0], a],
+      [kinds[1], b],
+    ] as const) {
+      const part = el('i', k)
+      part.style.flexGrow = String(n)
+      bar.append(part)
+    }
+    return bar
+  }
+  /** Since the page opened: the device actions the DM and the LLM took, and the time spent deciding and acting. */
   const steps = { dm: 0, llm: 0 }
-  // Above the list: who decided the device actions so far, the DM or the LLM, as shares of them.
+  const spent = { think: 0, act: 0 }
+  // Above the list, two rows alike: who decided the device actions so far, the DM or the LLM; and
+  // how long deciding them took against how long the devices took to carry them out.
   const drawHead = () => {
     const { dm: dmSteps, llm: llmSteps } = steps
     const all = dmSteps + llmSteps
-    head.hidden = all === 0 || (dmSteps === 0 && !(dm?.decisions().length ?? 0))
+    head.hidden = all === 0
     if (head.hidden) return
-    const dmShare = Math.round((dmSteps / all) * 100)
-    const split = el('span', 'split')
-    const dmPart = el('i', 'dm')
-    const llmPart = el('i', 'llm')
-    dmPart.style.flexGrow = String(dmSteps)
-    llmPart.style.flexGrow = String(llmSteps)
-    split.append(dmPart, llmPart)
-    head.replaceChildren(
-      el('span', 'label', t().share),
-      chip('DM'),
-      el('b', '', `${dmShare}%`),
-      split,
-      el('b', '', `${100 - dmShare}%`),
-      chip('LLM'),
-    )
+    const rows: HTMLElement[] = []
+    if (dmSteps > 0 || (dm?.decisions().length ?? 0) > 0) {
+      const dmShare = Math.round((dmSteps / all) * 100)
+      rows.push(
+        el('span', 'label', t().share),
+        box('left', chip('DM'), el('b', '', `${dmShare}%`)),
+        split(dmSteps, llmSteps, ['dm', 'llm']),
+        box('right', el('b', '', `${100 - dmShare}%`), chip('LLM')),
+      )
+    }
+    if (spent.think + spent.act > 0)
+      rows.push(
+        el('span', 'label', t().spent),
+        box('left', kindChip(t().think, 'think'), el('b', '', dur(spent.think))),
+        split(spent.think, spent.act, ['think', 'act']),
+        box('right', el('b', '', dur(spent.act)), kindChip(t().act, 'act')),
+      )
+    head.replaceChildren(...rows)
   }
   const push = (
     kind: () => string,
@@ -475,7 +515,8 @@ export function buildOverlay(options: {
       line.replaceChildren(
         el('span', 'when', when),
         ...parts().map((p) => (typeof p === 'string' ? el('span', '', p) : p)),
-        ...(d ? [el('span', 'caret', open ? '▾' : '▸')] : []),
+        // Every line keeps the caret's room, so the time columns line up.
+        el('span', 'caret', d ? (open ? '▾' : '▸') : ''),
       )
       item.replaceChildren(line, ...(open && d ? [decisionCard(d)] : []))
     }
@@ -499,7 +540,7 @@ export function buildOverlay(options: {
   const callText = (a: Activity) =>
     a.status
       ? a.status === 'done'
-        ? `✓ ${t().done} · ${Math.round(((a.ended ?? 0) - a.started) / 1000)} s`
+        ? `✓ ${t().done}`
         : `✗ ${statusWord(a)} · ${a.reason}${a.status === 'rejected' ? `: ${a.detail}` : ''}`
       : a.progress?.text
         ? `… ${progressLabel(lang, a.progress.text)}`
@@ -507,6 +548,7 @@ export function buildOverlay(options: {
   const callLine = (a: Activity) => {
     const by = byOf(a.caller)
     if (by) steps[by]++
+    if (by && a.think !== undefined) spent.think += a.think
     const behind = () => (a.caller === 'DM' ? dmBehind(a) : undefined)
     const draw = push(
       () => `call ${a.status ?? 'running'} by-${byOf(a.caller) ?? 'other'}`,
@@ -517,6 +559,9 @@ export function buildOverlay(options: {
           el('b', 'dev', name(a.device)),
           tool(a.tool),
           el('span', 'state', callText(a)),
+          // How long it was thought over, then how long the device took: aligned columns.
+          box('time', ...(a.think === undefined ? [] : [el('i', '', t().think), dur(a.think)])),
+          box('time', ...(a.ended === undefined ? [] : [el('i', '', t().act), dur(a.ended - a.started)])),
         ]
       },
       behind,
@@ -560,6 +605,10 @@ export function buildOverlay(options: {
       if (draw) draw()
       else lineFor.set(a, callLine(a))
       if (a.status) {
+        if (byOf(a.caller) && a.ended !== undefined) {
+          spent.act += a.ended - a.started
+          drawHead()
+        }
         lineFor.delete(a)
         lastEnded.set(a.device, a)
         if (a.status === 'error' || a.status === 'rejected')

@@ -144,6 +144,8 @@ export interface Activity {
   args: Values
   /** Who called: the caller name from the hub's meta (an agent, a person's console), if any. */
   caller: string | undefined
+  /** How long the caller took to decide on the call, in ms, from the hub's meta, if it says. */
+  think: number | undefined
   started: number
   progress: { done?: number; total?: number; text?: string } | undefined
   ended: number | undefined
@@ -205,6 +207,7 @@ export class WorldDevice extends Device {
               tool,
               args: {},
               caller: undefined,
+              think: undefined,
               started: now,
               progress: undefined,
               ended: now,
@@ -234,12 +237,13 @@ export class WorldDevice extends Device {
   override tool(options: ToolOptions, handler: ToolHandler): void {
     super.tool(options, async (call, args) => {
       this.running.add(call)
-      const meta = call.meta as { caller?: string } | undefined
+      const meta = call.meta as { caller?: string; think_ms?: number } | undefined
       const a: Activity = {
         device: this.id,
         tool: call.name,
         args,
         caller: meta?.caller,
+        think: meta?.think_ms,
         started: performance.now(),
         progress: undefined,
         ended: undefined,

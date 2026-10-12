@@ -12,9 +12,11 @@ type Values = Parameters<Device['update']>[0]
 import * as THREE from 'three'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js'
+import type { Actors } from '../actors.js'
 import { type Footprint, type GridMap, MAP_ID, occupancy } from './map.js'
 import { grayPng } from './png.js'
 import { type Circle, headingTo, type Point, round, toMap, yawOf } from './route.js'
+import { Service } from './service.js'
 
 /** A camera's render targets and the buffers its pictures are read back into. */
 interface Targets {
@@ -323,11 +325,21 @@ export class World {
   private readonly output = flippedOutput()
   private readonly i420 = new I420()
 
+  /** The guest's visit: orders, what is on the table, the bill. */
+  readonly service = new Service()
+  /** What the host robot says, in a bubble over it until `until` (ms, performance.now). */
+  speech = { text: '', until: 0 }
+  /** The room's lights, music and temperature, as room-01 set them; `light` applies a lighting scene. */
+  ambience = { lights: 'warm', music: 'guzheng', volume: 4, temperature: 24 }
+  light: (scene: string) => void = () => undefined
+
   constructor(
     readonly renderer: THREE.WebGLRenderer,
     readonly scene: THREE.Scene,
     /** What stands on the floor and blocks the way: walls, counters, tables. */
     readonly footprints: Footprint[],
+    /** The people and robots, and the dishes and effects they handle. */
+    readonly actors: Actors,
   ) {}
 
   onReset(reset: () => void): void {
@@ -336,6 +348,7 @@ export class World {
 
   /** Puts the shared state and every device back as a fresh page has them. */
   reset(): void {
+    this.service.reset()
     for (const reset of this.resets) reset()
   }
 

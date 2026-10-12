@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { buildActors } from './actors.js'
 import { ROOM } from './layout.js'
+import { connectDevices } from './live/index.js'
 import { buildRoom } from './room.js'
 import { IsoView } from './view.js'
 
@@ -76,3 +77,18 @@ renderer.setAnimationLoop(() => {
   // Screenshots wait for this marker: a few frames after everything has loaded.
   if (frames === 30) document.body.dataset.ready = '1'
 })
+
+// ?hub=ws://127.0.0.1:4180 connects the restaurant's devices to an AgnesHub.
+const hub = params.get('hub')
+const live = hub
+  ? connectDevices(
+      hub,
+      renderer,
+      scene,
+      actors,
+      (line) => console.log(line),
+      params.get('devices')?.split(','),
+    )
+  : undefined
+// Scripts (an evaluation, a test) reach the world here.
+if (live) Object.assign(window, { restaurant: { world: live.world, reset: live.reset, view } })

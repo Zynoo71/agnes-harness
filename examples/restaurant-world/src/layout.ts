@@ -313,3 +313,48 @@ export const FOOTPRINTS: Footprint[] = [
   ...TABLES.map((t) => foot(t.footprint)),
   ...PLANTS.map(foot),
 ]
+
+/** The seat the guest takes at a table: the one facing most toward the view, so they are seen. */
+export function guestSeat(t: Table): Seat {
+  const toView = (s: Seat) => Math.cos(((s.yaw - 315) * Math.PI) / 180)
+  return t.seats.reduce((best, s) => (toView(s) > toView(best) ? s : best))
+}
+
+/** Where things are set down on a table: points on its top, nearest the guest's seat first. */
+export function tableSlots(t: Table): { x: number; y: number }[] {
+  const seat = guestSeat(t)
+  const step = 0.26
+  const margin = 0.14
+  const points: { x: number; y: number }[] = []
+  const r = 'r' in t.top ? t.top.r : Math.max(t.top.w, t.top.d)
+  for (let dx = -r; dx <= r; dx += step)
+    for (let dy = -r; dy <= r; dy += step) {
+      const inside =
+        'r' in t.top
+          ? Math.hypot(dx, dy) <= t.top.r - margin && Math.hypot(dx, dy) > 0.2
+          : Math.abs(dx) <= t.top.w / 2 - margin && Math.abs(dy) <= t.top.d / 2 - margin
+      if (inside) points.push({ x: t.x + dx, y: t.y + dy })
+    }
+  return points.sort(
+    (a, b) => Math.hypot(a.x - seat.x, a.y - seat.y) - Math.hypot(b.x - seat.x, b.y - seat.y),
+  )
+}
+
+/** Where the guest steps in from to sit: a little behind the seat, away from the table. */
+export function besideSeat(t: Table, s: Seat): { x: number; y: number } {
+  const dx = s.x - t.x
+  const dy = s.y - t.y
+  const n = Math.hypot(dx, dy) || 1
+  return { x: s.x + (dx / n) * 0.75, y: s.y + (dy / n) * 0.75 }
+}
+
+/** The tables' surface height, and the counters dishes are set on. */
+export const TABLE_H = 0.75
+export const COUNTER_H = {
+  wok: 0.9,
+  stove: 0.9,
+  pass: 0.95,
+  bar: 1.095,
+  supplies: 1.14,
+  dishReturn: 0.9,
+} as const

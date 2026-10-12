@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import { ARM_BASE, BARTENDER, DOOR, HOMES } from './layout.js'
+import { ARM_BASE, BACK_OF_HOUSE_Y, BAR_X, BARTENDER, DOOR, FIXTURES, HOMES } from './layout.js'
+import type { Look } from './menu.js'
 import { box, cylinder, drawn, mat, place } from './shapes.js'
 
 /**
@@ -399,22 +400,8 @@ function bartender(): Bartender {
   return { object, arms }
 }
 
-/** How a dish or drink looks; the menu gives each item one, with a colour where it varies. */
-export type DishLook =
-  | 'stirfry'
-  | 'braise'
-  | 'fish'
-  | 'steamer'
-  | 'rice'
-  | 'noodles'
-  | 'soup'
-  | 'greens'
-  | 'tea'
-  | 'glass'
-  | 'cake'
-
 /** A dish or drink, its base on the origin, about as wide as the real thing. */
-export function dish(look: DishLook, color = 0xc4622d): THREE.Group {
+export function dish(look: Look, color = 0xc4622d): THREE.Group {
   const g = new THREE.Group()
   const food = mat(color, { roughness: 0.55 })
   const plate = (r: number) => g.add(at(cylinder(r, r * 0.8, 0.02, M.porcelain, 24), 0, 0.01, 0))
@@ -476,6 +463,16 @@ export function dish(look: DishLook, color = 0xc4622d): THREE.Group {
       mound(0.095, 0.06, mat(0xf0cf62, { roughness: 0.8 }))
       bits(12, 0.08, 0.06, [0x6db34f, 0xd8452f, 0xf7f2e0], 0.018)
       break
+    case 'bowl': {
+      g.add(at(cylinder(0.065, 0.042, 0.06, M.porcelain, 18), 0, 0.03, 0))
+      const top = new THREE.Mesh(
+        new THREE.SphereGeometry(0.06, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+        M.porcelain,
+      )
+      top.scale.y = 0.5
+      g.add(at(top, 0, 0.058, 0))
+      break
+    }
     case 'noodles':
     case 'soup':
       bowl(0.12, 0.09, M.porcelain, look === 'soup' ? mat(0xe8c890, { roughness: 0.2 }) : food)
@@ -514,6 +511,129 @@ export function dish(look: DishLook, color = 0xc4622d): THREE.Group {
   return g
 }
 
+/** A supply the runner brings: a napkin pack, a pair of chopsticks, a bowl, a spoon, a cup, a takeaway box, a baby chair. */
+export function supplyModel(item: string): THREE.Group {
+  const g = new THREE.Group()
+  const red = mat(0xb3261e)
+  switch (item) {
+    case 'napkins':
+      g.add(at(box(0.16, 0.06, 0.12, M.porcelain), 0, 0.03, 0))
+      g.add(at(box(0.165, 0.015, 0.04, red), 0, 0.045, 0))
+      break
+    case 'chopsticks':
+      for (const dx of [-0.012, 0.012]) g.add(at(box(0.01, 0.01, 0.24, red), dx, 0.006, 0))
+      g.add(at(box(0.05, 0.01, 0.03, M.porcelain), 0, 0.012, -0.08))
+      break
+    case 'bowl':
+      g.add(at(cylinder(0.065, 0.042, 0.06, M.porcelain, 18), 0, 0.03, 0))
+      break
+    case 'spoon':
+      g.add(at(box(0.04, 0.02, 0.14, M.porcelain), 0, 0.01, 0))
+      break
+    case 'cup':
+      g.add(at(cylinder(0.04, 0.032, 0.07, M.celadon, 14), 0, 0.035, 0))
+      break
+    case 'takeaway_box':
+      g.add(at(box(0.18, 0.08, 0.14, M.porcelain), 0, 0.04, 0))
+      g.add(at(box(0.06, 0.04, 0.005, red), 0, 0.045, 0.071))
+      break
+    case 'baby_chair': {
+      // A small high chair: four legs, a seat with a tray, a back.
+      const wood = mat(0xd2ad62)
+      for (const [dx, dz] of [
+        [-0.15, -0.15],
+        [0.15, -0.15],
+        [-0.15, 0.15],
+        [0.15, 0.15],
+      ] as const)
+        g.add(at(box(0.03, 0.7, 0.03, wood), dx, 0.35, dz))
+      g.add(at(box(0.34, 0.04, 0.34, wood), 0, 0.7, 0))
+      g.add(at(box(0.34, 0.3, 0.03, wood), 0, 0.86, -0.16))
+      g.add(at(box(0.36, 0.03, 0.16, red), 0, 0.82, 0.22))
+      break
+    }
+  }
+  return g
+}
+
+/** A spill on the floor: a flat brown puddle with a lighter edge. */
+export function puddle(): THREE.Group {
+  const g = new THREE.Group()
+  const wet = mat(0x6b4423, { roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.8 })
+  for (const [dx, dz, r] of [
+    [0, 0, 0.32],
+    [0.25, 0.12, 0.18],
+    [-0.2, -0.15, 0.15],
+  ] as const) {
+    const m = new THREE.Mesh(new THREE.CircleGeometry(r, 24), wet)
+    m.rotation.x = -Math.PI / 2
+    g.add(at(m, dx, 0.006, dz))
+  }
+  return g
+}
+
+/** Effects the kitchen and the room switch on: fire under the wok, steam over the stove, music notes. */
+export interface Effects {
+  fire: THREE.Group
+  steam: THREE.Group
+  notes: THREE.Group
+  update(t: number): void
+}
+
+export function buildEffects(): Effects {
+  const fire = new THREE.Group()
+  const flame = mat(0xffa040, { emissive: 0xff6a10, emissiveIntensity: 3, transparent: true, opacity: 0.85 })
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 7) * Math.PI * 2
+    const tongue = at(
+      new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.3, 8), flame),
+      Math.cos(a) * 0.2,
+      0.15,
+      Math.sin(a) * 0.2,
+    )
+    fire.add(tongue)
+  }
+  fire.visible = false
+  const steam = new THREE.Group()
+  const puff = mat(0xffffff, { transparent: true, opacity: 0.45, roughness: 1 })
+  for (let k = 0; k < 6; k++)
+    steam.add(at(sphere(0.09, puff, 10), (k % 3) * 0.12 - 0.12, k * 0.12, (k % 2) * 0.1))
+  steam.visible = false
+  const notes = new THREE.Group()
+  const ink = mat(0x000000, { emissive: 0xffd36e, emissiveIntensity: 1.6 })
+  for (let k = 0; k < 4; k++) {
+    const note = new THREE.Group()
+    note.add(at(sphere(0.06, ink, 10), 0, 0, 0))
+    note.add(at(box(0.015, 0.22, 0.015, ink), 0.05, 0.11, 0))
+    note.add(at(box(0.08, 0.02, 0.015, ink), 0.09, 0.21, 0))
+    notes.add(at(note, k * 0.4, k * 0.3, 0))
+  }
+  notes.visible = false
+  return {
+    fire,
+    steam,
+    notes,
+    update(t) {
+      if (fire.visible)
+        fire.children.forEach((c, k) => {
+          c.scale.y = 0.7 + 0.5 * Math.abs(Math.sin(t * 9 + k * 1.7))
+        })
+      if (steam.visible)
+        steam.children.forEach((c, k) => {
+          const phase = (t * 0.6 + k / 6) % 1
+          c.position.y = phase * 0.8
+          c.scale.setScalar(0.6 + phase)
+        })
+      if (notes.visible)
+        notes.children.forEach((c, k) => {
+          const phase = (t * 0.35 + k / 4) % 1
+          c.position.set(k * 0.5 - 0.75 + Math.sin(t + k) * 0.15, phase * 1.2, 0)
+          c.visible = phase < 0.9
+        })
+    },
+  }
+}
+
 export interface Actors {
   group: THREE.Group
   guest: Guest
@@ -522,6 +642,7 @@ export interface Actors {
   cleaner: Cleaner
   arm: Arm
   bartender: Bartender
+  effects: Effects
   /** Idle motion: the marker spins, the arm and the bar's robot sway while nobody drives them. */
   update(t: number): void
 }
@@ -543,6 +664,11 @@ export function buildActors(): Actors {
   group.add(place(a.object, ARM_BASE.x, ARM_BASE.y, 0.14, 270))
   const b = bartender()
   group.add(place(b.object, BARTENDER.x, BARTENDER.y, 0.01, BARTENDER.yaw))
+  const effects = buildEffects()
+  group.add(place(effects.fire, FIXTURES.wok.x - 0.25, FIXTURES.wok.y, 0.95))
+  group.add(place(effects.steam, FIXTURES.stove.x + 0.1, FIXTURES.stove.y, 1.4))
+  // Music notes rise from the speaker over the bar's side wall.
+  group.add(place(effects.notes, BAR_X - 1.5, BACK_OF_HOUSE_Y - 0.3, 2.3))
   return {
     group,
     guest: g,
@@ -551,7 +677,9 @@ export function buildActors(): Actors {
     cleaner: c,
     arm: a,
     bartender: b,
+    effects,
     update(t) {
+      effects.update(t)
       g.marker.rotation.y = t * 2
       g.marker.position.y = 2.15 + Math.sin(t * 3) * 0.05
       h.head.rotation.x = Math.sin(t * 0.8) * 0.04

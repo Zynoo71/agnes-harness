@@ -97,7 +97,6 @@ const TEXT = {
     fields: {} as Record<string, string>,
     already: (kind: string) => `a ${kind.toLowerCase()} is already happening`,
     notOnFoot: 'the astronaut is not out on foot',
-    auto: 'Auto',
     map: { title: 'base map · m', axes: 'x → east, y ↑ north' },
     views: {} as Record<string, string>,
     quality: {} as Record<string, string>,
@@ -122,7 +121,7 @@ const TEXT = {
 <ul>
 <li>Tags over the devices show the tool each one runs, its progress and who called it: the DM in teal with a bolt, the LLM in blue.</li>
 <li>Bottom left: the latest calls, alerts and events. Top: banners for what needs attention.</li>
-<li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> views · <kbd>A</kbd> auto camera · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
+<li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> views · <kbd>P</kbd> picture in picture · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
 <li>Address: <code>?time=night</code>, <code>?sol=10</code> (minutes a sol takes), <code>?events=auto&amp;seed=7</code> (an event every few minutes on its own) or <code>off</code>, <code>?lang=zh</code></li>
 </ul>`,
   },
@@ -241,7 +240,6 @@ const TEXT = {
     } as Record<string, string>,
     already: (kind: string) => `${kind}已经在进行`,
     notOnFoot: '宇航员不在舱外步行',
-    auto: '自动',
     map: { title: '基地地图 · 米', axes: 'x → 东，y ↑ 北' },
     views: {
       overview: '总览',
@@ -279,7 +277,7 @@ const TEXT = {
 <ul>
 <li>设备上方的标签显示它正在执行的工具、进度和调用者：DM 是青绿色带闪电，LLM 是蓝色。</li>
 <li>左下角是最近的调用、告警和事件；顶部横幅提示需要注意的事。</li>
-<li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 视角 · <kbd>A</kbd> 自动镜头 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
+<li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 视角 · <kbd>P</kbd> 画中画 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
 <li>地址参数：<code>?time=night</code>、<code>?sol=10</code>（一个火星日的分钟数）、<code>?events=auto&amp;seed=7</code>（每隔几分钟自动来一个事件）或 <code>off</code>、<code>?lang=en</code></li>
 </ul>`,
   },
@@ -350,9 +348,13 @@ export function buildOverlay(options: {
   toggleEvents(): void
   toggleHelp(): void
   lang(): Lang
-  view(name: string, label: string, auto: boolean): string
+  view(name: string, label: string): string
   quality(name: string): string
   mapWords(): { title: string; axes: string }
+  /** A device's name and a tool's, in the language of the moment, for the picture in picture. */
+  deviceName(id: string): string
+  toolName(tool: string): string
+  eventName(kind: EventKind): string
 } {
   const { clock, live, tags } = options
   let lang: Lang = options.lang
@@ -1050,8 +1052,11 @@ export function buildOverlay(options: {
     toggleEvents,
     toggleHelp,
     lang: () => lang,
-    view: (shot, label, auto) => `${auto ? `${t().auto} · ` : ''}${t().views[shot] ?? label}`,
+    view: (shot, label) => t().views[shot] ?? label,
     quality: (name) => t().quality[name] ?? name,
     mapWords: () => t().map,
+    deviceName: (id) => name(id),
+    toolName: (tool) => toolLabel(lang, tool),
+    eventName: (kind) => t().kinds[kind],
   }
 }

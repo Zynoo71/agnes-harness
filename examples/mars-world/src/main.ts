@@ -9,11 +9,12 @@ import { coveredTextures } from './assets.js'
 import { buildBase, GROUND_CONTACTS, LAYOUT } from './base.js'
 import { MarsClock, SOL_MINUTES, START_HOURS, type TimeOfDay } from './clock.js'
 import { DETAIL_AREAS } from './details.js'
-import { buildDevices, DEVICES, MONOLITH } from './devices.js'
+import { buildDevices, DEVICES } from './devices.js'
 import { DmWatch } from './dm/watch.js'
 import { buildDust } from './dust.js'
 import { buildEffects } from './effects.js'
-import type { EventKind, Headline } from './live/events.js'
+import { deviceCameras } from './live/camera.js'
+import type { EventKind } from './live/events.js'
 import { connectDevices } from './live/index.js'
 import { watchers } from './live/world.js'
 import { buildMinimap } from './minimap.js'
@@ -187,15 +188,7 @@ composer.addPass(new OutputPass())
 
 // Fixed viewpoints: keys 1–9 and 0, or ?shot=<name>.
 let shot = applyShot(camera, params.get('shot') ?? 'overview')
-/** A view the auto camera set up for an event in one place (a meteorite), not one of SHOTS. */
-let eventView: Headline = { en: '', zh: '' }
-const shotLabel = () =>
-  shot === 'event'
-    ? overlay.view(shot, eventView[overlay.lang()], auto)
-    : overlay.view(shot, SHOTS.find((s) => s.name === shot)?.label ?? '', auto)
-/** Whether the view follows what happens (A); a view picked by hand holds it off for a while. */
-let auto = false
-let autoHeldUntil = 0
+const shotLabel = () => overlay.view(shot, SHOTS.find((s) => s.name === shot)?.label ?? '')
 
 // Name tags over the devices.
 const tags = document.getElementById('tags') as HTMLElement
@@ -223,7 +216,6 @@ addEventListener('keydown', (e) => {
   const next = SHOTS[n - 1]
   if (n >= 1 && next) {
     shot = applyShot(camera, next.name)
-    autoHeldUntil = performance.now() + 30_000
   }
 })
 const v = new THREE.Vector3()
@@ -332,6 +324,7 @@ renderer.setAnimationLoop(() => {
   follow(dt)
   sky.position.copy(camera.position)
   composer.render()
+  drawPip()
   placeTags()
   placeSpeech()
   cpu += performance.now() - start
@@ -412,20 +405,15 @@ addEventListener('keydown', (e) => {
   if (e.key === 'e') overlay.toggleEvents()
   if (e.key === '?' || e.key === 'h') overlay.toggleHelp()
 })
-// The auto camera (A, on by default with a hub): it goes where a call starts or an event happens,
-// and stays at least a few seconds on each view; an event goes before a call.
+// The picture in picture, top left: the live view of the device at work, from its own camera when
+// it has one, else from the view of its place, at least a few seconds on each; an event goes
+// before a call. The main view stays where it is. P turns it off and on.
 const VIEW_OF: Record<string, string> = {
-  'hopper-01': 'hopper',
-  'rover-01': 'rover',
-  'suit-01': 'suit',
-  [MONOLITH.id]: 'monolith',
   'airlock-01': 'airlock',
   'habitat-01': 'airlock',
-  'lab-01': 'dock',
   'power-01': 'power',
   'weather-01': 'comms',
   'comms-01': 'comms',
-  'cam-base': 'overview',
 }
 const EVENT_VIEW: Record<EventKind, string> = {
   dust_storm: 'overview',
@@ -433,42 +421,80 @@ const EVENT_VIEW: Record<EventKind, string> = {
   dust_devil: 'power',
   meteorite: 'event',
 }
-auto = Boolean(live) && !params.has('shot') && params.get('auto') !== '0'
-let autoSince = 0
-const autoTo = (name: string, urgent = false) => {
+const PIP = { left: 14, top: 76, w: 320, h: 180, every: 3, holdMs: 8000 }
+const pipBox = document.getElementById('pip') as HTMLElement
+const pipLabel = pipBox.querySelector('span') as HTMLElement
+const pipCamera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 4000)
+pipCamera.far = 4000
+let pipOn = Boolean(live) && params.get('pip') !== '0'
+let pipShown: THREE.PerspectiveCamera | undefined
+let pipSince = 0
+let pipText = () => ''
+const pipTo = (camera: THREE.PerspectiveCamera, text: () => string, urgent = false) => {
   const now = performance.now()
-  if (!auto || now < autoHeldUntil || name === shot || (!urgent && now - autoSince < 8000)) return
-  shot = applyShot(camera, name)
-  autoSince = now
+  if (!urgent && pipShown && now - pipSince < PIP.holdMs) return
+  pipShown = camera
+  pipSince = now
+  pipText = text
+}
+// The picture is drawn into a texture every few frames and laid over the corner every frame.
+const pipMap = { value: null as THREE.Texture | null }
+const pipMaterial = new THREE.ShaderMaterial({
+  uniforms: { map: pipMap },
+  vertexShader:
+    'varying vec2 vUv; void main() { vUv = vec2(uv.x, 1.0 - uv.y); gl_Position = vec4(position.xy, 0.0, 1.0); }',
+  fragmentShader:
+    'uniform sampler2D map; varying vec2 vUv; void main() { gl_FragColor = texture2D(map, vUv); }',
+  depthTest: false,
+})
+const pipScene = new THREE.Scene()
+pipScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), pipMaterial))
+const pipFlat = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+function drawPip() {
+  pipBox.hidden = !pipOn || !pipShown || !live
+  if (pipBox.hidden || !live || !pipShown) return
+  if (frames % PIP.every === 0 || !pipMap.value)
+    pipMap.value = live.world.view(pipShown, PIP.w * 2, PIP.h * 2)
+  const text = pipText()
+  if (pipLabel.textContent !== text) pipLabel.textContent = text
+  const y = innerHeight - PIP.top - PIP.h
+  renderer.setScissorTest(true)
+  renderer.setViewport(PIP.left, y, PIP.w, PIP.h)
+  renderer.setScissor(PIP.left, y, PIP.w, PIP.h)
+  renderer.render(pipScene, pipFlat)
+  renderer.setScissorTest(false)
+  renderer.setViewport(0, 0, innerWidth, innerHeight)
 }
 if (live) {
   watchers.activity.push((a) => {
-    const view = VIEW_OF[a.device]
-    if (view && a.progress === undefined && !a.status) autoTo(view)
+    if (a.progress !== undefined || a.status) return
+    const own = deviceCameras.get(a.device)
+    const camera = own ?? pipCamera
+    const text = () => `${overlay.deviceName(a.device)} · ${overlay.toolName(a.tool)}`
+    if (own) pipTo(camera, text)
+    else {
+      const now = performance.now()
+      if (pipShown && now - pipSince < PIP.holdMs) return
+      applyShot(pipCamera, VIEW_OF[a.device] ?? 'overview')
+      pipTo(pipCamera, text)
+    }
   })
   live.world.events?.listeners.push((h, phase) => {
     if (phase !== 'start') return
+    const text = () => overlay.eventName(h.kind)
     if (h.kind === 'meteorite' && h.place) {
       // From the base side of the fall, a little above it, so the streak, the flash and the dust show.
       const { x, z } = h.place
-      const now = performance.now()
-      if (!auto || now < autoHeldUntil) return
-      camera.position.set(x + 16, 7, z + 12)
-      camera.lookAt(x, 2, z)
-      camera.fov = 50
-      camera.updateProjectionMatrix()
-      shot = 'event'
-      eventView = h.headline
-      autoSince = now
-      return
-    }
-    autoTo(EVENT_VIEW[h.kind], true)
+      pipCamera.position.set(x + 16, 7, z + 12)
+      pipCamera.lookAt(x, 2, z)
+      pipCamera.fov = 50
+      pipCamera.updateProjectionMatrix()
+    } else applyShot(pipCamera, EVENT_VIEW[h.kind])
+    pipTo(pipCamera, text, true)
   })
 }
 addEventListener('keydown', (e) => {
-  if (e.key !== 'a' || !live) return
-  auto = !auto
-  autoHeldUntil = 0
+  if (e.key === 'p') pipOn = !pipOn
 })
 // Reset (the button, or R): every device back to how the page started it, without reloading, so
 // the devices stay connected to the hub. A demo control of the page, not part of any device.

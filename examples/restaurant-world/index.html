@@ -173,6 +173,15 @@
       #help ul { margin: 4px 0; padding-left: 20px; } #help p { margin: 6px 0; }
       #help kbd, #help code { font: 11.5px var(--mono); padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; background: rgba(226, 160, 120, 0.08); }
       #help .close { position: sticky; float: right; bottom: 0; margin-top: 8px; }
+      /* Who comes in next: the party picker that Reset opens. */
+      #reset-panel { position: fixed; right: 14px; bottom: 42px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line);
+                     border-radius: 8px; color: var(--text); font-size: 12.5px; backdrop-filter: blur(6px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); }
+      #reset-panel .head { font: 700 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+      #reset-panel .sizes { display: flex; gap: 4px; margin: 6px 0 10px; }
+      #reset-panel .sizes button { width: 28px; padding: 4px 0; font-size: 12.5px; }
+      #reset-panel label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+      #reset-panel .actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; }
+      #reset-panel .go { background: rgba(82, 224, 138, 0.18); border-color: rgba(82, 224, 138, 0.6); }
       .tag.busy { border-color: rgba(255, 220, 170, 0.9); }
       .tag.warn { border-color: var(--amber); }
       .tag.bad { border-color: var(--red); background: rgba(60, 16, 12, 0.8); }
@@ -206,6 +215,7 @@
       <aside id="menu-card" class="card" hidden></aside>
     </div>
     <div id="help" hidden></div>
+    <div id="reset-panel" hidden></div>
     <div id="bar">
       <span id="guest"></span><span id="table"></span><span id="kitchen"></span><span id="room"></span>
       <span class="spacer"></span>

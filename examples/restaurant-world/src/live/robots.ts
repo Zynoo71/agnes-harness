@@ -1,7 +1,7 @@
 import { CallError } from '@agnes/mhs/device'
 import type * as THREE from 'three'
 import { puddle } from '../actors.js'
-import { besideSeat, guestSeat, HOMES, TABLE_H, TABLES, type Table, tableSlots } from '../layout.js'
+import { babyChairSpot, guestSeat, HOMES, TABLE_H, TABLES, type Table, tableSlots } from '../layout.js'
 import { place } from '../shapes.js'
 import { landmark, PLACE_PARAM } from './floormap.js'
 import { kitchenSpots } from './kitchen.js'
@@ -37,8 +37,8 @@ function setOnTable(world: World, t: Table, i: Item) {
   object.rotation.set(0, 0, 0)
   if (i.kind === 'supply' && i.supply.item === 'baby_chair') {
     const seat = world.service.seat ?? guestSeat(t)
-    const by = besideSeat(t, seat)
-    world.actors.group.add(place(object, (seat.x + by.x) / 2 + 0.55, (seat.y + by.y) / 2, 0, seat.yaw))
+    const spot = babyChairSpot(t, seat)
+    world.actors.group.add(place(object, spot.x, spot.y, 0, seat.yaw))
     i.supply.slot = -1
     return
   }

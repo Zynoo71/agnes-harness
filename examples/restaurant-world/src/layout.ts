@@ -293,7 +293,8 @@ export const PLACES: Place[] = [
     y: (PRIVATE_ROOM.y0 + PRIVATE_ROOM.y1) / 2,
     w: PRIVATE_ROOM.x1 - PRIVATE_ROOM.x0,
     d: PRIVATE_ROOM.y1 - PRIVATE_ROOM.y0,
-    description: 'A room of its own for eight at table 6, with its own lights, music and air; a sliding door to the dining room',
+    description:
+      'A room of its own for eight at table 6, with its own lights, music and air; a sliding door to the dining room',
   },
   {
     id: 'kitchen',
@@ -386,6 +387,13 @@ export function besideSeat(t: Table, s: Seat): { x: number; y: number } {
   const dy = s.y - t.y
   const n = Math.hypot(dx, dy) || 1
   return { x: s.x + (dx / n) * 0.75, y: s.y + (dy / n) * 0.75 }
+}
+
+/** Where a baby chair stands for a child beside the guest's seat `s`: just behind it, toward the table's near end. */
+export function babyChairSpot(t: Table, s: Seat): { x: number; y: number } {
+  const by = besideSeat(t, s)
+  const side = s.x >= t.x ? 1 : -1
+  return { x: (s.x + by.x) / 2 + side * 0.55, y: (s.y + by.y) / 2 }
 }
 
 /** The tables' surface height, and the counters dishes are set on. */

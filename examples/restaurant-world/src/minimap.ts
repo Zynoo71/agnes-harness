@@ -46,6 +46,8 @@ const plan = (x: number, y: number) => at(x, -y)
 export function buildMinimap(
   marks: Mark[],
   guest: THREE.Object3D,
+  /** The others in the guest's party. */
+  companions: () => THREE.Object3D[],
   service: () => Service | undefined,
   words: () => MapWords,
 ): HTMLCanvasElement {
@@ -134,6 +136,12 @@ export function buildMinimap(
         g.lineTo(x + Math.sin(h) * 9, y + Math.cos(h) * 9)
         g.stroke()
       }
+    }
+    for (const o of companions()) {
+      if (!o.visible) continue
+      o.getWorldPosition(p)
+      const { cx, cy } = at(p.x, p.z)
+      dot(cx, cy, 2.8, GUEST)
     }
     if (guest.visible) {
       guest.getWorldPosition(p)

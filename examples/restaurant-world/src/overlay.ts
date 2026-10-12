@@ -25,6 +25,7 @@ const TEXT = {
     kitchenIdle: 'Kitchen · idle',
     evening: 'evening',
     privateRoom: 'private room',
+    party: (n: number) => `${n} guests`,
     room: (lights: string, music: string, c: number) => `${lights} · ${music} · ${c.toFixed(1)} °C`,
     language: '中文',
     reset: 'Reset',
@@ -127,6 +128,7 @@ const TEXT = {
     kitchenIdle: '后厨 · 空闲',
     evening: '傍晚',
     privateRoom: '包间',
+    party: (n: number) => `${n} 位`,
     room: (lights: string, music: string, c: number) => `${lights} · ${music} · ${c.toFixed(1)} °C`,
     language: 'EN',
     reset: '重置',
@@ -716,7 +718,7 @@ export function buildOverlay(options: {
         el(
           'span',
           '',
-          `${table?.name[lang] ?? s.table}${s.seatedAt ? ` · ${clockTime((performance.now() - s.seatedAt) / 1000)}` : ''}`,
+          `${table?.name[lang] ?? s.table}${live && live.world.party.size > 1 ? ` · ${t().party(live.world.party.size)}` : ''}${s.seatedAt ? ` · ${clockTime((performance.now() - s.seatedAt) / 1000)}` : ''}`,
         ),
       ),
     ]

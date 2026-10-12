@@ -315,6 +315,19 @@ export interface Condition {
   apply(): void
 }
 
+/** Someone who came with the guest: a figure that follows them in and sits with them. */
+export interface Companion {
+  figure: import('../actors.js').Guest
+  child: boolean
+  /** While a device walks the child about (play-01), the party leaves them be. */
+  held: boolean
+  odometer: number
+  /** The seat they took at the guest's table, and the way they are walking now. */
+  seat?: import('../layout.js').Seat | undefined
+  table?: import('../layout.js').Table | undefined
+  path: import('./route.js').Point[]
+}
+
 /** A room's lights, music and set temperature, and its air's temperature now. */
 export interface Air {
   lights: string
@@ -337,6 +350,10 @@ export class World {
 
   /** The guest's visit: orders, what is on the table, the bill. */
   readonly service = new Service()
+  /** Who comes in at the next reset: how many in the guest's party, the guest included, and whether one is a small child. */
+  party = { size: 1, kid: false }
+  /** The others in the party, as the page draws them; the child last. */
+  companions: Companion[] = []
   /** What the host robot says, in a bubble over it until `until` (ms, performance.now). */
   speech = { text: '', until: 0 }
   /** The dining room's lights, music and set temperature, as room-01 set them, and its air now; `light` applies a lighting scene. */
@@ -571,7 +588,8 @@ export class Body {
     const lookahead = options.lookahead ?? 0.45
     // Points closer than a centimetre to the one before add nothing but a zero-length segment.
     const path = [this.at, ...points].filter(
-      (p, k, all) => k === 0 || Math.hypot(p.x - (all[k - 1] as Point).x, p.z - (all[k - 1] as Point).z) > 0.01,
+      (p, k, all) =>
+        k === 0 || Math.hypot(p.x - (all[k - 1] as Point).x, p.z - (all[k - 1] as Point).z) > 0.01,
     )
     const end = path[path.length - 1] as Point
     /** The segment the body is on: it moves forward along the path, never back. */
@@ -655,7 +673,6 @@ export class Body {
     }
   }
 }
-
 
 /** Eases `object`'s rotation toward `target` (radians per axis) over `ms`, interruptibly. */
 export async function turnTo(

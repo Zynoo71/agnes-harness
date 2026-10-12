@@ -110,7 +110,17 @@ scene.add(place(lamp, t6.x, t6.y, 2.6))
 const shade = new THREE.MeshBasicMaterial({ color: 0xffd9a8 })
 const lantern = new THREE.Group()
 lantern.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 12).scale(1, 0.85, 1), shade))
-lantern.add(place(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.6), new THREE.MeshBasicMaterial({ color: 0x2a1a12 })), 0, 0, 0.45))
+lantern.add(
+  place(
+    new THREE.Mesh(
+      new THREE.CylinderGeometry(0.008, 0.008, 0.6),
+      new THREE.MeshBasicMaterial({ color: 0x2a1a12 }),
+    ),
+    0,
+    0,
+    0.45,
+  ),
+)
 scene.add(place(lantern, t6.x, t6.y, 2.3))
 
 // Where each device's tag sits: over the robot that moves, or over the fixture it is.
@@ -199,6 +209,11 @@ const live = hub
       actors,
       (line) => console.log(line),
       params.get('devices')?.split(','),
+      // ?party=4&kid=1: who comes in first; Reset asks again.
+      {
+        size: Math.max(1, Math.min(8, Number(params.get('party')) || 1)),
+        kid: params.get('kid') === '1' && Number(params.get('party')) > 1,
+      },
     )
   : undefined
 if (live) {
@@ -255,6 +270,7 @@ const minimap = buildMinimap(
     return { id: d.id, object: a.object, moving: Boolean(a.moving) }
   }),
   actors.guest.object,
+  () => live?.world.companions.map((c) => c.figure.object) ?? [],
   () => live?.world.service,
   () => overlay.mapWords(),
 )
@@ -352,23 +368,93 @@ addEventListener('keydown', (e) => {
   if (e.key === 'c') overlay.toggleMenu()
   if (e.key === 'e') overlay.toggleControls()
   if (e.key === '?' || e.key === 'h') overlay.toggleHelp()
-  if (e.key === 'r') void reset()
+  if (e.key === 'r') openPanel()
+  if (e.key === 'Escape') panel.hidden = true
 })
 
-// Reset (the button, or R): every device back to how the page started it, without reloading, so
-// the devices stay connected to the hub. A demo control of the page, not part of any device.
+// Reset (the button, or R): first who comes in next, how many and whether with a small child; then
+// every device back to how the page started it, without reloading, so the devices stay connected
+// to the hub. A demo control of the page, not part of any device.
 const resetButton = document.getElementById('reset') as HTMLButtonElement
 resetButton.hidden = !live
 let resetting = false
-const reset = async () => {
+const reset = async (party?: { size: number; kid: boolean }) => {
   if (!live || resetting) return
   resetting = true
   resetButton.disabled = true
-  await live.reset()
+  await live.reset(party)
   resetButton.disabled = false
   resetting = false
 }
-resetButton.addEventListener('click', () => void reset())
+const PANEL_WORDS = {
+  en: {
+    head: 'Next guests',
+    size: 'How many',
+    kid: 'With a small child (one of them)',
+    cancel: 'Cancel',
+    go: 'Open the door',
+  },
+  zh: { head: '迎客', size: '来了几位', kid: '带一个小孩（算在人数里）', cancel: '取消', go: '开门迎客' },
+}
+const panel = document.getElementById('reset-panel') as HTMLElement
+function openPanel() {
+  if (!live || resetting) return
+  const w = PANEL_WORDS[overlay.lang()]
+  const pick = { ...live.world.party }
+  const head = document.createElement('div')
+  head.className = 'head'
+  head.textContent = w.head
+  const sizes = document.createElement('div')
+  sizes.className = 'sizes'
+  const kid = document.createElement('input')
+  kid.type = 'checkbox'
+  const draw = () => {
+    for (const b of sizes.children) b.classList.toggle('on', Number(b.textContent) === pick.size)
+    kid.disabled = pick.size < 2
+    kid.checked = pick.kid && pick.size > 1
+  }
+  for (let n = 1; n <= 8; n++) {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.textContent = String(n)
+    b.addEventListener('click', () => {
+      pick.size = n
+      draw()
+    })
+    sizes.appendChild(b)
+  }
+  kid.addEventListener('change', () => {
+    pick.kid = kid.checked
+  })
+  const label = document.createElement('label')
+  label.append(kid, w.kid)
+  const cancel = document.createElement('button')
+  cancel.type = 'button'
+  cancel.textContent = w.cancel
+  cancel.addEventListener('click', () => {
+    panel.hidden = true
+  })
+  const go = document.createElement('button')
+  go.type = 'button'
+  go.className = 'go'
+  go.textContent = w.go
+  go.addEventListener('click', () => {
+    panel.hidden = true
+    void reset({ size: pick.size, kid: pick.kid && pick.size > 1 })
+  })
+  const actions = document.createElement('div')
+  actions.className = 'actions'
+  actions.append(cancel, go)
+  const size = document.createElement('div')
+  size.textContent = w.size
+  panel.replaceChildren(head, size, sizes, label, actions)
+  draw()
+  panel.hidden = false
+}
+resetButton.addEventListener('click', () => {
+  if (panel.hidden) openPanel()
+  else panel.hidden = true
+})
 
 // Up to 60 frames a second, so the robots glide; ?fps=30 halves the work on a slow machine. ?stats
 // adds the draw calls, triangles and JavaScript time of an average frame to the status line.

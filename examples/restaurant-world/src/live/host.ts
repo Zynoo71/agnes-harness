@@ -40,7 +40,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
       size_m: [0.6, 0.6, 1.3],
       max_speed: 1.8,
       notes:
-        'The robot at the door that meets the guest: it leads them to a table, and at the end back to the door, and says things to them in a speech bubble. There is one guest. It goes back to the door by itself when it has nothing to do.',
+        'The robot at the door that meets the guest: it leads them, and everyone in their party, to a table, and at the end back to the door, and says things to them in a speech bubble. There is one party of guests at a time; party says how many came, the guest included, and child whether one is a small child. A table seats only as many as it has seats (floor-01). It goes back to the door by itself when it has nothing to do.',
     },
     resources: { chassis: 'reject', voice: 'queue' },
     ui: { primary: 'pose' },
@@ -53,10 +53,19 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
           'where the guest is: outside, waiting inside the door, following the robot, seated, leaving, gone',
       },
       table: { type: 'string', description: "the guest's table (t1 to t6), empty before they sit" },
+      party: { type: 'integer', min: 1, max: 8, description: 'how many came, the guest included' },
+      child: { type: 'boolean', description: 'one of them is a small child, who sits in a baby chair' },
     },
   })
   dev.log = log
-  const report = () => dev.update({ mode, guest: service.guest, table: service.table ?? '' })
+  const report = () =>
+    dev.update({
+      mode,
+      guest: service.guest,
+      table: service.table ?? '',
+      party: world.party.size,
+      child: world.party.kid,
+    })
   report()
   service.listeners.push(report)
   robot.onHome = (phase) => {
@@ -114,6 +123,12 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
       const status = service.status(t.id)
       if (status !== 'free')
         throw new CallError('x_table_taken', `${t.id} is ${status.replace('_', ' ')}; pick a free table`)
+      const { size, kid } = world.party
+      if (t.seats.length < size)
+        throw new CallError(
+          'x_too_small',
+          `${t.id} seats ${t.seats.length} and the party is ${size}; pick a free table for at least ${size} (floor-01)`,
+        )
       if (service.lines.some((l) => l.stage === 'served'))
         throw new CallError(
           'x_dishes_served',
@@ -160,7 +175,11 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
           service.seatedAt ??= performance.now()
           service.menuOpen = true
           service.changed()
-          return `the guest is seated at ${t.id}, ${t.name.en.toLowerCase()}; the menu is open on their screen, and they tell you what they would like`
+          const who = size > 1 ? `the party of ${size} is` : 'the guest is'
+          const little = kid
+            ? '; their small child stands beside them, with no chair to sit on yet (a baby chair is in supplies-01)'
+            : ''
+          return `${who} seated at ${t.id}, ${t.name.en.toLowerCase()}${little}; the menu is open on their screen, and they tell you what they would like`
         } finally {
           mode = 'at_door'
           report()

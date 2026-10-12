@@ -7,6 +7,7 @@ import { floor } from './floor.js'
 import { host } from './host.js'
 import { arm, bar, stove, wok } from './kitchen.js'
 import { menu } from './menu.js'
+import { partyOf } from './party.js'
 import { pos } from './pos.js'
 import { prepBot } from './prep.js'
 import { cleaner, runner } from './robots.js'
@@ -25,8 +26,10 @@ export function connectDevices(
   actors: Actors,
   log: (line: string) => void,
   only: string[] | undefined,
-): { devices: WorldDevice[]; world: World; reset: () => Promise<void> } {
+  party: World['party'],
+): { devices: WorldDevice[]; world: World; reset: (party?: World['party']) => Promise<void> } {
   const world = new World(renderer, scene, FOOTPRINTS, actors)
+  world.party = party
   const all = [
     host(world, log),
     floor(world, log),
@@ -44,6 +47,8 @@ export function connectDevices(
     pos(world, log),
     cam(world, log),
   ]
+  // After host-01, whose reset puts the guest back in the street for the party to line up behind.
+  partyOf(world)
   // ?devices=host-01,menu-01 connects only these, for example to check one device on its own.
   const devices = only ? all.filter((d) => only.includes(d.id)) : all
   for (const dev of devices) void dev.run(hub)
@@ -52,9 +57,10 @@ export function connectDevices(
   })
   // Reset ends every running call (reported as interrupted, as mhs/stop does), gives the tools a
   // moment to reach their next checkpoint, then restores the scene and every device's state.
-  const reset = async () => {
+  const reset = async (party?: World['party']) => {
     await Promise.all(all.map((dev) => dev.stopAll()))
     await new Promise((resolve) => setTimeout(resolve, 300))
+    if (party) world.party = party
     world.reset()
   }
   return { devices, world, reset }

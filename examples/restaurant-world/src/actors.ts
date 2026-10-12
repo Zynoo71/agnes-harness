@@ -141,18 +141,41 @@ const HIP_H = 0.92
 const SEAT_HIP_H = 0.56
 
 /** The guest the person plays: a chunky figure in a mustard top, with a green marker overhead. */
-function guest(): Guest {
+/** What a guest wears, as colours. */
+export interface Outfit {
+  shirt: number
+  pants: number
+  hair: number
+}
+
+/** The people who come with the guest, each dressed their own way; the child last. */
+export const OUTFITS: Outfit[] = [
+  { shirt: 0x4f8fd8, pants: 0x2b2b30, hair: 0x1b1410 },
+  { shirt: 0xd8566a, pants: 0x4a3a2c, hair: 0x5a3a22 },
+  { shirt: 0x5fae7a, pants: 0x34507a, hair: 0x101010 },
+  { shirt: 0xe7e2d6, pants: 0x6b5a48, hair: 0x8a6a48 },
+  { shirt: 0x9a6ad0, pants: 0x2b2b30, hair: 0x2e1d14 },
+  { shirt: 0xe58a3a, pants: 0x34507a, hair: 0x1b1410 },
+  { shirt: 0x3fb8b0, pants: 0x4a3a2c, hair: 0x5a3a22 },
+]
+export const CHILD_OUTFIT: Outfit = { shirt: 0xff8fb0, pants: 0x6fb3ff, hair: 0x3a2418 }
+
+/** A figure of the guest, or with `outfit` someone in their party; a child is a little over half the size. */
+export function guest(outfit?: Outfit, child = false): Guest {
+  const shirt = outfit ? mat(outfit.shirt, { roughness: 0.85 }) : M.shirt
+  const jeans = outfit ? mat(outfit.pants, { roughness: 0.9 }) : M.jeans
+  const hairMat = outfit ? mat(outfit.hair, { roughness: 0.9 }) : M.hair
   const object = new THREE.Group()
   const hips = joint(object, 0, HIP_H, 0)
   const legs = [-1, 1].map((side) => {
     const hip = joint(hips, side * 0.1, 0, 0)
-    hip.add(at(capsule(0.075, 0.3, M.jeans), 0, -0.22, 0))
+    hip.add(at(capsule(0.075, 0.3, jeans), 0, -0.22, 0))
     const knee = joint(hip, 0, -0.45, 0)
-    knee.add(at(capsule(0.065, 0.32, M.jeans), 0, -0.22, 0))
+    knee.add(at(capsule(0.065, 0.32, jeans), 0, -0.22, 0))
     knee.add(at(box(0.11, 0.07, 0.22, M.shoe), 0, -0.43, 0.04))
     return { hip, knee }
   })
-  const torso = at(cylinder(0.2, 0.17, 0.58, M.shirt, 20), 0, 0.27, 0)
+  const torso = at(cylinder(0.2, 0.17, 0.58, shirt, 20), 0, 0.27, 0)
   torso.scale.z = 0.62
   hips.add(torso)
   hips.add(at(cylinder(0.05, 0.05, 0.08, M.skin, 10), 0, 0.6, 0))
@@ -160,14 +183,14 @@ function guest(): Guest {
   hips.add(head)
   const hair = new THREE.Mesh(
     new THREE.SphereGeometry(0.135, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
-    M.hair,
+    hairMat,
   )
   hair.castShadow = true
   hair.rotation.x = -0.35
   hips.add(at(hair, 0, 0.74, -0.015))
   const arms = [-1, 1].map((side) => {
     const shoulder = joint(hips, side * 0.24, 0.5, 0)
-    shoulder.add(at(capsule(0.055, 0.25, M.shirt), 0, -0.17, 0))
+    shoulder.add(at(capsule(0.055, 0.25, shirt), 0, -0.17, 0))
     const elbow = joint(shoulder, 0, -0.33, 0)
     elbow.add(at(capsule(0.048, 0.2, M.skin), 0, -0.14, 0))
     elbow.add(at(sphere(0.055, M.skin, 10), 0, -0.3, 0))
@@ -177,9 +200,18 @@ function guest(): Guest {
   const marker = at(new THREE.Mesh(new THREE.OctahedronGeometry(0.12), M.you), 0, 2.15, 0)
   marker.scale.y = 1.5
   object.add(marker)
+  marker.visible = !outfit
+  // A child: the same figure, smaller, with a rounder head.
+  if (child) {
+    hips.scale.setScalar(0.58)
+    head.scale.setScalar(1.25)
+    hair.scale.setScalar(1.25)
+    hair.position.y = 0.76
+  }
+  const size = child ? 0.58 : 1
 
   const pose = (hipH: number, hipZ: number) => {
-    hips.position.set(0, hipH, hipZ)
+    hips.position.set(0, hipH * size, hipZ * size)
   }
   return {
     object,

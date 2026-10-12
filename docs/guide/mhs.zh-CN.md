@@ -40,7 +40,7 @@ pnpm --filter @agnes/mhs dev-hub
 
 打开 `http://127.0.0.1:4191/`。开发中枢就是真实的 AgnesHub，带四台示例设备：`robot-01` 是移动机器人，有相机、办公室地图和手动驾驶；`lamp-01` 是带可写状态的灯；`env-01` 是安装在办公室里的室内传感器；`arm-01` 是带可关闭麦克风的机械臂。页面有三个标签页：设备（每台设备一张卡片，点开是设备页）、数据流（AgnesHub 与设备之间的调用和数据）、地图（办公室地图及其区域、地标和设备）。可以在地址后加 `?lang=zh-CN`、`?theme=light` 或 `?device=robot-01`。在终端输入 `health robot-01 hot` 或 `pose robot-01 lost` 可以改变设备的健康状况和位置。
 
-想看更大的场景，可以运行 [`examples/mars-world`](../../examples/mars-world/README.md)：浏览器里的火星基地，有十一台虚拟 MHS 设备。[火星基地](mars-world.zh-CN.md)介绍怎样在 AGH 里指挥它们。
+想看更大的场景，可以运行 [`examples/mars-world`](../../examples/mars-world/README.md)：浏览器里的火星基地，有十一台虚拟 MHS 设备。[火星基地](mars-world.zh-CN.md)介绍怎样在 AGH 里指挥它们。[Agnes 餐厅](restaurant-world.zh-CN.md)是一家有十三台设备的餐厅，你在里面当客人。
 
 ## 编写并检查设备
 

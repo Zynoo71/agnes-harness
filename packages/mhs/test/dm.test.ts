@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type { RequestBody } from '@agnes/protocol'
 import { describe, expect, it, vi } from 'vitest'
-import { type DmLink, dmOperation, type InferenceContext, momentOf } from '../plugin/dm.js'
+import { type DmLink, dmOperation, type InferenceContext, momentOf, thinking } from '../plugin/dm.js'
 import { Dm } from '../server/dm.js'
 import type { DecisionModel } from '../server/dm-models.js'
 import type { North } from '../server/north.js'
@@ -117,7 +117,7 @@ describe('the DM in the loop', () => {
     expect(picked.action).toEqual({ device: 'door-01', tool: 'open', args: {} })
   })
 
-  it("takes the step after the LLM's own results, and leaves failed results to the LLM", async () => {
+  it("takes the step after the LLM's own results, leaves failed results to the LLM, and times both", async () => {
     const north = Object.assign(new EventEmitter(), {
       devices: () => [
         {
@@ -133,7 +133,11 @@ describe('the DM in the loop', () => {
     const link: DmLink = { dm, on: () => true, report: () => {}, log: () => {} }
     const op = dmOperation(() => link)
     const run = async (messages: Message[]) => {
-      const next = vi.fn(async () => (async function* () {})())
+      const next = vi.fn(async () =>
+        (async function* () {
+          yield { type: 'start' }
+        })(),
+      )
       const ctx = {
         input: {
           request: {
@@ -164,8 +168,11 @@ describe('the DM in the loop', () => {
     expect(events.find((e) => e.type === 'toolcall_end')).toMatchObject({
       call: { name: 'call_device', args: { device: 'door-01', tool: 'open', args: {} } },
     })
+    expect(thinking.get('c1')).toBeGreaterThanOrEqual(0)
+    thinking.delete('c1')
     const jammed = [...unlocked.slice(0, 2), result('jammed', 't1', true)]
     expect((await run(jammed)).llm).toBe(true)
+    expect(thinking.get('c1')).toBeGreaterThanOrEqual(0)
     expect(decide).toHaveBeenCalledTimes(1)
   })
 })

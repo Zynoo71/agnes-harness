@@ -89,6 +89,12 @@ export interface DmNote {
  */
 export const dmNotes = new Map<string, { call: string; note: DmNote }>()
 
+/**
+ * Per conversation, how long its newest step took to decide, in ms: from the step's start to the
+ * DM's pick or the model call's newest event. Its device calls carry it as their thinking time.
+ */
+export const thinking = new Map<string, number>()
+
 /** The key a call is matched by: the tool and its arguments. */
 export const callKey = (name: string, args: unknown) => `${name} ${canonicalJson(args)}`
 
@@ -105,9 +111,19 @@ export function dmOperation(link: () => DmLink | undefined) {
       const { request, options } = ctx.input
       const hub = link()
       const conversation = request.sessionKey
+      const began = Date.now()
+      const timed = async () => {
+        const events = await ctx.next()
+        return (async function* () {
+          for await (const e of events) {
+            thinking.set(conversation, Date.now() - began)
+            yield e
+          }
+        })()
+      }
       const llm = () => {
         streak.delete(conversation)
-        return ctx.next()
+        return timed()
       }
       if (!hub?.on(conversation) || !options.toolNames.includes('call_device')) return llm()
       const moment = momentOf(request.messages)
@@ -151,6 +167,7 @@ export function dmOperation(link: () => DmLink | undefined) {
       const parser = (ctx.session.d.contractForModel?.(target) ?? ctx.session.d.contract).parser_version
       if (call) {
         streak.set(conversation, chain + 1)
+        thinking.set(conversation, Date.now() - began)
         dmNotes.set(conversation, {
           call: callKey(call.name, call.args),
           note: { model: hub.dm.model.name, sure: p, options: picked.options, ms: picked.ms },
@@ -158,7 +175,7 @@ export function dmOperation(link: () => DmLink | undefined) {
         return step(request, parser, call)
       }
       streak.delete(conversation)
-      return ctx.next()
+      return timed()
     },
   }
 }

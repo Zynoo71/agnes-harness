@@ -459,8 +459,11 @@ export class North extends EventEmitter {
     return id
   }
 
-  /** hub/call: one job through the hub (section 8.1). Progress and the result go to `sink`. */
-  async call(caller: Caller, params: CallParams, sink: JobSink = {}): Promise<Json> {
+  /**
+   * hub/call: one job through the hub (section 8.1). Progress and the result go to `sink`; `think`,
+   * how long the caller took to decide on the call in ms, goes to the device in `meta`.
+   */
+  async call(caller: Caller, params: CallParams, sink: JobSink = {}, think?: number): Promise<Json> {
     const entry = this.device(params.device)
     const tool = (entry.tools as { name: string; uses?: string[] }[] | undefined)?.find(
       (t) => t.name === params.tool,
@@ -469,7 +472,7 @@ export class North extends EventEmitter {
     const id = `j${this.jobCount}`
     this.count(entry.id, 'mhs_down')
     const handle = this.south.call(entry.id, params.tool, params.arguments ?? {}, {
-      meta: { job: id, caller: caller.name },
+      meta: { job: id, caller: caller.name, ...(think === undefined ? {} : { think_ms: think }) },
       onProgress: (p) => {
         this.count(entry.id, 'mhs_up')
         const { call: _, ...rest } = p

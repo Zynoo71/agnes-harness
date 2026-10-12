@@ -122,13 +122,17 @@ export class Brain {
     }
   }
 
-  /** call_device: waits up to 50 s; a job still running returns `running` and wakes the conversation later. */
+  /**
+   * call_device: waits up to 50 s; a job still running returns `running` and wakes the conversation
+   * later. `think`: how long the step that made the call took to decide, in ms.
+   */
   async callDevice(
     args: { device?: string; tool: string; args?: Json },
     conversation: string,
     signal?: AbortSignal,
     ref?: string,
     by: Caller = LLM,
+    think?: number,
   ): Promise<Answer> {
     const device = this.pick(args.device)
     if (typeof device !== 'string') return device
@@ -146,8 +150,15 @@ export class Brain {
         ...(ref === undefined ? {} : { ref }),
       },
       { result: resolveResult },
+      think,
     )
-    const facts = { device, tool: args.tool, args: args.args ?? {}, started }
+    const facts = {
+      device,
+      tool: args.tool,
+      args: args.args ?? {},
+      started,
+      ...(think === undefined ? {} : { think_ms: think }),
+    }
     if (!reply.accepted)
       return {
         text: String(reply.text),

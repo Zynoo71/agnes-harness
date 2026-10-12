@@ -465,7 +465,7 @@ Seven fixed tools, named verb + `device`. A device's own tools are not registere
 
 - **Which device.** `device` is required except in `list_devices` and `stop_device`, and may be left out only while a single device is online. There is no default device.
 - **Names come from the devices.** The brain calls devices by the `name` and `kind` they report; nothing in AgnesHub maps nicknames to devices. When a request could mean more than one device, the brain asks the user.
-- **Callers.** The brain's jobs and watches carry the caller name `LLM`; a call the DM made in its stead (section 15.5) carries `DM`. Pages show who called a device by this name.
+- **Callers.** The brain's jobs and watches carry the caller name `LLM`; a call the DM made in its stead (section 15.5) carries `DM`. Pages show who called a device by this name. The device's call `meta` also carries `think_ms`, how long the step that made the call took to decide: from the step's start to the DM's pick or the end of the LLM's model call; the tool result's data carries it for pages too.
 
 ### 15.2 The `context` hook
 

@@ -332,6 +332,13 @@ export async function buildDevices(base: Base): Promise<Devices> {
   const [hx, hz] = LAYOUT.hopperPad
   group.add(place(hopper.group, hx, hz, -Math.PI / 2, 0.12))
   anchors.set('hopper-01', hopper.group)
+  // The suit model faces -z; turned inside its holder it faces +z like every other model, so walking,
+  // the helmet camera and being carried all point the way the code means.
+  const suit = astronaut.children[0] as THREE.Object3D
+  const turned = new THREE.Group()
+  turned.rotation.y = Math.PI
+  turned.add(suit)
+  astronaut.add(turned)
   // The astronaut works at the rock outcrop out in the west field.
   const [fx, fz] = LAYOUT.field
   group.add(place(astronaut, fx, fz, -2.3))

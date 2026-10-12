@@ -163,7 +163,7 @@ function Shell(props: {
           title={dmVars ? t('card.dm.title', dmVars) : t('card.llm.title')}
         >
           <ByIcon by={by} />
-          {by === 'dm' ? 'DM' : 'LLM'}
+          {by === 'dm' ? 'Jev' : 'LLM'}
           {dmVars && <em>{t('card.dm', dmVars)}</em>}
         </span>
         <DeviceChip id={props.device} />

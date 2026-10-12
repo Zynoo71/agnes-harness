@@ -77,7 +77,7 @@ export function Panel(props: { brain?: Brain; actions?: ReactNode; activity?: Re
             <span className="mhs-brain-pulse" />
             {props.brain.device
               ? t('overview.brain', {
-                  who: props.brain.by === 'dm' ? 'DM' : 'LLM',
+                  who: props.brain.by === 'dm' ? 'Jev' : 'LLM',
                   device: props.brain.device,
                 })
               : '…'}

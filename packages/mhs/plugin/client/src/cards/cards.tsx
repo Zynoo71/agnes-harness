@@ -95,13 +95,15 @@ function useDetail(node: ToolNode): Json | undefined {
  * Who made the call: the DM's note in the result decides once the result is in; until then the
  * DM's `dm` events (hub-api.md section 15.5).
  */
-function useBy(node: ToolNode): { by: By; dm?: DmNote } {
+/** Who made a call, the DM's note if it did, and how long the step took to decide (ms) once known. */
+function useBy(node: ToolNode): { by: By; dm?: DmNote; think?: number } {
   const store = useStore()
   useEvents()
   const detail = useDetail(node)
   const done = detail?.dm as DmNote | undefined
   if (done) return { by: 'dm', dm: done }
-  if (detail) return { by: 'llm' }
+  if (detail)
+    return typeof detail.think_ms === 'number' ? { by: 'llm', think: detail.think_ms } : { by: 'llm' }
   const live = store.dmCall(node.name, parse(node.argsPreview))
   return live ? { by: 'dm', dm: live } : { by: 'llm' }
 }
@@ -146,7 +148,7 @@ function Shell(props: {
   children?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
-  const { by, dm } = useBy(props.node)
+  const { by, dm, think } = useBy(props.node)
   const dmVars = dm && {
     model: dm.model ?? '',
     sure: Math.round(dm.sure * 100),
@@ -165,6 +167,7 @@ function Shell(props: {
           <ByIcon by={by} />
           {by === 'dm' ? 'Jev' : 'LLM'}
           {dmVars && <em>{t('card.dm', dmVars)}</em>}
+          {!dmVars && think !== undefined && <em>{t('card.llm', { s: (think / 1000).toFixed(1) })}</em>}
         </span>
         <DeviceChip id={props.device} />
         {props.what && <span className="mhs-tcard-what">{props.what}</span>}

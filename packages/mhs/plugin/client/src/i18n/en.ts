@@ -19,7 +19,8 @@ export const en = {
   'card.dm': '{sure}% · {s} s',
   'card.dm.title':
     'Jev, the decision model ({model}), took this step without the LLM: it chose this action among {options}, {sure}% sure, in {s} s.',
-  'card.llm.title': 'The LLM made this call.',
+  'card.llm': '{s} s',
+  'card.llm.title': 'The LLM made this call; the time is how long it thought before it.',
   'dm.mode.on': 'Jev + LLM',
   'dm.mode.off': 'LLM',
   'dm.mode.title':

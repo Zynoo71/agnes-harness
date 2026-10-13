@@ -106,7 +106,7 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'order',
       description:
-        'Order dishes and drinks for the seated guest. Each portion becomes an order line; the result says which device makes it. Notes (less spicy, no coriander, no ice) go to the kitchen.',
+        'Order dishes and drinks for the seated guest. Each portion becomes an order line; the result says which device makes it. Notes (less spicy, no coriander, no ice) go to the kitchen. Ordering makes nothing by itself: then start the lines the guest wants now, with the calls the result names, and bring them to the table.',
       timeout: 10,
       params: {
         items: {

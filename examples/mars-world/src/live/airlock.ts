@@ -109,9 +109,10 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
   }
 
   dev.unsafe = (tool) => {
-    if (tool === 'open_outer' && pressure > 1) return `chamber at ${pressure.toFixed(1)} kPa; cycle_out first`
+    if (tool === 'open_outer' && pressure > 1)
+      return `chamber at ${pressure.toFixed(1)} kPa; call airlock-01 cycle_out now, then open_outer again`
     if (tool === 'cycle_in' && world.airlock.outer === 'open')
-      return 'the outer door is open; close_outer first'
+      return 'the outer door is open; call airlock-01 close_outer now, then cycle_in again'
     return undefined
   }
 

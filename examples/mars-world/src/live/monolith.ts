@@ -38,7 +38,7 @@ import {
 
 /** Gaits: top speed in m/s, acceleration in m/s², turning in radians a second. */
 const GAIT = {
-  walk: { speed: 2, accel: 1.6, turn: Math.PI * 0.8 },
+  walk: { speed: 3, accel: 2.4, turn: Math.PI },
   roll: { speed: 6, accel: 2, turn: Math.PI / 2 },
 }
 /** From its front to what it picks up, at most, in metres. */
@@ -61,6 +61,9 @@ const AISLE = {
   entry: { x: LAYOUT.greenhouse[0] + GREENHOUSE.length / 2 - 0.6, z: LAYOUT.greenhouse[1] },
   west: { x: LAYOUT.greenhouse[0] - GREENHOUSE.length / 2 + 1.1, z: LAYOUT.greenhouse[1] },
 }
+/** Taking what it holds into the habitat, step by step: said in the results that end holding it. */
+const INTO_AIRLOCK =
+  'go_to the airlock; airlock-01 cycle_out (skip it when its pressure is already near 0 kPa), then open_outer; put_down; then airlock-01 close_outer and cycle_in'
 /** How fast it walks along a bed while it plants or harvests it, m/s. */
 const TENDING = 1
 /** What each plant yields, in kg. */
@@ -727,7 +730,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
           load = { kind: 'crate', id: 'crate' }
           report()
           return {
-            detail: `picked up the crate (${world.crate.kg} kg of ${world.crate.crop}es) at ${where()}; holding it`,
+            detail: `picked up the crate (${world.crate.kg} kg of ${world.crate.crop}es) at ${where()}; holding it. To take it in, in this order: ${INTO_AIRLOCK}.`,
             data: { carrying: 'crate', ...world.crate },
           }
         }
@@ -770,7 +773,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
           report()
           const said = speak(flavour(voice(LINES.pickup)))
           return {
-            detail: `picked up the astronaut (suit-01) at ${where()}; holding them. Said: "${said}"`,
+            detail: `picked up the astronaut (suit-01) at ${where()}; holding them. To bring them inside, in this order: ${INTO_AIRLOCK}. Said: "${said}"`,
             data: { carrying: 'astronaut', target, said },
           }
         }
@@ -1309,7 +1312,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         })
         const said = speak(flavour(voice(LINES.harvested)))
         return {
-          detail: `harvested ${world.crate.kg} kg of ${crop}es from the ${bed} bed into a crate and came back out, at ${where()}, holding it; the bed is empty. To take it in, in this order: go_to the airlock; airlock-01 cycle_out (skip it when its pressure is already near 0 kPa), then open_outer; put_down; then airlock-01 close_outer and cycle_in. Said: "${said}"`,
+          detail: `harvested ${world.crate.kg} kg of ${crop}es from the ${bed} bed into a crate and came back out, at ${where()}, holding it; the bed is empty. To take it in, in this order: ${INTO_AIRLOCK}. Said: "${said}"`,
           data: { bed, crop, kg: world.crate.kg, said },
         }
       }),

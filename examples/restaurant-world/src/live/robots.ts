@@ -162,7 +162,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
           minItems: 1,
           maxItems: 3,
           items: { type: 'string', maxLength: 8 },
-          description: 'order lines (o1) and supplies (s1)',
+          description: 'order lines (o1) and supplies (s1), three at most a trip',
         },
       },
       uses: ['chassis'],

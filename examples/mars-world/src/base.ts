@@ -259,7 +259,8 @@ function greenhouse(): { group: THREE.Group; live: THREE.Object3D[]; view: Green
   door.add(part(new THREE.BoxGeometry(0.05, 2, 1.62), std(0xd6d2c8, 0.45, 0.2), 0, 1, 0))
   door.add(part(new THREE.BoxGeometry(0.06, 0.7, 0.9), glass, 0, 1.35, 0))
   g.add(door)
-  // The beds: a planter each, its soil, its plants and (tomatoes) fruit.
+  // The beds: a planter each, its soil, its plants and (tomatoes) fruit; a ripe potato plant shows
+  // as one potato on the soil, larger than life so it reads from afar.
   const leaves = {
     tomato: new THREE.Color(0x4c8f33),
     potato: new THREE.Color(0x3f8a2e),
@@ -270,12 +271,32 @@ function greenhouse(): { group: THREE.Group; live: THREE.Object3D[]; view: Green
   const plantGeo = new THREE.IcosahedronGeometry(0.32, 1)
   const fruitGeo = new THREE.SphereGeometry(0.055, 10, 8)
   const fruit = std(0xc8321e, 0.35)
+  const tuberGeo = new THREE.IcosahedronGeometry(0.5, 2)
+  {
+    // Lumpy: each vertex pushed in or out a little, the same way wherever it is shared.
+    const p = tuberGeo.attributes.position as THREE.BufferAttribute
+    const v = new THREE.Vector3()
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i)
+      const bump = 1 + 0.07 * Math.sin(v.x * 17 + v.y * 5) * Math.cos(v.z * 13 - v.y * 7)
+      v.multiplyScalar(bump)
+      p.setXYZ(i, v.x, v.y, v.z)
+    }
+    tuberGeo.computeVertexNormals()
+  }
+  const tuber = std(0xb8895a, 0.9)
   const random = seeded(11)
   const spots = Array.from({ length: GREENHOUSE.plants }, (_, i) => e - 1.1 - i * 0.58)
   const live: THREE.Object3D[] = []
   const beds = {} as Record<
     BedName,
-    { plants: THREE.InstancedMesh; fruit: THREE.InstancedMesh; soil: THREE.MeshStandardMaterial; z: number }
+    {
+      plants: THREE.InstancedMesh
+      fruit: THREE.InstancedMesh
+      tubers: THREE.InstancedMesh
+      soil: THREE.MeshStandardMaterial
+      z: number
+    }
   >
   const jitter = spots.map(() => ({
     dz: (random() - 0.5) * 0.2,
@@ -293,12 +314,15 @@ function greenhouse(): { group: THREE.Group; live: THREE.Object3D[]; view: Green
     const bed = {
       plants: new THREE.InstancedMesh(plantGeo, std(0x4c8f33, 0.7), GREENHOUSE.plants),
       fruit: new THREE.InstancedMesh(fruitGeo, fruit, GREENHOUSE.plants * 4),
+      tubers: new THREE.InstancedMesh(tuberGeo, tuber, GREENHOUSE.plants),
       soil,
       z,
     }
     bed.plants.castShadow = true
+    bed.tubers.castShadow = true
+    bed.tubers.count = 0
     const ground = part(new THREE.BoxGeometry(length - 1.4, 0.04, 0.85), soil, 0, 0.93, z)
-    g.add(ground, bed.plants, bed.fruit)
+    g.add(ground, bed.plants, bed.fruit, bed.tubers)
     live.push(ground)
     beds[name] = bed
   }
@@ -319,9 +343,19 @@ function greenhouse(): { group: THREE.Group; live: THREE.Object3D[]; view: Green
   const view: GreenhouseView = {
     spots: spots.map((x) => gx + x),
     bed(name, crop, growth, planted, moisture) {
-      const { plants, fruit: tomatoes, soil, z } = beds[name]
+      const { plants, fruit: tomatoes, tubers, soil, z } = beds[name]
       soil.color.lerpColors(dry, wet, moisture)
       const n = crop === 'none' ? 0 : planted
+      const dug = crop === 'potato' && growth >= 1 ? n : 0
+      for (let i = 0; i < dug; i++) {
+        const j = jitter[i] as (typeof jitter)[number]
+        q.setFromEuler(new THREE.Euler(0.15, j.turn, 0.1))
+        size.set(0.44 * j.s, 0.27 * j.s, 0.32 * j.s)
+        at.set(spots[i] as number, 0.95 + 0.11 * j.s, z + j.dz)
+        tubers.setMatrixAt(i, m.compose(at, q, size))
+      }
+      tubers.count = dug
+      tubers.instanceMatrix.needsUpdate = true
       const k = Math.min(1, growth / 0.85)
       const grown = 0.32 + 0.68 * k * k * (3 - 2 * k)
       for (let i = 0; i < n; i++) {
@@ -333,7 +367,7 @@ function greenhouse(): { group: THREE.Group; live: THREE.Object3D[]; view: Green
         at.set(spots[i] as number, 0.95 + 0.22 * s, z + j.dz)
         plants.setMatrixAt(i, m.compose(at, q, size))
       }
-      plants.count = n
+      plants.count = dug ? 0 : n
       plants.instanceMatrix.needsUpdate = true
       const material = plants.material as THREE.MeshStandardMaterial
       if (crop === 'tomato') material.color.copy(leaves.tomato)

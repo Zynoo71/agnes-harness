@@ -38,7 +38,7 @@ import {
 
 /** Gaits: top speed in m/s, acceleration in m/s², turning in radians a second. */
 const GAIT = {
-  walk: { speed: 1.3, accel: 1.2, turn: Math.PI * 0.7 },
+  walk: { speed: 2, accel: 1.6, turn: Math.PI * 0.8 },
   roll: { speed: 6, accel: 2, turn: Math.PI / 2 },
 }
 /** From its front to what it picks up, at most, in metres. */
@@ -62,7 +62,7 @@ const AISLE = {
   west: { x: LAYOUT.greenhouse[0] - GREENHOUSE.length / 2 + 1.1, z: LAYOUT.greenhouse[1] },
 }
 /** How fast it walks along a bed while it plants or harvests it, m/s. */
-const TENDING = 0.6
+const TENDING = 1
 /** What each plant yields, in kg. */
 const YIELD: Record<Exclude<Crop, 'none'>, number> = { potato: 0.6, tomato: 0.4 }
 /** Towing: the cable's length in metres, and how near home (the dock, the hopper pad) put_down winches it into place. */

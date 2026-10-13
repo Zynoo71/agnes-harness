@@ -149,7 +149,7 @@ Once a second, when anything moved, every client gets how many messages each dev
 Devices describe the maps they know in their registration (`maps`, MOS 3.5). AgnesHub keeps every map it has seen:
 
 - The latest declaration of a map gives its frame fields (`name`, `bounds`, `anchor`); places merge by id, the latest declaration of each place winning.
-- Maps stay after their devices disconnect. The plugin keeps them in `maps.json` in its data directory (`AGNES_HUB_DATA`), so they survive a restart of the hub; the development hubs (`pnpm dev`, `pnpm dev-hub`) keep them in memory only.
+- Maps stay after their devices disconnect. The plugin keeps them in `maps.json` in its data directory (`AGNES_HUB_DATA`), so they survive a restart of the hub; the development hubs (`pnpm dev`, `pnpm dev-hub`) keep them in memory only. The brain and the DM are told only the maps the online devices use (section 15).
 - AgnesHub does not edit maps or add places of its own.
 
 **`hub/world`** returns one `world` (MOS Appendix B) per map: the declared maps first, then maps that a device's position names without any declaration:
@@ -473,12 +473,13 @@ At the start of every turn, Agnes adds a snapshot from AgnesHub's memory:
 
 - **Opening lines**: how to use the device tools, and that nothing wakes the brain later: when the next step has to wait for something, it says what happens next and ends its turn.
 - **Briefs from other agents** (section 15.4), when there are any, right after the opening lines.
-- **Then the maps** (section 4.4): each map's id, name and extent, and its places, a landmark as its point and facing, a zone as its centre and size, each with its description. The snapshot says how to use them: to send a device to a place, call the device's own tool with the place's coordinates. The maps take at most half of the snapshot; places that do not fit are counted.
+- **Then the maps** (section 4.4) that the online devices declare or are positioned on: each map's id, name and extent, its description of the site, and its places, a landmark as its point and facing, a zone as its centre and size, each with its description. The snapshot says how to use them: to send a device to a place, call the device's own tool with the place's coordinates. The maps take at most half of the snapshot; places that do not fit are counted.
 - **Then the devices**: for each its id, name, kind, whether it is available, its health and position summaries (with the map it is on and the zone it is in, by the zone's name and id), what it is doing, and its tools.
 
 ```
 Maps (x, y in metres, yaw in degrees counter-clockwise from +x). … To send a device to a place, call its own tool with the place's coordinates …
 - site "Site", x 0..20, y 0..10:
+  A yard with a gate. Keep the gate clear.
   - gate "Gate": landmark at (1, 3), face 180° — The way in
   - yard "Yard": zone around (5, 5), 10 × 10 m
 Devices:
@@ -522,7 +523,7 @@ The DM is a decision model that takes some steps of the brain's loop in the LLM'
 - **When.** After the results of a `call_device` or `set_device` call, the LLM's or its own, it picks one fixed device action among all the devices allow, or `ask_llm`.
 - **Otherwise the LLM.** A step a person started, a step after the LLM read devices (`read_device`, `list_devices`), a failed result, and the step after 3 DM steps in a row go to the LLM. So does the step when the DM is less than 20 % sure, picks `ask_llm`, or picks one of the task's last 4 actions. Only the LLM judges that nothing needs doing.
 
-What the DM is told: the scene; what the person asked; the task's devices (those the task's device tools named, and those what just happened names) with each tool's whole description, whose preconditions show which step comes next; the task's device actions so far with how they ended, up to 12; what just happened; and the state now of the task's devices. A task starts where the person last spoke.
+What the DM is told: what it is and that anything beyond one fixed action goes to the LLM; the site, as the descriptions of the online devices' maps give it; the online devices by id and name; what the person asked; the task's devices (those the task's device tools named, and those what just happened names) with each tool's whole description, whose preconditions show which step comes next; the task's device actions so far with how they ended, up to 12; what just happened; and the state now of the task's devices. A task starts where the person last spoke.
 
 ```json
 → {"jsonrpc": "2.0", "id": "70", "method": "hub/dm", "params": {"conversation": "c1", "on": true}}

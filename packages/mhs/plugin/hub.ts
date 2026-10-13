@@ -10,10 +10,10 @@
  *                   devices declared
  * TYPESAFE_API_KEY  TypeSafe's Jev as the decision model (plugin/dm.ts); or, with AGNES_DM_MODEL=clef,
  *                   Cloudflare's clef (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN). Switched per
- *                   conversation with hub/dm; AGNES_DM=on has it on where it was never switched;
- *                   AGNES_DM_SCENE names a file that tells it about the place
+ *                   conversation with hub/dm; AGNES_DM=on has it on where it was never switched.
+ *                   It learns the site from the descriptions of the devices' maps
  */
-import { mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import type { RequestListener } from 'node:http'
 import { homedir } from 'node:os'
@@ -144,9 +144,6 @@ export const presets = {
   },
 }
 
-const DEFAULT_SCENE =
-  'You are the duty decision maker for the devices connected to AgnesHub. You act alone only when one fixed action from the list is clearly right; anything else goes to the LLM operator (ask_llm).'
-
 /** The decision model of the loaded hub, for the Operation the host builds at assembly. */
 let dmLink: DmLink | undefined
 
@@ -177,11 +174,10 @@ export const hub = {
           ? new JevModel(key)
           : undefined
     if (model) {
-      const scene = env.AGNES_DM_SCENE ? readFileSync(env.AGNES_DM_SCENE, 'utf8').trim() : DEFAULT_SCENE
       // Per conversation, as switched with hub/dm; AGNES_DM=on turns it on where it was never switched.
       const switched = new Map<string, boolean>()
       const on = (conversation: string) => switched.get(conversation) ?? env.AGNES_DM === 'on'
-      const dm = new Dm(north, scene, model)
+      const dm = new Dm(north, model)
       north.dm = (conversation, value) => {
         if (value !== undefined) switched.set(conversation, value)
         return { ready: true, on: on(conversation), model: model.name }

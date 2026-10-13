@@ -5,8 +5,9 @@ import type { HubEvent, North } from './north.js'
 /**
  * The DM: a decision model (dm-models.ts) that picks one fixed device action, so a step of the
  * Agnes loop can go without the LLM. It knows the devices and the run-time ids from AgnesHub; the
- * plugin asks it at the steps the DM may take (plugin/dm.ts). It is told the task's devices with
- * their whole tool descriptions, whose preconditions show which step comes next. Independent of Agnes.
+ * plugin asks it at the steps the DM may take (plugin/dm.ts). It is told the site as its maps
+ * describe it, and the task's devices with their whole tool descriptions, whose preconditions show
+ * which step comes next. Independent of Agnes.
  */
 
 type Json = Record<string, unknown>
@@ -40,11 +41,14 @@ export interface Choice {
 const KEEP_CANDIDATES = 12
 const TEXT_MAX = 800
 
+/** What the DM is and where it stops; the site and its priorities come from the maps. */
+const ROLE =
+  "You are the duty decision maker for the devices connected to AgnesHub. You take one step at a time in the LLM operator's loop: when the person gave a task, the step carries it on. You act alone only when one fixed action from the list is clearly right. Anything that needs talking to people, writing, choosing coordinates or other values, judging a picture, or a plan of several steps goes to the LLM operator (ask_llm), and so does deciding that nothing needs doing."
+
 export class Dm {
   private readonly candidates = new Map<string, Candidate[]>()
   constructor(
     private readonly north: North,
-    private readonly scene: string,
     readonly model: DecisionModel,
   ) {
     north.on('event', (event: HubEvent) => this.onEvent(event))
@@ -57,8 +61,15 @@ export class Dm {
     const named = new Set(moment.devices)
     const task = devices.filter((d) => named.has(d.id) || moment.happened.includes(d.id))
     const tooled = task.filter((d) => d.tools?.length)
+    const online = devices.filter((d) => d.online)
+    const sites = this.north.maps
+      .inUse(online)
+      .filter((m) => m.description)
+      .map((m) => `${m.name ?? m.id}: ${m.description}`)
     const state = [
-      this.scene,
+      ROLE,
+      sites.length && `The site:\n${sites.join('\n')}`,
+      online.length && `The devices here: ${online.map(nameOf).join(', ')}.`,
       moment.instruction && `The person asked: ${clip(moment.instruction)}`,
       tooled.length && `The devices in this task and their tools:\n${tooled.map(toolsText).join('\n')}`,
       moment.recent?.length && `Device actions so far in this task:\n${moment.recent.join('\n')}`,
@@ -106,6 +117,9 @@ export class Dm {
 }
 
 const clip = (text: string) => (text.length > TEXT_MAX ? `${text.slice(0, TEXT_MAX)}…` : text)
+
+/** "host-01 (Host robot)", or the kind without a name. */
+const nameOf = (d: DeviceEntry) => `${d.id} (${d.name ?? d.kind ?? 'device'})`
 
 /** A device's tools with their whole descriptions. */
 const toolsText = (d: DeviceEntry) =>

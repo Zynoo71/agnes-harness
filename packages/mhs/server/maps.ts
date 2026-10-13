@@ -39,6 +39,20 @@ export class Maps {
     return [...this.maps.values()]
   }
 
+  /**
+   * The maps the online devices use, for agents: those they declare and those their positions are
+   * on. Maps whose devices are gone stay for hub/world but say nothing about the site now.
+   */
+  inUse(devices: { online?: boolean; maps?: unknown; position?: { map?: string } }[]): MapDecl[] {
+    const ids = new Set<string>()
+    for (const d of devices) {
+      if (!d.online) continue
+      for (const m of (d.maps as MapDecl[] | undefined) ?? []) ids.add(m.id)
+      if (d.position?.map) ids.add(d.position.map)
+    }
+    return this.list().filter((m) => ids.has(m.id))
+  }
+
   get(id: string): MapDecl | undefined {
     return this.maps.get(id)
   }

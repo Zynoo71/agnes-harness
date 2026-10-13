@@ -28,6 +28,10 @@ interface Field {
 /** The parts of a hub/devices entry the options come from. */
 export interface DeviceEntry {
   id: string
+  name?: string
+  kind?: string
+  online?: boolean
+  maps?: unknown
   available: boolean
   tools?: Tool[]
   state: { fields: Record<string, Field>; values: Json }
@@ -111,7 +115,7 @@ export function buildOptions(devices: DeviceEntry[], candidates: Map<string, Can
     }
   }
   criteria[ASK_LLM] =
-    'hand it to the LLM operator: judge that nothing needs doing, talk to the astronaut, write a report, pick coordinates, judge a picture, or plan several steps'
+    'hand it to the LLM operator: judge that nothing needs doing, talk to people, write something, pick coordinates or other values, judge a picture, or plan several steps'
   return { criteria, actions }
 }
 

@@ -256,7 +256,7 @@ export class Brain {
     const devices = this.north.devices()
     const head =
       'You can use the devices connected to AgnesHub with the device tools (list_devices, read_device, call_device, set_device, stop_device). Call devices by the ids below; their own tools go in call_device, with the arguments read_device lists. call_device returns when the device has finished. Nothing wakes you later: when the next step has to wait for something (a crop to ripen, a window to open), say what happens next and end your turn; the person tells you when it is time. Never wait with other tools.'
-    const maps = mapsText(this.north.maps.list(), CONTEXT_LIMIT * MAPS_SHARE)
+    const maps = mapsText(this.north.maps.inUse(devices), CONTEXT_LIMIT * MAPS_SHARE)
     const notes = this.notesText()
     if (devices.length === 0) return `${head}${notes}${maps}\nNo devices are connected right now.`
     let text = `${head}${notes}${maps}${maps ? '\nDevices:' : ''}`
@@ -298,10 +298,12 @@ const round = (n: number) => Number(n.toFixed(2))
 const pt = (x: number, y: number) => `(${round(x)}, ${round(y)})`
 
 /**
- * The maps for the per-turn snapshot, at most `limit` bytes: each place with what a tool needs to
- * go there, a landmark's point and a zone's centre and extent.
+ * The maps for the per-turn snapshot, at most `limit` bytes: each map's description of its site,
+ * then each place with what a tool needs to go there, a landmark's point and a zone's centre and
+ * extent.
  *
  *   - base "Base", x -60..60, y -60..60:
+ *     A research base with one astronaut. The astronaut's safety comes first.
  *     - airlock "Airlock": landmark at (-12, 4), face 180° — Outer door of the habitat airlock
  *     - west-field "West field": zone around (-42.5, -40), 35 × 40 m
  */
@@ -313,8 +315,9 @@ export function mapsText(maps: MapDecl[], limit: number): string {
     const [x0, y0, x1, y1] = map.bounds ?? []
     const extent = map.bounds ? `, x ${x0}..${x1}, y ${y0}..${y1}` : ''
     const header = `\n- ${map.id}${map.name && map.name !== map.id ? ` "${map.name}"` : ''}${extent}${map.places?.length ? ':' : ', no places'}`
-    if (bytes(text) + bytes(header) > limit) break
-    text += header
+    const about = map.description ? `\n  ${map.description}` : ''
+    if (bytes(text) + bytes(header) + bytes(about) > limit) break
+    text += header + about
     const places = map.places ?? []
     for (const [i, p] of places.entries()) {
       let line = `\n  - ${p.id} "${p.name}": `

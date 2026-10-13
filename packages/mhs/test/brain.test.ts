@@ -238,6 +238,7 @@ describe('brain tools', () => {
           id: 'site',
           name: 'Site',
           bounds: [0, 0, 20, 10],
+          description: 'A yard with a gate. Keep the gate clear.',
           places: [
             { id: 'gate', name: 'Gate', at: [1, 3], yaw: 180, description: 'The way in' },
             {
@@ -261,6 +262,7 @@ describe('brain tools', () => {
       [
         '',
         '- site "Site", x 0..20, y 0..10:',
+        '  A yard with a gate. Keep the gate clear.',
         '  - gate "Gate": landmark at (1, 3), face 180° — The way in',
         '  - yard "Yard": zone around (5, 5), 10 × 10 m',
         'Devices:',

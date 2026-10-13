@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { type DmLink, dmOperation, type InferenceContext, momentOf, thinkingOf } from '../plugin/dm.js'
 import { Dm } from '../server/dm.js'
 import type { DecisionModel } from '../server/dm-models.js'
+import { Maps } from '../server/maps.js'
 import type { North } from '../server/north.js'
 
 type Message = RequestBody['messages'][number]
@@ -53,10 +54,13 @@ describe('the DM in the loop', () => {
   })
 
   it('asks its decision model and takes the likeliest option', async () => {
-    const north = Object.assign(new EventEmitter(), { devices: () => [] }) as unknown as North
+    const north = Object.assign(new EventEmitter(), {
+      devices: () => [],
+      maps: new Maps(),
+    }) as unknown as North
     const model = fake({ ask_llm: 0.7, other: 0.3 })
     const rank = vi.spyOn(model, 'rank')
-    const picked = await new Dm(north, 'scene', model).decide({ happened: 'storm warning' })
+    const picked = await new Dm(north, model).decide({ happened: 'storm warning' })
     expect(rank.mock.calls[0]?.[0]).toContain('storm warning')
     expect(picked).toMatchObject({
       choice: 'ask_llm',
@@ -84,11 +88,18 @@ describe('the DM in the loop', () => {
     expect(momentOf([...task.slice(0, 4), result('jammed', 't1', true)])?.failed).toBe(true)
   })
 
-  it("gives the model the task's devices with their whole tool descriptions and state", async () => {
+  it("gives the model the site, the task's devices with their whole tool descriptions and state", async () => {
+    const maps = new Maps()
+    maps.declare([{ id: 'shop', name: 'Shop', description: 'A corner shop. Customers first.' }])
+    maps.declare([{ id: 'old', name: 'Old', description: 'A site whose devices are gone.' }])
     const north = Object.assign(new EventEmitter(), {
+      maps,
       devices: () => [
         {
           id: 'door-01',
+          name: 'Front door',
+          online: true,
+          maps: [{ id: 'shop' }],
           available: true,
           tools: [{ name: 'open', description: 'Open the door. Needs it unlocked.' }],
           state: { fields: {}, values: { locked: false } },
@@ -103,8 +114,11 @@ describe('the DM in the loop', () => {
     }) as unknown as North
     const model = fake({ 'door-01 open': 0.9, ask_llm: 0.1 })
     const rank = vi.spyOn(model, 'rank')
-    const picked = await new Dm(north, 'scene', model).decide({ happened: 'door-01: unlocked' })
+    const picked = await new Dm(north, model).decide({ happened: 'door-01: unlocked' })
     const [state, options] = rank.mock.calls[0] ?? []
+    expect(state).toContain('The site:\nShop: A corner shop. Customers first.')
+    expect(state).not.toContain('gone')
+    expect(state).toContain('The devices here: door-01 (Front door).')
     expect(state).toContain('door-01:\n- open: Open the door. Needs it unlocked.')
     expect(state).toContain('Now:\ndoor-01 now: locked false')
     expect(state).not.toContain('lamp-01')
@@ -114,6 +128,7 @@ describe('the DM in the loop', () => {
 
   it("takes the step after the LLM's own results, leaves failed results to the LLM, and times both", async () => {
     const north = Object.assign(new EventEmitter(), {
+      maps: new Maps(),
       devices: () => [
         {
           id: 'door-01',
@@ -123,7 +138,7 @@ describe('the DM in the loop', () => {
         },
       ],
     }) as unknown as North
-    const dm = new Dm(north, 'scene', fake({ 'door-01 open': 0.9, ask_llm: 0.1 }))
+    const dm = new Dm(north, fake({ 'door-01 open': 0.9, ask_llm: 0.1 }))
     const decide = vi.spyOn(dm, 'decide')
     const link: DmLink = { dm, on: () => true, report: () => {}, log: () => {} }
     const op = dmOperation(() => link)

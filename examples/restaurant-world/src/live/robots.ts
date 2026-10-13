@@ -305,7 +305,8 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
           await wait(call, 400)
           for (const i of aboard.splice(0)) objectOf(i)?.removeFromParent()
           report()
-          return `cleared ${things.length} things from ${t.id} to the dish return`
+          const wipe = service.dirty.has(t.id) ? `; cleaner-01 clean place ${t.id} wipes it free` : ''
+          return `cleared ${things.length} things from ${t.id} to the dish return${wipe}`
         } finally {
           mode = 'docked'
           report()

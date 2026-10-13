@@ -23,7 +23,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
   const robot = new Robot(
     world,
     model.object,
-    { id: 'host-01', label: 'host robot', radius: 0.32, speed: 1.8, home: HOMES.host, idleS: 6 },
+    { id: 'host-01', label: 'host robot', radius: 0.32, speed: 2.2, home: HOMES.host, idleS: 6 },
     log,
   )
   const walker = new Body(guest.object, world)
@@ -38,7 +38,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
     localization: 'self',
     profile: {
       size_m: [0.6, 0.6, 1.3],
-      max_speed: 1.8,
+      max_speed: 2.2,
       notes:
         'The robot at the door that meets the guest: it leads them, and everyone in their party, to a table, and at the end back to the door, and says things to them in a speech bubble. There is one party of guests at a time; party says how many came, the guest included, and child whether one is a small child. A table seats only as many as it has seats (floor-01). It goes back to the door by itself when it has nothing to do.',
     },

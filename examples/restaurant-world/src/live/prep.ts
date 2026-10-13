@@ -26,7 +26,7 @@ export function prepBot(world: World, log: (line: string) => void): WorldDevice 
   const robot = new Robot(
     world,
     model.object,
-    { id: 'prep-01', label: 'prep robot', radius: 0.3, speed: 2, home: HOMES.prep, idleS: 4 },
+    { id: 'prep-01', label: 'prep robot', radius: 0.3, speed: 2.5, home: HOMES.prep, idleS: 4 },
     log,
   )
   let mode: 'idle' | 'fetching' | 'washing' | 'cutting' | 'carrying' | 'returning' = 'idle'
@@ -41,7 +41,7 @@ export function prepBot(world: World, log: (line: string) => void): WorldDevice 
     localization: 'self',
     profile: {
       size_m: [0.6, 0.6, 1.7],
-      max_speed: 2,
+      max_speed: 2.5,
       notes:
         'A kitchen robot with two arms and a knife. prep takes wok-01 and stove-01 order lines’ ingredients from the cold store, washes and cuts them at the prep counter, and sets each bowl beside its station; the station cooks only prepped lines. Drinks and desserts need no prep.',
     },

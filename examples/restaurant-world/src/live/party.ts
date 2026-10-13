@@ -7,7 +7,7 @@ import type { Companion, World } from './world.js'
 
 /** Metres between people walking in a line, and how fast the others can catch up. */
 const GAP = 0.75
-const SPEED = 2.4
+const SPEED = 2.8
 /** How high a child sits on the baby chair. */
 const HIGH_CHAIR = 0.42
 

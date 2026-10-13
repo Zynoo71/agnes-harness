@@ -64,9 +64,14 @@ export function supplies(world: World, log: (line: string) => void): WorldDevice
       timeout: 20,
       params: {
         item: { type: 'string', enum: [...SUPPLY_ITEMS] },
-        qty: { type: 'integer', minimum: 1, maximum: 4 },
+        qty: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 4,
+          description: 'how many the guest asked for; a pair of chopsticks is one',
+        },
       },
-      required: ['item'],
+      required: ['item', 'qty'],
       uses: ['hatch'],
       ui: { label: 'Dispense' },
     },

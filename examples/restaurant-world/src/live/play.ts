@@ -319,7 +319,7 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
     {
       name: 'take_child',
       description:
-        'Walk the guest’s small child from the table to the play area, holding the way for them; the child must be seated at the guest’s table first.',
+        'Walk the guest’s small child from the table to the play area, holding the way for them, when the guest wants the child to play (or the child is crying); the child must be at the guest’s table first.',
       timeout: 90,
       uses: ['chassis'],
       motion: true,

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { buildActors } from './actors.js'
 import { DmWatch } from './dm/watch.js'
+import { buildFocus, FOCUS_LAYER } from './focus.js'
 import { DEVICES } from './labels.js'
 import { BACK_OF_HOUSE_Y, BAR_X, FIXTURES, PRIVATE_ROOM, PRIVATE_SPEAKER, ROOM, TABLES } from './layout.js'
 import { connectDevices } from './live/index.js'
@@ -42,6 +43,8 @@ const view = new IsoView()
 // with `span` metres of floor top to bottom.
 let shot = shotNamed(params.get('shot') ?? 'overview')
 view.set(shot)
+// The main view also draws its own layer: the rings under the devices at work, which their cameras never see.
+view.camera.layers.enable(FOCUS_LAYER)
 const framing = params.get('view')?.split(',').map(Number)
 if (framing?.length === 3)
   view.set({ x: framing[0] as number, y: framing[1] as number, span: framing[2] as number })
@@ -186,7 +189,8 @@ function placeTags() {
   for (const { el, id, anchor } of tagEls) {
     const p = shot.devices && !shot.devices.includes(id) ? undefined : onScreen(anchor.object, anchor.h)
     el.style.display = p ? '' : 'none'
-    if (p) el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`
+    // --calm shrinks a quiet device's tag about the point it stands on (index.html).
+    if (p) el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%) scale(var(--calm))`
   }
   const said = live?.world.speech
   const p = said && performance.now() < said.until ? onScreen(actors.host.object, 1.75) : undefined
@@ -236,6 +240,10 @@ if (live) {
     privateLighting = name
   }
 }
+// A ring breathing on the floor under each device while it runs a call, in its caller's colour.
+const focus = live
+  ? buildFocus(scene, new Map(Object.entries(ANCHORS).map(([id, a]) => [id, a.object])), live.devices)
+  : undefined
 // Scripts (an evaluation, a test) reach the world here.
 if (live) Object.assign(window, { restaurant: { world: live.world, reset: live.reset, view } })
 
@@ -410,6 +418,7 @@ renderer.setAnimationLoop(() => {
   renderer.info.reset()
   actors.update(start / 1000)
   updateLights(start / 1000)
+  focus?.update(start / 1000)
   // Shadows follow the moving robots at 30 a second, or every frame below that.
   if (FPS <= 30 || frames % 2 === 0) renderer.shadowMap.needsUpdate = true
   renderer.render(scene, view.camera)

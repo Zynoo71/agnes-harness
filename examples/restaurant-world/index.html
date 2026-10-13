@@ -194,6 +194,10 @@
       #reset-panel label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
       #reset-panel .actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; }
       #reset-panel .go { background: rgba(82, 224, 138, 0.18); border-color: rgba(82, 224, 138, 0.6); }
+      /* A device with no call running and nothing wrong steps back: smaller about the point its tag stands on, and fainter. */
+      @property --calm { syntax: "<number>"; inherits: false; initial-value: 1; }
+      .tag { transform-origin: 50% 100%; transition: opacity 0.3s, --calm 0.3s; }
+      .tag.calm { --calm: 0.85; opacity: 0.55; }
       .tag.busy { border-color: rgba(255, 220, 170, 0.9); }
       .tag.warn { border-color: var(--amber); }
       .tag.bad { border-color: var(--red); background: rgba(60, 16, 12, 0.8); }

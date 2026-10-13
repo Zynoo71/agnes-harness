@@ -106,7 +106,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'charge',
       description:
-        'Take the payment for the bill shown, the way it says: by QR code (the guest scans it), card or cash.',
+        'Take the payment for the bill shown, the way it says, once the guest wants to pay: it waits while the guest scans the QR code on their screen, or takes their card or cash, and confirms it.',
       timeout: 30,
       uses: ['till'],
       ui: { label: 'Charge' },

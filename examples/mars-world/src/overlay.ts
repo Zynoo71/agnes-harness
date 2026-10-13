@@ -1081,7 +1081,7 @@ export function buildOverlay(options: {
       dmSeen.add(d)
       const read = lastEnded.get(d.trigger[0]?.match(/^([\w-]+):/)?.[1] ?? '')
       if (read) saw.set(d, read)
-      fresh = { d, until: performance.now() + 8000 }
+      fresh = { d, until: performance.now() + 15000 }
       if (d.outcome !== 'did') handLine(d)
     }
     for (const line of lines) line.draw()

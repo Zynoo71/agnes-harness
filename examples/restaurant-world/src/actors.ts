@@ -15,7 +15,7 @@ import { box, cylinder, drawn, mat, place } from './shapes.js'
 
 /**
  * Everyone who moves in the restaurant, made in code: the guest the person plays and one robot of
- * each kind (the host at the door, the runner, the cleaner, the kitchen arm and the bar's robot),
+ * each kind (the host at the door, the runner, the cleaner, the kitchen arm, the bar's robot and the play robot),
  * and the dishes and drinks they carry. Every model faces +z with its origin on the floor; the
  * joints the devices drive are handed out by name.
  */
@@ -345,6 +345,74 @@ function cleaner(): Cleaner {
     brush.add(bristle)
   }
   return { object, brush }
+}
+
+export interface Playmate {
+  object: THREE.Group
+  /** The arms, hung from the shoulders: rotation.x swings one forward and up. */
+  arms: THREE.Object3D[]
+  /** The bubble wand in its right hand, shown while it blows bubbles; bubbles come off its ring. */
+  wand: THREE.Object3D
+  head: THREE.Object3D
+}
+
+/** The play robot: a small round yellow and pink robot with a smiling face and an antenna. */
+function playmate(): Playmate {
+  const object = new THREE.Group()
+  const pink = mat(0xff8fb0, { roughness: 0.45 })
+  const yellow = mat(0xffd166, { roughness: 0.45 })
+  const glowPink = mat(0x000000, { emissive: 0xff6fa8, emissiveIntensity: 2 })
+  object.add(at(cylinder(0.22, 0.24, 0.1, M.shellDark, 24), 0, 0.05, 0))
+  object.add(at(cylinder(0.225, 0.225, 0.02, glowPink, 24), 0, 0.11, 0))
+  const belly = at(sphere(0.23, M.shell, 24), 0, 0.38, 0)
+  belly.scale.y = 1.2
+  object.add(belly)
+  object.add(at(cylinder(0.235, 0.235, 0.06, pink, 24), 0, 0.38, 0))
+  const head = joint(object, 0, 0.78, 0)
+  head.add(box(0.36, 0.28, 0.28, yellow))
+  head.add(at(face(0.3, 0.2, 'happy', '#ffd6e8'), 0, 0, 0.141))
+  for (const side of [-1, 1]) {
+    const ear = at(cylinder(0.05, 0.05, 0.05, pink, 12), side * 0.19, 0.02, 0)
+    ear.rotation.z = Math.PI / 2
+    head.add(ear)
+  }
+  head.add(at(cylinder(0.01, 0.01, 0.14, M.shellDark, 6), 0, 0.2, 0))
+  head.add(at(sphere(0.04, glowPink, 10), 0, 0.28, 0))
+  const arms = [-1, 1].map((side) => {
+    const shoulder = joint(object, side * 0.25, 0.5, 0)
+    shoulder.add(at(capsule(0.045, 0.18, pink), 0, -0.13, 0))
+    shoulder.add(at(sphere(0.06, yellow, 10), 0, -0.28, 0))
+    shoulder.rotation.z = side * 0.15
+    return shoulder
+  })
+  // The wand: a stick and a ring, held up in the right hand.
+  const wand = joint(arms[1] as THREE.Object3D, 0, -0.3, 0.04)
+  wand.add(at(cylinder(0.008, 0.008, 0.2, yellow, 6), 0, -0.1, 0))
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.008, 6, 20), pink)
+  wand.add(at(ring, 0, -0.24, 0))
+  wand.rotation.x = Math.PI
+  wand.visible = false
+  return { object, arms, wand, head }
+}
+
+/** A soap bubble, its rainbow sheen faked by a faint emissive tint. */
+const BUBBLE = new THREE.MeshStandardMaterial({
+  color: 0xe8f6ff,
+  emissive: 0x8fb8ff,
+  emissiveIntensity: 0.25,
+  roughness: 0.05,
+  metalness: 0.3,
+  transparent: true,
+  opacity: 0.4,
+  depthWrite: false,
+})
+export function bubble(r: number): THREE.Mesh {
+  return new THREE.Mesh(new THREE.SphereGeometry(r, 12, 9), BUBBLE)
+}
+
+/** A toy building block, `size` metres a side. */
+export function toyBlock(color: number, size = 0.11): THREE.Mesh {
+  return box(size, size, size, mat(color, { roughness: 0.55 }))
 }
 
 export interface Arm {
@@ -796,6 +864,7 @@ export interface Actors {
   arm: Arm
   bartender: Bartender
   prep: Prep
+  playmate: Playmate
   effects: Effects
   /** Idle motion: the marker spins, the arm and the bar's robot sway while nobody drives them; the private room's door opens for whoever comes near. */
   update(t: number): void
@@ -820,6 +889,8 @@ export function buildActors(): Actors {
   group.add(place(b.object, BARTENDER.x, BARTENDER.y, 0.01, BARTENDER.yaw))
   const p = prep()
   group.add(place(p.object, HOMES.prep.x, HOMES.prep.y, 0.02, HOMES.prep.yaw))
+  const pm = playmate()
+  group.add(place(pm.object, HOMES.play.x, HOMES.play.y, 0.02, HOMES.play.yaw))
   const effects = buildEffects()
   group.add(place(effects.fire, FIXTURES.wok.x - 0.25, FIXTURES.wok.y, 0.95))
   group.add(place(effects.steam, FIXTURES.stove.x + 0.1, FIXTURES.stove.y, 1.4))
@@ -837,6 +908,7 @@ export function buildActors(): Actors {
     arm: a,
     bartender: b,
     prep: p,
+    playmate: pm,
     effects,
     update(t) {
       effects.update(t)
@@ -845,6 +917,7 @@ export function buildActors(): Actors {
       g.marker.rotation.y = t * 2
       g.marker.position.y = 2.15 + Math.sin(t * 3) * 0.05
       h.head.rotation.x = Math.sin(t * 0.8) * 0.04
+      pm.head.rotation.z = Math.sin(t * 1.3) * 0.06
       // Idle motion eases in from wherever work left the joints.
       if (!a.busy) {
         a.base.rotation.y += (Math.sin(t * 0.25) * 0.9 - a.base.rotation.y) * 0.05

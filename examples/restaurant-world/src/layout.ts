@@ -309,6 +309,17 @@ export const PLACES: Place[] = [
       'A room of its own for eight at table 6, with its own lights, music and air; a sliding door to the dining room',
   },
   {
+    id: 'play-area',
+    name: { en: 'Play area', zh: '儿童游乐区' },
+    kind: 'zone',
+    x: (PLAY_AREA.x0 + PLAY_AREA.x1) / 2,
+    y: (PLAY_AREA.y0 + PLAY_AREA.y1) / 2,
+    w: PLAY_AREA.x1 - PLAY_AREA.x0,
+    d: PLAY_AREA.y1 - PLAY_AREA.y0,
+    description:
+      'A fenced corner for small children: a slide, a ball pit and a mat; play-01 plays with them here',
+  },
+  {
     id: 'kitchen',
     name: { en: 'Kitchen', zh: '后厨' },
     kind: 'zone',

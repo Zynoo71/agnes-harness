@@ -21,6 +21,7 @@ export const DEVICES: { id: string; en: string; zh: string }[] = [
   { id: 'runner-01', en: 'Runner', zh: '送餐机器人' },
   { id: 'supplies-01', en: 'Supplies cabinet', zh: '用品柜' },
   { id: 'cleaner-01', en: 'Cleaner', zh: '清洁机器人' },
+  { id: 'play-01', en: 'Play robot', zh: '陪玩机器人' },
   { id: 'room-01', en: 'Room', zh: '灯光音乐空调' },
   { id: 'room-02', en: 'Private room', zh: '包间灯光音乐空调' },
   { id: 'pos-01', en: 'Payment terminal', zh: '收银' },
@@ -29,6 +30,7 @@ export const DEVICES: { id: string; en: string; zh: string }[] = [
 
 const TOOLS: Record<string, [en: string, zh: string]> = {
   bill: ['Bill', '出账单'],
+  bring_back: ['Bring back', '送回'],
   cancel: ['Cancel', '退菜'],
   charge: ['Charge', '收款'],
   clean: ['Clean', '清洁'],
@@ -41,6 +43,7 @@ const TOOLS: Record<string, [en: string, zh: string]> = {
   make: ['Make', '制作'],
   order: ['Order', '下单'],
   plate: ['Plate', '装盘'],
+  play: ['Play', '陪玩'],
   prep: ['Prep', '备菜'],
   play_music: ['Play music', '放音乐'],
   restock: ['Restock', '补货'],
@@ -52,6 +55,7 @@ const TOOLS: Record<string, [en: string, zh: string]> = {
   set_temperature: ['Set temperature', '调温度'],
   show_menu: ['Show menu', '展示菜单'],
   stop: ['Stop', '停止'],
+  take_child: ['Take the child', '带小孩去玩'],
 }
 
 const VALUES_ZH: Record<string, string> = {
@@ -96,6 +100,14 @@ const VALUES_ZH: Record<string, string> = {
   cleaning: '清洁中',
   leading: '带位中',
   seeing_off: '送客中',
+  playing: '玩耍中',
+  slide: '滑滑梯',
+  bubbles: '吹泡泡',
+  blocks: '搭积木',
+  with_guest: '跟着客人',
+  at_table: '在桌边',
+  with_robot: '和机器人在一起',
+  'play-area': '儿童游乐区',
   none: '无',
   billed: '已出单',
   paid: '已付款',
@@ -155,6 +167,9 @@ const PROGRESS_ZH: [RegExp, (m: RegExpMatchArray, v: (s: string) => string) => s
   [/^cutting (o\d+) (.+)$/, (m) => `切配 ${m[1]} ${dishZh(m[2] ?? '')}`],
   [/^scrubbing at (.+)$/, (m, v) => `在${v(m[1] ?? '')}擦洗`],
   [/^waiting for the guest to scan$/, () => '等客人扫码'],
+  [/^down the slide, (\d) of 2$/, (m) => `滑滑梯，第 ${m[1]} 次`],
+  [/^blowing soap bubbles$/, () => '吹泡泡'],
+  [/^building a tower of blocks$/, () => '搭积木'],
   [/^taking (\w+)$/, (m, v) => `收${v(m[1] ?? '')}`],
 ]
 

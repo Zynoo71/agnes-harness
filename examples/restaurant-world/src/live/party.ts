@@ -1,3 +1,4 @@
+import type * as THREE from 'three'
 import { CHILD_OUTFIT, guest, OUTFITS } from '../actors.js'
 import { babyChairSpot, besideSeat, type Seat, TABLES } from '../layout.js'
 import { rotY } from '../shapes.js'
@@ -17,10 +18,60 @@ const HIGH_CHAIR = 0.42
  * baby chair is served there, then sits on it. Page-side only: devices see the party through
  * host-01's state.
  */
+/** Where someone has been, newest first, so others can walk the same way some way behind. */
+export class Trail {
+  points: Point[] = []
+  constructor(readonly lead: THREE.Object3D) {}
+
+  /** Adds where the lead is now, once they have moved on from the last point. */
+  record(): void {
+    const head = this.points[0]
+    const { x, z } = this.lead.position
+    if (!head || Math.hypot(x - head.x, z - head.z) > 0.1) {
+      this.points.unshift({ x, z })
+      this.points.length = Math.min(this.points.length, 400)
+    }
+  }
+
+  /** The point `d` metres back along the lead's way. */
+  along(d: number): Point {
+    let left = d
+    let prev: Point = { x: this.lead.position.x, z: this.lead.position.z }
+    for (const p of this.points) {
+      const seg = Math.hypot(p.x - prev.x, p.z - prev.z)
+      if (seg >= left) {
+        const f = left / Math.max(seg, 1e-6)
+        return { x: prev.x + (p.x - prev.x) * f, z: prev.z + (p.z - prev.z) * f }
+      }
+      left -= seg
+      prev = p
+    }
+    return prev
+  }
+}
+
+/** Walks `m` one frame's step toward `target`, turning as they go; false once they are there. */
+export function stepTo(m: Companion, target: Point, dt: number, speed = SPEED): boolean {
+  const o = m.figure.object
+  const dx = target.x - o.position.x
+  const dz = target.z - o.position.z
+  const d = Math.hypot(dx, dz)
+  if (d <= 0.04) return false
+  const v = Math.min(d, speed * dt)
+  const want = Math.atan2(dx, dz)
+  const turn = Math.atan2(Math.sin(want - o.rotation.y), Math.cos(want - o.rotation.y))
+  o.rotation.y += Math.sign(turn) * Math.min(Math.abs(turn), 8 * dt)
+  o.position.x += (dx / d) * v
+  o.position.z += (dz / d) * v
+  o.position.y = 0
+  m.odometer += v
+  m.figure.walk((m.odometer / (m.child ? 0.4 : 0.7)) * Math.PI)
+  return true
+}
+
 export function partyOf(world: World): void {
   const lead = world.actors.guest.object
-  /** Where the guest has been, newest first. */
-  let trail: Point[] = []
+  const trail = new Trail(lead)
   let members: Companion[] = []
 
   const build = () => {
@@ -35,29 +86,16 @@ export function partyOf(world: World): void {
     })
     world.companions = members
     // In a line behind the guest, out in the street to the south.
-    trail = Array.from({ length: n + 2 }, (_, k) => ({ x: lead.position.x, z: lead.position.z + k * GAP }))
+    trail.points = Array.from({ length: n + 2 }, (_, k) => ({
+      x: lead.position.x,
+      z: lead.position.z + k * GAP,
+    }))
     members.forEach((m, k) => {
-      const p = trail[k + 1] as Point
+      const p = trail.points[k + 1] as Point
       m.figure.object.position.set(p.x, 0, p.z)
       m.figure.object.rotation.y = lead.rotation.y
       m.figure.stand()
     })
-  }
-
-  /** The point `d` metres back along the guest's way. */
-  const along = (d: number): Point => {
-    let left = d
-    let prev: Point = { x: lead.position.x, z: lead.position.z }
-    for (const p of trail) {
-      const seg = Math.hypot(p.x - prev.x, p.z - prev.z)
-      if (seg >= left) {
-        const f = left / Math.max(seg, 1e-6)
-        return { x: prev.x + (p.x - prev.x) * f, z: prev.z + (p.z - prev.z) * f }
-      }
-      left -= seg
-      prev = p
-    }
-    return prev
   }
 
   /** A way round the furniture from `from` to plan point `to`, as the guest walks it. */
@@ -68,11 +106,7 @@ export function partyOf(world: World): void {
 
   const step = (dt: number) => {
     const s = world.service
-    const head = trail[0]
-    if (!head || Math.hypot(lead.position.x - head.x, lead.position.z - head.z) > 0.1) {
-      trail.unshift({ x: lead.position.x, z: lead.position.z })
-      trail.length = Math.min(trail.length, 400)
-    }
+    trail.record()
     const t = s.guest === 'seated' ? TABLES.find((x) => x.id === s.table) : undefined
     const mine = t && s.seat
     const chairAt = mine ? babyChairSpot(t, mine) : undefined
@@ -113,22 +147,10 @@ export function partyOf(world: World): void {
       }
       const next = m.path[0]
       if (next && Math.hypot(next.x - at.x, next.z - at.z) < 0.05) m.path.shift()
-      const target = m.path[0] ?? (m.seat ? fromMap(m.seat.x, m.seat.y) : along((k + 1) * GAP))
+      const target = m.path[0] ?? (m.seat ? fromMap(m.seat.x, m.seat.y) : trail.along((k + 1) * GAP))
       if (m.path.length) rest = undefined
-      const dx = target.x - o.position.x
-      const dz = target.z - o.position.z
-      const d = Math.hypot(dx, dz)
-      if (d > 0.04) {
-        const v = Math.min(d, SPEED * dt)
-        const want = Math.atan2(dx, dz)
-        const turn = Math.atan2(Math.sin(want - o.rotation.y), Math.cos(want - o.rotation.y))
-        o.rotation.y += Math.sign(turn) * Math.min(Math.abs(turn), 8 * dt)
-        o.position.x += (dx / d) * v
-        o.position.z += (dz / d) * v
-        o.position.y = 0
-        m.odometer += v
-        m.figure.walk((m.odometer / (m.child ? 0.4 : 0.7)) * Math.PI)
-      } else if (rest) {
+      if (stepTo(m, target, dt)) return
+      if (rest) {
         o.rotation.y = rotY(rest.yaw)
         o.position.y = rest.h
         if (rest.sit) m.figure.sit()

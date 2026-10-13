@@ -145,6 +145,7 @@ const ANCHORS: Record<string, Anchor> = {
   'runner-01': { object: actors.runner.object, h: 1.55, moving: true },
   'supplies-01': { object: fixed(FIXTURES.supplies.x, FIXTURES.supplies.y), h: 1.5 },
   'cleaner-01': { object: actors.cleaner.object, h: 0.8, moving: true },
+  'play-01': { object: actors.playmate.object, h: 1.25, moving: true },
   'room-01': { object: fixed(BAR_X - 1.5, BACK_OF_HOUSE_Y - 0.3), h: 2.2 },
   'room-02': { object: fixed(PRIVATE_SPEAKER.x, PRIVATE_SPEAKER.y - 0.3), h: 2.2 },
   'pos-01': { object: fixed(FIXTURES.cashier.x, FIXTURES.cashier.y), h: 1.45 },
@@ -166,6 +167,11 @@ const speech = document.createElement('div')
 speech.className = 'speech'
 speech.hidden = true
 tags.appendChild(speech)
+// How the small child looks (crying, beaming), over their head.
+const mood = document.createElement('div')
+mood.className = 'mood'
+mood.hidden = true
+tags.appendChild(mood)
 const v = new THREE.Vector3()
 /** Screen position of a point `h` metres over `object`, or undefined off screen. */
 const onScreen = (object: THREE.Object3D, h: number) => {
@@ -189,6 +195,14 @@ function placeTags() {
     if (speech.textContent !== said.text) speech.textContent = said.text
     // The host's tag sits over it too; the bubble goes above the tag.
     speech.style.transform = `translate(${p.x}px, ${p.y - 46}px) translate(-50%, -100%)`
+  }
+  const face = live?.world.childMood() ?? ''
+  const child = live?.world.companions.find((c) => c.child)?.figure.object
+  const q = face && child?.visible ? onScreen(child, 1.15) : undefined
+  mood.hidden = !q
+  if (q) {
+    if (mood.textContent !== face) mood.textContent = face
+    mood.style.transform = `translate(${q.x}px, ${q.y}px) translate(-50%, -100%)`
   }
 }
 

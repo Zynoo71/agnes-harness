@@ -8,6 +8,7 @@ import { host } from './host.js'
 import { arm, bar, stove, wok } from './kitchen.js'
 import { menu } from './menu.js'
 import { partyOf } from './party.js'
+import { playBot } from './play.js'
 import { pos } from './pos.js'
 import { prepBot } from './prep.js'
 import { cleaner, runner } from './robots.js'
@@ -42,6 +43,7 @@ export function connectDevices(
     runner(world, log),
     supplies(world, log),
     cleaner(world, log),
+    playBot(world, log),
     ambience(world, log),
     privateAmbience(world, log),
     pos(world, log),

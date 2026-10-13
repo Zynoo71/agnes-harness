@@ -202,6 +202,11 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
       if (service.guest !== 'seated' || !t) throw new CallError('x_not_seated', 'the guest is not at a table')
       if (service.bill !== 'paid')
         throw new CallError('x_not_paid', 'the bill is not paid yet: pos-01 bill, then charge, first')
+      if (world.companions.some((m) => m.held))
+        throw new CallError(
+          'x_child_playing',
+          'the small child is still in the play area: play-01 bring_back first',
+        )
       return robot.work(async () => {
         mode = 'seeing_off'
         report()

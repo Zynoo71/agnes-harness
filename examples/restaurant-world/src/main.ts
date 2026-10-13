@@ -3,9 +3,7 @@ import { buildActors } from './actors.js'
 import { DmWatch } from './dm/watch.js'
 import { DEVICES } from './labels.js'
 import { BACK_OF_HOUSE_Y, BAR_X, FIXTURES, PRIVATE_ROOM, PRIVATE_SPEAKER, ROOM, TABLES } from './layout.js'
-import { deviceCameras } from './live/camera.js'
 import { connectDevices } from './live/index.js'
-import { watchers } from './live/world.js'
 import { buildMinimap } from './minimap.js'
 import { buildOverlay, type Lang } from './overlay.js'
 import { buildRoom } from './room.js'
@@ -277,84 +275,7 @@ const minimap = buildMinimap(
 minimap.hidden = params.get('minimap') === '0'
 document.body.appendChild(minimap)
 
-// The picture in picture, top left: the live view of the device at work, from its own camera when
-// it has one, else from a camera that keeps beside it, at least a few seconds on each. The main
-// view stays where it is. P turns it off and on.
-const PIP = { left: 14, top: 76, w: 320, h: 180, every: 3, holdMs: 8000 }
-const pipBox = document.getElementById('pip') as HTMLElement
-const pipLabel = pipBox.querySelector('span') as HTMLElement
-const pipCamera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 100)
-let pipOn = Boolean(live) && params.get('pip') !== '0'
-let pipShown: THREE.PerspectiveCamera | undefined
-/** The device the side camera keeps beside, while it shows one without a camera of its own. */
-let pipNear: Anchor | undefined
-let pipSince = 0
-let pipText = () => ''
-const eye = new THREE.Vector3()
-/** Where the side camera keeps: south-east of the device and above it, as the main view looks. */
-const besideOf = (a: Anchor) => {
-  a.object.getWorldPosition(v)
-  return eye.set(v.x + 2.2, v.y + 2.4, v.z + 2.2)
-}
-const pipTo = (camera: THREE.PerspectiveCamera, near: Anchor | undefined, text: () => string) => {
-  const now = performance.now()
-  if (pipShown && now - pipSince < PIP.holdMs) return
-  // A side camera just switched to a device starts right beside it.
-  if (near && near !== pipNear) camera.position.copy(besideOf(near))
-  pipShown = camera
-  pipNear = near
-  pipSince = now
-  pipText = text
-}
-function keepBeside(a: Anchor) {
-  pipCamera.position.lerp(besideOf(a), 0.2)
-  a.object.getWorldPosition(v)
-  pipCamera.lookAt(v.x, v.y + Math.min(1, a.h * 0.5), v.z)
-}
-// The picture is drawn into a texture every few frames and laid over the corner every frame.
-const pipMap = { value: null as THREE.Texture | null }
-const pipMaterial = new THREE.ShaderMaterial({
-  uniforms: { map: pipMap },
-  vertexShader:
-    'varying vec2 vUv; void main() { vUv = vec2(uv.x, 1.0 - uv.y); gl_Position = vec4(position.xy, 0.0, 1.0); }',
-  fragmentShader:
-    'uniform sampler2D map; varying vec2 vUv; void main() { gl_FragColor = texture2D(map, vUv); }',
-  depthTest: false,
-})
-const pipScene = new THREE.Scene()
-pipScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), pipMaterial))
-const pipFlat = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
-function drawPip() {
-  pipBox.hidden = !pipOn || !pipShown || !live
-  if (pipBox.hidden || !live || !pipShown) return
-  if (pipNear) keepBeside(pipNear)
-  if (frames % PIP.every === 0 || !pipMap.value)
-    pipMap.value = live.world.view(pipShown, PIP.w * 2, PIP.h * 2)
-  const text = pipText()
-  if (pipLabel.textContent !== text) pipLabel.textContent = text
-  const y = innerHeight - PIP.top - PIP.h
-  renderer.setScissorTest(true)
-  renderer.setViewport(PIP.left, y, PIP.w, PIP.h)
-  renderer.setScissor(PIP.left, y, PIP.w, PIP.h)
-  renderer.render(pipScene, pipFlat)
-  renderer.setScissorTest(false)
-  renderer.setViewport(0, 0, innerWidth, innerHeight)
-}
-if (live) {
-  // Until a device starts a call, the ceiling camera.
-  const cam = deviceCameras.get('cam-01')
-  if (cam) pipTo(cam, undefined, () => overlay.deviceName('cam-01'))
-  watchers.activity.push((a) => {
-    if (a.progress !== undefined || a.status) return
-    const own = deviceCameras.get(a.device)
-    const near = ANCHORS[a.device]
-    const text = () => `${overlay.deviceName(a.device)} · ${overlay.toolName(a.tool)}`
-    if (own) pipTo(own, undefined, text)
-    else if (near) pipTo(pipCamera, near, text)
-  })
-}
-
-// Keys: 1–9 views, L tags, M map, P picture in picture, C the menu card, E controls, ? About.
+// Keys: 1–9 views, L tags, M map, C the menu card, E controls, ? About.
 addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return
   const next = SHOTS[Number(e.key) - 1]
@@ -364,7 +285,6 @@ addEventListener('keydown', (e) => {
   }
   if (e.key === 'l') tags.hidden = !tags.hidden
   if (e.key === 'm') minimap.hidden = !minimap.hidden
-  if (e.key === 'p') pipOn = !pipOn
   if (e.key === 'c') overlay.toggleMenu()
   if (e.key === 'e') overlay.toggleControls()
   if (e.key === '?' || e.key === 'h') overlay.toggleHelp()
@@ -480,7 +400,6 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, view.camera)
   draws += renderer.info.render.calls
   triangles += renderer.info.render.triangles
-  drawPip()
   placeTags()
   cpu += performance.now() - start
   frames += 1

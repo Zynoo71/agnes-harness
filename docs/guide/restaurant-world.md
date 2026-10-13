@@ -94,7 +94,7 @@ The bill opens on your screen with a QR code; once paid, the host robot walks yo
 ## Watch it happen
 
 - **In the conversation**, every device call shows as a card with its arguments, progress and result.
-- **In the world page**, each device's tag shows the tool it is running, its progress and who called it (the LLM in blue; with the DM on, Jev in green); the host robot's words float over it as a speech bubble; the list at the bottom left keeps the latest calls and alerts; the cards on the right show the menu, your table and the bill; the bar along the bottom shows how long you have sat, your table, the kitchen and the room. A frame in the top-left corner shows the device at work. Keys `1`–`9` switch between fixed views, drag and the wheel move the view, `M` toggles the minimap, `L` the tags, `C` the menu, `P` the picture in picture, `E` the controls and `?` the page's own guide. The button beside it switches the page to Chinese.
+- **In the world page**, each device's tag shows the tool it is running, its progress and who called it (the LLM in blue; with the DM on, Jev in green); the host robot's words float over it as a speech bubble; the list at the bottom left keeps the latest calls and alerts; the cards on the right show the menu, your table and the bill; the bar along the bottom shows how long you have sat, your table, the kitchen and the room. Keys `1`–`9` switch between fixed views, drag and the wheel move the view, `M` toggles the minimap, `L` the tags, `C` the menu, `E` the controls and `?` the page's own guide. The button beside it switches the page to Chinese.
 
 <a id="重来一次"></a>
 

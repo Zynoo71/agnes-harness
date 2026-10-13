@@ -109,7 +109,7 @@ const TEXT = {
 <li>The 🔈 button in the bar turns on the sound: the birthday song plays through your speakers while the room plays it.</li>
 <li>Right: the menu on the guest's screen, the guest's table with each dish's progress, and the bill. Bottom left: the latest calls and alerts, with every decision of Jev; click a Jev line to see how it chose.</li>
 <li>Controls (<kbd>E</kbd>): bring about trouble — a dish sells out, napkins run out, the guest knocks over their tea, the room gets hot.</li>
-<li>Keys: <kbd>1</kbd>–<kbd>9</kbd> views · drag and wheel to move · <kbd>P</kbd> picture in picture · <kbd>C</kbd> menu · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
+<li>Keys: <kbd>1</kbd>–<kbd>9</kbd> views · drag and wheel to move · <kbd>C</kbd> menu · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
 <li>Address: <code>?lang=zh</code>, <code>?shot=kitchen</code>, <code>?view=x,y,span</code>, <code>?fps=60</code>, <code>?stats</code></li>
 </ul>`,
   },
@@ -231,7 +231,7 @@ const TEXT = {
 <li>底栏的 🔈 按钮打开声音：餐厅放生日歌时，电脑喇叭里也会响起。</li>
 <li>右边是客人屏幕上的菜单、客人这桌每道菜的进度，以及账单。左下角是最近的调用和告警，Jev 的每次决定也在其中；点 Jev 的那一行看它怎么选的。</li>
 <li>控制台（<kbd>E</kbd>）：制造状况——某道菜卖完、纸巾用完、客人打翻茶、屋里变热。</li>
-<li>按键：<kbd>1</kbd>–<kbd>9</kbd> 视角 · 拖动和滚轮移动 · <kbd>P</kbd> 画中画 · <kbd>C</kbd> 菜单 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
+<li>按键：<kbd>1</kbd>–<kbd>9</kbd> 视角 · 拖动和滚轮移动 · <kbd>C</kbd> 菜单 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
 <li>地址参数：<code>?lang=en</code>、<code>?shot=kitchen</code>、<code>?view=x,y,span</code>、<code>?fps=60</code>、<code>?stats</code></li>
 </ul>`,
   },
@@ -336,9 +336,6 @@ export function buildOverlay(options: {
   toggleMenu(): void
   lang(): Lang
   mapWords(): MapWords
-  /** A device's name and a tool's, in the language of the moment, for the picture in picture. */
-  deviceName(id: string): string
-  toolName(tool: string): string
 } {
   const { live, tags } = options
   let lang: Lang = options.lang
@@ -1020,7 +1017,5 @@ export function buildOverlay(options: {
     },
     lang: () => lang,
     mapWords: () => t().map,
-    deviceName: (id) => name(id),
-    toolName: (tool) => toolLabel(lang, tool),
   }
 }

@@ -39,10 +39,6 @@
                color: var(--text); pointer-events: none; backdrop-filter: blur(6px); }
       #brand h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: 0.02em; }
       #brand p { margin: 2px 0 0; font-size: 11.5px; color: var(--dim); }
-      #pip { position: fixed; left: 14px; top: 76px; width: 320px; height: 180px; border: 1px solid var(--line); border-radius: 6px;
-        pointer-events: none; box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45); }
-      #pip span { position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 4px; background: var(--panel);
-        font: 11px var(--mono); color: var(--text); }
       #bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 5px 12px;
              background: var(--panel); border-top: 1px solid var(--line); color: var(--text); font: 11.5px var(--mono);
              backdrop-filter: blur(6px); white-space: nowrap; overflow: hidden; }
@@ -205,7 +201,6 @@
     <div id="app"></div>
     <div id="tags"></div>
     <div id="brand"><h1>Agnes Restaurant</h1><p>Robots front of house and in the kitchen</p></div>
-    <div id="pip" hidden><span></span></div>
     <div id="banners"></div>
     <div id="feed"></div>
     <div id="side">

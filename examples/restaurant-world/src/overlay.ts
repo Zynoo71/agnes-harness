@@ -115,7 +115,7 @@ const TEXT = {
 </ul>
 <h3>On this page</h3>
 <ul>
-<li>Tags over the devices show the tool each one runs, its progress and who called it: Jev in green with a bolt, the LLM in blue.</li>
+<li>Tags over the devices show the tool each one runs, its progress and who called it: Jev in green with a bolt, the LLM in blue. A device at work has a ring breathing on the floor under it in the same colour, and a robot on its way shows the way still ahead, dashed; the tags of idle devices step back. A dish served or a bill paid shows over the table for a moment.</li>
 <li>The 🔈 button in the bar turns on the sound: the birthday song plays through your speakers while the room plays it.</li>
 <li>Right: the menu on the guest's screen, the guest's table with each dish's progress, and the bill. Bottom left, the activity list (<kbd>A</kbd> folds it): every call and alert since the page opened, with every decision of Jev; click a Jev line to see how it chose.</li>
 <li>Controls (<kbd>E</kbd>): bring about trouble — a dish sells out, napkins run out, the guest knocks over their tea, the room gets hot.</li>
@@ -246,7 +246,7 @@ const TEXT = {
 </ul>
 <h3>页面上</h3>
 <ul>
-<li>设备上方的标签显示它正在执行的工具、进度和调用者：Jev 是绿色带闪电，LLM 是蓝色。</li>
+<li>设备上方的标签显示它正在执行的工具、进度和调用者：Jev 是绿色带闪电，LLM 是蓝色。正在干活的设备脚下有一圈同色的光环一呼一吸，出发的机器人用虚线标出还要走的路；空闲设备的标签会退到一旁。菜上桌、付款成功时，桌子上方会显示片刻。</li>
 <li>底栏的 🔈 按钮打开声音：餐厅放生日歌时，电脑喇叭里也会响起。</li>
 <li>右边是客人屏幕上的菜单、客人这桌每道菜的进度，以及账单。左下角的动态列表（<kbd>A</kbd> 收起）记着页面打开以来的每次调用和告警，Jev 的每次决定也在其中；点 Jev 的那一行看它怎么选的。</li>
 <li>控制台（<kbd>E</kbd>）：制造状况——某道菜卖完、纸巾用完、客人打翻茶、屋里变热。</li>

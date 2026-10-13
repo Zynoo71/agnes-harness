@@ -6,7 +6,7 @@ English | [简体中文](restaurant-world.zh-CN.md)
 
 [Documentation](../README.md) · [MHS and devices](mhs.md) · [Mars base](mars-world.md) · [Example reference](../../examples/restaurant-world/README.md)
 
-[`examples/restaurant-world`](../../examples/restaurant-world/README.md) is a modern Chinese restaurant drawn in 3D in the browser, as in a management game. Its fourteen devices are virtual, but they speak MHS like real ones: the host robot at the door, the kitchen's prep robot, wok, steamer and arm, the bar robot, the runner, the cleaner, the supplies cabinet, the payment terminal, the room's lights and music, a ceiling camera, the menu and the floor plan. You are the one guest. You say what you want in AGH, in your own words; the brain drives the devices, and you watch your table fill up.
+[`examples/restaurant-world`](../../examples/restaurant-world/README.md) is a modern Chinese restaurant drawn in 3D in the browser, as in a management game. Its sixteen devices are virtual, but they speak MHS like real ones: the host robot at the door, the kitchen's prep robot, wok, steamer and arm, the bar robot, the runner, the cleaner, the play robot in the children's corner, the supplies cabinet, the payment terminal, the lights and music of the dining room and of the private room, a ceiling camera, the menu and the floor plan. You are the guest, alone or with your party. You say what you want in AGH, in your own words; the brain drives the devices, and you watch your table fill up.
 
 <a id="开始之前"></a>
 
@@ -33,7 +33,7 @@ English | [简体中文](restaurant-world.zh-CN.md)
    ```
 
 3. Open `http://127.0.0.1:4200/?hub=ws://127.0.0.1:4180`, once. The devices live in this page; keep it open while you play.
-4. In the workbench, the Devices panel lists the fourteen devices, and its World tab shows the floor plan.
+4. In the workbench, the Devices panel lists the sixteen devices, and its World tab shows the floor plan.
 
 The restaurant and the Mars base use the same ports, so run one at a time: close the other world's page and stop its `dev` first. If you use the DM, point `AGNES_DM_SCENE` at `examples/restaurant-world/dm-scene.md` and restart AGH, so the DM knows where it is.
 
@@ -41,7 +41,7 @@ The restaurant and the Mars base use the same ports, so run one at a time: close
 
 ## You are the guest
 
-A few seconds after the page opens, the guest walks in from the street and waits at the door; a green marker floats over them. The page has no text box: everything you want, you tell AGH, and the brain decides which devices to use. Talk as a guest would, not as an operator: no device names needed.
+A few seconds after the page opens, the guest walks in from the street and waits at the door; a green marker floats over them. Whoever came with you walks in behind: press **Reset** (or `R`) to choose how many you are, one to eight, and whether one is a small child. The page has no text box: everything you want, you tell AGH, and the brain decides which devices to use. Talk as a guest would, not as an operator: no device names needed.
 
 <a id="可以这样说"></a>
 
@@ -52,6 +52,10 @@ A few seconds after the page opens, the guest walks in from the street and waits
 > Just me today. Could I sit by the window?
 
 The host robot leads you to a free window table (one is booked by someone else) and the menu opens on your screen.
+
+> There are six of us. Do you have a private room?
+
+The host only takes a party to a table with enough seats; table 6, in the private room, seats eight, and the room has its own lights, music and air.
 
 **Ordering**
 
@@ -66,6 +70,12 @@ The prep robot takes each kitchen dish's ingredients from the cold store, washes
 **Little things**
 
 > Could I have some more napkins? · I've got a little one with me, do you have a baby chair?
+
+The child stands beside you until the runner brings the chair, then sits in it.
+
+> The little one is getting restless. Is there somewhere they can play?
+
+The play robot walks the child to the play area, goes down the slide with them, blows soap bubbles or builds a tower of blocks, and brings them back when you ask. Turn on **The small child starts crying** in the controls and the child cries until someone plays with them. You cannot leave while the child is still playing.
 
 > Oops, I knocked my tea over.
 
@@ -87,7 +97,7 @@ There is no single right answer: the lights can go to party, the birthday song c
 
 The bill opens on your screen with a QR code; once paid, the host robot walks you to the door, and the runner and the cleaner reset your table.
 
-**Trouble** — open the controls with `E` on the world page and bring some about while you eat: the sea bass sells out, there is a hair in your dish, the napkins run out, you knock over your tea, the air conditioning fails, or evening falls. The brain only learns of it from the devices.
+**Trouble** — open the controls with `E` on the world page and bring some about while you eat: the sea bass sells out, there is a hair in your dish, the napkins run out, you knock over your tea, the child starts crying, the air conditioning fails, or evening falls. The brain only learns of it from the devices.
 
 <a id="观察过程"></a>
 
@@ -100,7 +110,7 @@ The bill opens on your screen with a QR code; once paid, the host robot walks yo
 
 ## Start over
 
-Press **Reset** at the bottom right of the world page, or `R`. Every running call ends as if stopped, the robots go home, the tables are cleared, the orders and the bill are gone and the guest walks in again. The devices stay connected. Open a new conversation too, so the brain does not plan from the last visit.
+Press **Reset** at the bottom right of the world page, or `R`, and choose who comes in next. Every running call ends as if stopped, the robots go home, the tables are cleared, the orders and the bill are gone and the guest walks in again with the new party. The devices stay connected. Open a new conversation too, so the brain does not plan from the last visit.
 
 <a id="遇到问题"></a>
 

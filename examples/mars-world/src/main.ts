@@ -13,6 +13,7 @@ import { buildDevices, DEVICES } from './devices.js'
 import { DmWatch } from './dm/watch.js'
 import { buildDust } from './dust.js'
 import { buildEffects } from './effects.js'
+import { buildFocus, FOCUS_LAYER } from './focus.js'
 import { deviceCameras } from './live/camera.js'
 import type { EventKind } from './live/events.js'
 import { connectDevices } from './live/index.js'
@@ -66,6 +67,8 @@ app.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 4000)
+// The main view also draws what marks the devices at work, which the device cameras leave out.
+camera.layers.enable(FOCUS_LAYER)
 
 // Sky, sunlight, and the dusty air that softens everything in the distance, all following the clock.
 let light = lightAt(clock.hour())
@@ -322,6 +325,7 @@ renderer.setAnimationLoop(() => {
   devices.update(t)
   dust.update(t, storm)
   effects.update(t)
+  focus?.update(t, dt)
   follow(dt)
   sky.position.copy(camera.position)
   composer.render()
@@ -370,6 +374,8 @@ const live = hub
       },
     )
   : undefined
+// A ring under each device while it runs a call, in its caller's colour.
+const focus = live ? buildFocus(scene, devices.anchors, live.devices) : undefined
 if (live) {
   live.world.effects = effects
   // Scripts (an evaluation, a test) reach the events and the director here: mars.director.next().

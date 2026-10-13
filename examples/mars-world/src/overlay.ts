@@ -1175,6 +1175,8 @@ export function buildOverlay(options: {
       tag.el.classList.toggle('by-llm', a?.caller === 'LLM')
       tag.el.classList.toggle('warn', levels.includes('warn') && !levels.includes('bad'))
       tag.el.classList.toggle('bad', levels.includes('bad') || failed)
+      // A device at rest and well steps back, so the eye goes to the ones at work or in trouble.
+      tag.el.classList.toggle('calm', Boolean(live) && !a && !levels.length && !failed)
     }
     for (const [b, update] of shown) {
       update()

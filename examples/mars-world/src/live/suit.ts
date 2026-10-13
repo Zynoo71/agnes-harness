@@ -210,7 +210,8 @@ export function suit(
           'what the wearer is doing: working round the base on their own, walking where the radio sent them, waiting outside, carried by monolith-01, in the airlock chamber, in the habitat',
       },
     },
-    ui: { primary: 'helmet_video' },
+    // The helmet camera moves the most, so pages show it first.
+    ui: { primary: 'helmet_video', order: -1 },
     resources: { wearer: 'reject' },
   })
   dev.log = log

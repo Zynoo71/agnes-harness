@@ -29,7 +29,7 @@ function nextCalls(lines: Line[]): string {
   return [
     ...(kitchen.length
       ? [
-          `prep-01 prep (all of them in one trip), then ${kitchen.map((l) => `${STATION_DEVICE[l.dish.station]} cook item ${l.id}`).join(', ')}`,
+          `prep-01 prep (${kitchen.length > 3 ? `three a trip, so ${Math.ceil(kitchen.length / 3)} trips` : 'all of them in one trip'}), then ${kitchen.map((l) => `${STATION_DEVICE[l.dish.station]} cook item ${l.id}`).join(', ')}`,
         ]
       : []),
     ...bar.map((l) => `bar-01 make item ${l.id}`),

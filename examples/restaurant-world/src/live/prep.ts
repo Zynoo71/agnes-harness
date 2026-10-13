@@ -146,12 +146,18 @@ export function prepBot(world: World, log: (line: string) => void): WorldDevice 
               service.changed()
             }
           }
+          const left = service.lines.filter((x) => x.dish.station !== 'bar' && x.stage === 'queued')
           return lines
             .map(
               (l) => `${l.id} ${l.dish.en} is washed, cut and set beside ${STATION_DEVICE[l.dish.station]}`,
             )
             .join('; ')
             .concat(', ready to cook')
+            .concat(
+              left.length
+                ? `; still waiting for prep: ${left.map((l) => `${l.id} ${l.dish.en}`).join(', ')}`
+                : '',
+            )
         })
       } catch (e) {
         for (const bowl of bowls.values()) bowl.removeFromParent()

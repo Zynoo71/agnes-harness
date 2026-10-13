@@ -301,6 +301,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'm') minimap.hidden = !minimap.hidden
   if (e.key === 'c') overlay.toggleMenu()
   if (e.key === 'e') overlay.toggleControls()
+  if (e.key === 'a') overlay.toggleFeed()
   if (e.key === '?' || e.key === 'h') overlay.toggleHelp()
   if (e.key === 'r') openPanel()
   if (e.key === 'Escape') panel.hidden = true

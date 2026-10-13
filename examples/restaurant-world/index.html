@@ -52,10 +52,22 @@
       #bar .warn { color: var(--amber); }
       #bar .bad { color: var(--red); font-weight: 700; }
       #bar .ok { color: var(--ok); }
-      #feed { position: fixed; left: 14px; bottom: 40px; width: min(600px, 48vw); display: flex; flex-direction: column; gap: 3px;
-              font: 11.5px var(--mono); color: var(--text); pointer-events: none; }
-      #feed .line { display: flex; gap: 8px; padding: 3px 8px; background: var(--panel); border-radius: 5px; border-left: 2px solid var(--line);
-                    overflow: hidden; white-space: nowrap; transition: opacity 0.4s; }
+      /* The activity list: a panel of its own, kept open, its whole history scrolling under a title row. */
+      #feed { position: fixed; left: 14px; bottom: 40px; width: min(680px, 50vw); display: flex; flex-direction: column; gap: 6px;
+              padding: 8px 10px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+              font: 13px var(--mono); color: var(--text); backdrop-filter: blur(6px); }
+      #feed .top { display: flex; align-items: center; gap: 8px; }
+      #feed .top b { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+      #feed .top .count { color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+      #feed .fold { margin-left: auto; background: none; border: 0; color: var(--dim); font: inherit; cursor: pointer; padding: 0 4px; }
+      #feed .fold:hover, #feed .fold:focus-visible { color: var(--text); }
+      #feed.folded .head, #feed.folded .list { display: none; }
+      #feed .list { display: flex; flex-direction: column; gap: 3px; max-height: min(38vh, calc(100vh - 420px)); min-height: 64px;
+                    overflow-y: auto; overscroll-behavior: contain; }
+      #feed .empty { color: var(--dim); padding: 6px 2px; }
+      #feed .line { display: flex; gap: 8px; padding: 4px 8px; background: rgba(255, 255, 255, 0.03); border-radius: 5px; border-left: 2px solid var(--line);
+                    overflow: hidden; white-space: nowrap; flex: none; }
+      #feed .emo { margin-right: 5px; font-weight: 400; }
       #feed .when { color: var(--dim); }
       #feed .dev { font-weight: 700; }
       #feed .args { color: var(--dim); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -68,7 +80,7 @@
       #feed .by-dm.error, #feed .by-dm.rejected, #feed .by-llm.error, #feed .by-llm.rejected { border-left-color: var(--red); }
       /* Above the list: rows alike, a label, the left share, a split bar and the right share, in columns. */
       #feed .head { align-self: flex-start; display: grid; grid-template-columns: auto auto 120px auto; gap: 4px 8px; align-items: center;
-                    padding: 4px 9px; background: var(--panel); border-radius: 5px; color: var(--dim); }
+                    padding: 2px 0 4px; color: var(--dim); font-size: 11.5px; }
       #feed .head .label { margin-right: 4px; }
       #feed .head .left, #feed .head .right { display: flex; gap: 6px; align-items: center; }
       #feed .head .left { justify-self: end; }
@@ -84,7 +96,7 @@
       /* A call's two times, thinking and acting, in columns at the end of its line. */
       #feed .time { flex: none; width: 12ch; text-align: right; font-variant-numeric: tabular-nums; }
       #feed .time i { font-style: normal; color: var(--dim); margin-right: 5px; }
-      #feed .item { transition: opacity 0.4s; }
+      #feed .item { flex: none; }
       #feed .hand { border-left-color: var(--dm-soft); }
       #feed .hand .arrow { color: var(--dim); margin: 0 -3px; }
       #feed .hand .why { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
@@ -92,8 +104,8 @@
       #feed .can-open { pointer-events: auto; cursor: pointer; }
       #feed .caret { flex: none; width: 8px; color: var(--dim); font-size: 10px; }
       #feed .open .line { border-radius: 5px 5px 0 0; }
-      #feed .decision { padding: 5px 10px 7px 12px; background: var(--panel); border-left: 2px solid var(--dm-soft); border-radius: 0 0 5px 5px;
-                        font-size: 10.5px; }
+      #feed .decision { padding: 5px 10px 7px 12px; background: rgba(255, 255, 255, 0.03); border-left: 2px solid var(--dm-soft); border-radius: 0 0 5px 5px;
+                        font-size: 12px; }
       #feed .decision .meta { display: flex; gap: 12px; justify-content: space-between; margin-bottom: 4px; color: var(--dim); white-space: nowrap; }
       #feed .decision .meta .said { overflow: hidden; text-overflow: ellipsis; }
       #feed .decision .meta .dev { color: var(--text); }

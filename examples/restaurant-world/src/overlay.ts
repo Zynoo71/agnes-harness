@@ -1,5 +1,5 @@
 import type { Decision } from './dm/watch.js'
-import { DEVICES, type Lang, progressLabel, toolLabel, valueLabel } from './labels.js'
+import { DEVICES, EMOJI, type Lang, progressLabel, toolLabel, valueLabel } from './labels.js'
 import { TABLES } from './layout.js'
 import type { Line as OrderLine, Service } from './live/service.js'
 import { type Activity, type Alert, type World, type WorldDevice, watchers } from './live/world.js'
@@ -32,6 +32,9 @@ const TEXT = {
     help: 'About',
     controls: 'Controls',
     conditionsHead: 'Conditions',
+    activity: 'Activity',
+    activityEmpty: 'Calls, alerts and events show up here.',
+    activityFold: 'Fold or unfold the activity list (A)',
     share: 'Decisions',
     spent: 'Time',
     think: 'think',
@@ -113,9 +116,9 @@ const TEXT = {
 <ul>
 <li>Tags over the devices show the tool each one runs, its progress and who called it: Jev in green with a bolt, the LLM in blue.</li>
 <li>The 🔈 button in the bar turns on the sound: the birthday song plays through your speakers while the room plays it.</li>
-<li>Right: the menu on the guest's screen, the guest's table with each dish's progress, and the bill. Bottom left: the latest calls and alerts, with every decision of Jev; click a Jev line to see how it chose.</li>
+<li>Right: the menu on the guest's screen, the guest's table with each dish's progress, and the bill. Bottom left, the activity list (<kbd>A</kbd> folds it): every call and alert since the page opened, with every decision of Jev; click a Jev line to see how it chose.</li>
 <li>Controls (<kbd>E</kbd>): bring about trouble — a dish sells out, napkins run out, the guest knocks over their tea, the room gets hot.</li>
-<li>Keys: <kbd>1</kbd>–<kbd>9</kbd> views · drag and wheel to move · <kbd>C</kbd> menu · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
+<li>Keys: <kbd>1</kbd>–<kbd>9</kbd> views · drag and wheel to move · <kbd>C</kbd> menu · <kbd>E</kbd> controls · <kbd>A</kbd> activity · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
 <li>Address: <code>?lang=zh</code>, <code>?shot=kitchen</code>, <code>?view=x,y,span</code>, <code>?fps=60</code>, <code>?stats</code></li>
 </ul>`,
   },
@@ -141,6 +144,9 @@ const TEXT = {
     help: '说明',
     controls: '控制台',
     conditionsHead: '状况',
+    activity: '动态',
+    activityEmpty: '设备调用、告警和事件会出现在这里。',
+    activityFold: '收起或展开动态（A）',
     share: '决策占比',
     spent: '用时',
     think: '思考',
@@ -241,9 +247,9 @@ const TEXT = {
 <ul>
 <li>设备上方的标签显示它正在执行的工具、进度和调用者：Jev 是绿色带闪电，LLM 是蓝色。</li>
 <li>底栏的 🔈 按钮打开声音：餐厅放生日歌时，电脑喇叭里也会响起。</li>
-<li>右边是客人屏幕上的菜单、客人这桌每道菜的进度，以及账单。左下角是最近的调用和告警，Jev 的每次决定也在其中；点 Jev 的那一行看它怎么选的。</li>
+<li>右边是客人屏幕上的菜单、客人这桌每道菜的进度，以及账单。左下角的动态列表（<kbd>A</kbd> 收起）记着页面打开以来的每次调用和告警，Jev 的每次决定也在其中；点 Jev 的那一行看它怎么选的。</li>
 <li>控制台（<kbd>E</kbd>）：制造状况——某道菜卖完、纸巾用完、客人打翻茶、屋里变热。</li>
-<li>按键：<kbd>1</kbd>–<kbd>9</kbd> 视角 · 拖动和滚轮移动 · <kbd>C</kbd> 菜单 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
+<li>按键：<kbd>1</kbd>–<kbd>9</kbd> 视角 · 拖动和滚轮移动 · <kbd>C</kbd> 菜单 · <kbd>E</kbd> 控制台 · <kbd>A</kbd> 动态 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
 <li>地址参数：<code>?lang=en</code>、<code>?shot=kitchen</code>、<code>?view=x,y,span</code>、<code>?fps=60</code>、<code>?stats</code></li>
 </ul>`,
   },
@@ -285,6 +291,9 @@ interface Live {
   devices: WorldDevice[]
   world: World
 }
+
+/** The activity list keeps this many items, the oldest going first. */
+const KEEP_LINES = 300
 
 /** An item of the activity list: a call, an alert, or a step the DM left to the LLM, drawn again when the language changes. */
 interface Line {
@@ -344,6 +353,7 @@ export function buildOverlay(options: {
 }): {
   stats(text: string): void
   toggleControls(): void
+  toggleFeed(): void
   toggleHelp(): void
   toggleMenu(): void
   lang(): Lang
@@ -386,6 +396,12 @@ export function buildOverlay(options: {
   const dishName = (id: string) => {
     const d = MENU.find((x) => x.id === id)
     return d ? d[lang] : id
+  }
+  /** A device's name in the activity list, after its emoji. */
+  const devEl = (id: string, label = name(id)) => {
+    const b = el('b', 'dev')
+    b.append(el('span', 'emo', EMOJI[id] ?? '•'), label)
+    return b
   }
   /** A tool's name for people, its id on hover. */
   const tool = (id: string) => {
@@ -441,9 +457,38 @@ export function buildOverlay(options: {
   // language of the moment. An item the DM decided opens to show how: the newest for a few seconds,
   // any of them on a click.
   const lines: Line[] = []
+  // On top, the list's name, how many items it holds and a button (or A) to fold it away; then the
+  // share rows; then the items, all of them since the page opened, scrolling.
+  const feedTop = el('div', 'top')
+  const feedTitle = el('b')
+  const feedCount = el('span', 'count')
+  const feedFold = el('button', 'fold')
+  feedFold.type = 'button'
+  feedTop.append(feedTitle, feedCount, feedFold)
   const head = el('div', 'head')
   head.hidden = true
-  feed.appendChild(head)
+  const list = el('div', 'list')
+  const empty = el('div', 'empty')
+  list.append(empty)
+  feed.append(feedTop, head, list)
+  let folded = false
+  const drawFeedTop = () => {
+    feedTitle.textContent = t().activity
+    feedCount.textContent = lines.length ? String(lines.length) : ''
+    feedFold.textContent = folded ? '▸' : '▾'
+    feedFold.title = t().activityFold
+    empty.textContent = t().activityEmpty
+    empty.hidden = lines.length > 0
+    feed.classList.toggle('folded', folded)
+  }
+  const atEnd = () => list.scrollHeight - list.scrollTop - list.clientHeight < 8
+  const toggleFeed = () => {
+    folded = !folded
+    drawFeedTop()
+    if (!folded) list.scrollTop = list.scrollHeight
+  }
+  feedFold.addEventListener('click', toggleFeed)
+  drawFeedTop()
   /** The DM's newest decision, open in the list until `until`. */
   let fresh: { d: Decision; until: number } | undefined
   const time = () => new Date().toTimeString().slice(0, 8)
@@ -526,20 +571,23 @@ export function buildOverlay(options: {
         // Every line keeps the caret's room, so the time columns line up.
         el('span', 'caret', d ? (open ? '▾' : '▸') : ''),
       )
+      // A line that grows (a decision opening) keeps the list at its end when it was there.
+      const stick = atEnd()
       item.replaceChildren(line, ...(open && d ? [decisionCard(d)] : []))
+      if (stick) list.scrollTop = list.scrollHeight
     }
     line.addEventListener('click', () => {
       if (!decision?.()) return
       clicked = !item.classList.contains('open')
       draw()
     })
+    const stick = atEnd()
+    list.appendChild(item)
     draw()
-    feed.appendChild(item)
     lines.push({ el: item, draw })
-    while (lines.length > 5) lines.shift()?.el.remove()
-    lines.forEach((l, i) => {
-      l.el.style.opacity = String(0.35 + (0.65 * (i + 1)) / lines.length)
-    })
+    while (lines.length > KEEP_LINES) lines.shift()?.el.remove()
+    if (stick) list.scrollTop = list.scrollHeight
+    drawFeedTop()
     drawHead()
     return draw
   }
@@ -577,7 +625,7 @@ export function buildOverlay(options: {
         const d = behind()
         return [
           ...(a.caller ? [chip(a.caller, d ? `${Math.round(d.sure * 100)}%` : '')] : []),
-          el('b', 'dev', name(a.device)),
+          devEl(a.device),
           tool(a.tool),
           el('span', 'args', argsText(a)),
           el('span', 'state', callText(a)),
@@ -638,7 +686,7 @@ export function buildOverlay(options: {
       push(
         () => `alert ${raised ? a.level : 'ok'}`,
         () => [
-          el('b', 'dev', name(a.device)),
+          devEl(a.device),
           el('span', '', `${fieldName(a.field)} ${a.value}${a.unit ? ` ${a.unit}` : ''}`),
           el('span', 'state', raised ? (a.level === 'bad' ? t().alertBad : t().alertWarn) : t().cleared),
         ],
@@ -671,7 +719,7 @@ export function buildOverlay(options: {
       c.apply()
       push(
         () => 'event info',
-        () => [el('b', 'dev', name(c.device)), el('span', '', c[lang])],
+        () => [devEl(c.device), el('span', '', c[lang])],
       )
     })
     item.append(text, b)
@@ -818,6 +866,7 @@ export function buildOverlay(options: {
     closeHelp.textContent = t().close
     for (const tag of tagParts) tag.title.textContent = name(tag.id)
     for (const line of lines) line.draw()
+    drawFeedTop()
   }
 
   // The DM's decisions: a step it left to the LLM gets an item of its own, under the result it read;
@@ -888,7 +937,7 @@ export function buildOverlay(options: {
             : running
               ? `${toolLabel(lang, running[1] ?? '')} … ${t().stillRunning}`
               : clipped(rest)
-    e.append(el('b', 'dev', name(device)), ` ${text}`)
+    e.append(devEl(device), ` ${text}`)
     return e
   }
   /** How the DM chose: the result it read, how long it took among how many actions, the likeliest four. */
@@ -1022,6 +1071,7 @@ export function buildOverlay(options: {
       status.textContent = text
     },
     toggleControls,
+    toggleFeed,
     toggleHelp,
     toggleMenu() {
       menuChoice = menuCard.hidden === true

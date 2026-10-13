@@ -135,6 +135,26 @@ const VALUES_ZH: Record<string, string> = {
 for (const t of TABLES) VALUES_ZH[t.id] = t.name.zh
 for (const d of MENU) VALUES_ZH[d.id] = d.zh
 
+/** A device's emoji in the activity list. */
+export const EMOJI: Record<string, string> = {
+  'host-01': '🙋',
+  'floor-01': '🪑',
+  'menu-01': '📋',
+  'prep-01': '🔪',
+  'wok-01': '🥘',
+  'stove-01': '🥟',
+  'arm-01': '🦾',
+  'bar-01': '🍹',
+  'runner-01': '🍽️',
+  'supplies-01': '🧻',
+  'cleaner-01': '🧹',
+  'play-01': '🧸',
+  'room-01': '💡',
+  'room-02': '🏮',
+  'pos-01': '💳',
+  'cam-01': '📷',
+}
+
 export const toolLabel = (lang: Lang, tool: string) => TOOLS[tool]?.[lang === 'zh' ? 1 : 0] ?? tool
 
 /** An enum value; `name` names device ids. */

@@ -58,7 +58,8 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
         unit: 'deg',
         min: -170,
         max: 170,
-        description: '0 looks north over the base, positive left',
+        description:
+          '0 looks north over the base, positive left: 90 looks west, -90 east (pan is minus the compass azimuth)',
       },
       tilt: { type: 'number', unit: 'deg', min: -60, max: 20, description: 'positive looks up' },
       zoom: { type: 'number', min: 1, max: 4, description: 'magnification' },
@@ -125,7 +126,8 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
           type: 'number',
           minimum: -170,
           maximum: 170,
-          description: 'degrees, 0 north over the base, positive left',
+          description:
+            'degrees, 0 north over the base, positive left: 90 west, -90 east; for a compass azimuth (clockwise from north) pan is minus it, so azimuth 270 is pan 90',
         },
         tilt: { type: 'number', minimum: -60, maximum: 20, description: 'degrees, positive up' },
       },
@@ -194,9 +196,12 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
         at: world.clock.label(),
         sun: { inFrame, elevation, azimuth },
       })
+      const sun = inFrame
+        ? 'the sun is in the picture'
+        : `the sun (azimuth ${Math.round(azimuth)}°, elevation ${Math.round(elevation)}°) is ${elevation > -1 ? 'not in the picture' : 'below the horizon'}`
       return {
-        detail: `${id} taken at ${world.clock.label()}: pan ${Math.round(pan)}°, tilt ${Math.round(tilt)}°, zoom ${zoom}×`,
-        data: { photo: id },
+        detail: `${id} taken at ${world.clock.label()}: pan ${Math.round(pan)}°, tilt ${Math.round(tilt)}°, zoom ${zoom}×; ${sun}`,
+        data: { photo: id, sun_in_picture: inFrame },
       }
     },
   )

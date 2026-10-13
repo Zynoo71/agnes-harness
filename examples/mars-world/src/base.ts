@@ -148,19 +148,28 @@ function airlock(): { group: THREE.Group; door: THREE.Object3D } {
   g.add(part(new THREE.BoxGeometry(2.6, 0.5, 5.2), dark(), 0, 0.25, 9.4))
   const ring = part(new THREE.TorusGeometry(1.75, 0.12, 12, 48), metal(), 0, 1.9, 12.1)
   g.add(ring)
-  // The outer door swings on a hinge at its east edge.
+  // Behind the door, the dark chamber, seen while the door is open.
+  g.add(part(new THREE.CircleGeometry(1.63, 48), std(0x15171a, 0.9), 0, 1.9, 12.14))
+  // The outer door hangs in front of the ring on a hinge beyond its east edge, so it swings clear
+  // of the ring and the hull; two arms hold it.
+  const HINGE = 1.95
   const door = new THREE.Group()
-  door.position.set(1.45, 1.9, 12.12)
+  door.position.set(HINGE, 1.9, 12.32)
   const leaf = new THREE.Group()
-  leaf.position.x = -1.45
+  leaf.position.x = -HINGE
   door.add(leaf)
-  leaf.add(part(new THREE.CircleGeometry(1.45, 48), std(0xd9d4cb, 0.5, 0.2)))
-  leaf.add(part(new THREE.CircleGeometry(0.32, 32), std(0x223344, 0.05, 0.6), 0, 0.55, 0.01))
-  leaf.add(part(new THREE.TorusGeometry(0.34, 0.04, 8, 32), metal(), 0, 0.55, 0.015))
-  leaf.add(part(new THREE.BoxGeometry(0.5, 0.08, 0.06), metal(), 0, -0.2, 0.04))
+  const slab = part(new THREE.CylinderGeometry(1.5, 1.5, 0.08, 48), std(0xd9d4cb, 0.5, 0.2))
+  slab.rotation.x = Math.PI / 2
+  leaf.add(slab)
+  leaf.add(part(new THREE.CircleGeometry(0.32, 32), std(0x223344, 0.05, 0.6), 0, 0.55, 0.05))
+  leaf.add(part(new THREE.TorusGeometry(0.34, 0.04, 8, 32), metal(), 0, 0.55, 0.055))
+  leaf.add(part(new THREE.BoxGeometry(0.5, 0.08, 0.06), metal(), 0, -0.2, 0.08))
+  for (const y of [-0.6, 0.6])
+    leaf.add(part(new THREE.BoxGeometry(0.75, 0.12, 0.08), metal(), HINGE - 0.375, y, 0))
   g.add(door)
-  g.add(part(new THREE.BoxGeometry(0.16, 0.16, 0.05), glow(0x46ff7a, 5), 1.15, 3.0, 12.15))
-  g.add(part(new THREE.BoxGeometry(0.16, 0.16, 0.05), glow(0xffa21a, 5), -1.15, 3.0, 12.15))
+  g.add(part(new THREE.CylinderGeometry(0.06, 0.06, 1.4, 12), metal(), HINGE, 1.9, 12.32))
+  g.add(part(new THREE.BoxGeometry(0.16, 0.16, 0.05), glow(0x46ff7a, 5), 1.15, 3.0, 12.42))
+  g.add(part(new THREE.BoxGeometry(0.16, 0.16, 0.05), glow(0xffa21a, 5), -1.15, 3.0, 12.42))
   // A ramp down to the ground.
   const ramp = part(new THREE.BoxGeometry(2.2, 0.1, 1.9), pbr('metal_plate', [2, 2]), 0, 0.28, 13.0)
   ramp.rotation.x = 0.12

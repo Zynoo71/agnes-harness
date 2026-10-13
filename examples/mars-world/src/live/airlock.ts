@@ -11,7 +11,7 @@ const OUTSIDE = 0.7
 export const CYCLE_S = 10
 /** Seconds the outer door takes to swing open or shut. */
 const DOOR_S = 2
-const OPEN = 1.9
+const OPEN = 1.75
 
 /** Inside the habitat, where the astronaut goes once the inner door opens for them. */
 const HABITAT = { x: 0, z: 5 }

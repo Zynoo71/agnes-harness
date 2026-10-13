@@ -71,7 +71,7 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
         service.lines
           .map(
             (l) =>
-              `${l.id} ${l.dish.en}${l.note ? ` (${l.note})` : ''}${l.rush ? ' [hurried]' : ''}: ${stageText(l)}`,
+              `${l.id} ${l.dish.en}${l.note ? ` (${l.note})` : ''}${l.rush ? ' [hurried]' : ''}: ${stageText(l)}${l.problem ? ` [the guest found ${l.problem}]` : ''}`,
           )
           .join('; ') || 'none',
       open: service.lines.filter((l) => !['served', 'cleared', 'cancelled'].includes(l.stage)).length,

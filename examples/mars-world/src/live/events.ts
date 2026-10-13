@@ -5,7 +5,7 @@ import { heightAt, OBSTACLES, type Obstacle, UNUSUAL_ROCK } from '../terrain.js'
 import { AREAS } from './hopper.js'
 import { FINDINGS } from './lab.js'
 import type { Point } from './route.js'
-import { every, type World } from './world.js'
+import { every, nextFrame, type World } from './world.js'
 
 /**
  * What can happen to Agnes Base on its own: each event's parameters and their ranges (numbers as
@@ -269,19 +269,17 @@ export class Events {
       r: FALLEN.across / 2,
       object: holder,
     }
-    // It drops and tumbles for a second, then lies in the way.
+    // It drops and tumbles for a second on the motion clock, which beats in a hidden tab too, then
+    // lies in the way.
     const start = performance.now()
-    const fall = () => {
-      const k = Math.min(1, (performance.now() - start) / 1000)
+    for (let k = 0; k < 1; ) {
+      await nextFrame()
+      k = Math.min(1, (performance.now() - start) / 1000)
       holder.position.y = ground + 9 * (1 - k * k)
       holder.rotation.set(k * Math.PI * 2, k * 1.1, 0)
-      if (k < 1) requestAnimationFrame(fall)
-      else {
-        OBSTACLES.push(obstacle)
-        this.rocks.push(obstacle)
-      }
     }
-    fall()
+    OBSTACLES.push(obstacle)
+    this.rocks.push(obstacle)
   }
 
   /** Somewhere in `area` clear of the rocks already there. */

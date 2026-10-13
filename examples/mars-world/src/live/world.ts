@@ -105,6 +105,11 @@ export async function frame(call: Call): Promise<void> {
   if (call.signal.aborted) await call.checkpoint()
 }
 
+/** Waits for the next frame of the motion clock, outside any call: it beats in a hidden tab too. */
+export function nextFrame(): Promise<void> {
+  return new Promise((resolve) => frameWaiters.push(resolve))
+}
+
 /** Runs `step` on every frame of the motion clock while the page lives; errors are logged. */
 export function everyFrame(step: () => void, log: (line: string) => void): void {
   onFrame.add(() => {

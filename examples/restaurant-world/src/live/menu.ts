@@ -184,7 +184,7 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'hurry',
       description:
-        'Mark an order line as hurried: its station makes it twice as fast. Says how far it has got.',
+        'Mark an order line as hurried, when the guest is in a hurry or asks for it sooner: its station makes it twice as fast (a note does not). Says how far it has got.',
       timeout: 5,
       params: { item: { type: 'string', maxLength: 8, description: 'the order line, such as o1' } },
       required: ['item'],

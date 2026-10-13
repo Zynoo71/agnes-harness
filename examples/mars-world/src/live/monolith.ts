@@ -29,6 +29,7 @@ import {
   everyFrame,
   FRAME_HZ,
   frame,
+  routes,
   type Thing,
   turnTo,
   type World,
@@ -433,14 +434,21 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   ) => {
     const g = GAIT[gait]
     let done = 0
-    for (const p of path) {
-      await body.go(call, p, { speed: g.speed, accel: g.accel, turnRate: g.turn, arrive: 0.2, blocked })
-      done += 1
-      call.progress({
-        done,
-        total: path.length,
-        text: `${gait === 'roll' ? 'rolling' : 'walking'}: leg ${done} of ${path.length}`,
-      })
+    const route = { points: path, next: 0 }
+    routes.set(dev.id, route)
+    try {
+      for (const p of path) {
+        route.next = done
+        await body.go(call, p, { speed: g.speed, accel: g.accel, turnRate: g.turn, arrive: 0.2, blocked })
+        done += 1
+        call.progress({
+          done,
+          total: path.length,
+          text: `${gait === 'roll' ? 'rolling' : 'walking'}: leg ${done} of ${path.length}`,
+        })
+      }
+    } finally {
+      if (routes.get(dev.id) === route) routes.delete(dev.id)
     }
   }
   /** Runs a motion tool: it is the current call, and its state says it moves while it does. */

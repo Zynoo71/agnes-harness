@@ -7,7 +7,7 @@ import { addCamera } from './camera.js'
 import { addPlace, reading } from './place.js'
 import { burn, flightTimeLeft, maxAltitude, ROCKET } from './rocket.js'
 import { type Circle, fromMap, type Point, pathToRock, ROVER, round, toMap } from './route.js'
-import { Blocked, Body, every, type Thing, type World, WorldDevice, wait } from './world.js'
+import { Blocked, Body, every, routes, type Thing, type World, WorldDevice, wait } from './world.js'
 
 /** Named areas the hopper can survey: centre and radius in world coordinates. */
 export const AREAS: Record<string, Point & { r: number }> = {
@@ -330,6 +330,8 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
     const cruise = altitude()
     const total = Math.max(0.1, Math.hypot(p.x - body.at.x, p.z - body.at.z))
     let told = 0
+    const route = { points: [p], next: 0 }
+    routes.set(dev.id, route)
     try {
       await body.go(call, p, {
         speed: FLIGHT.speed,
@@ -359,6 +361,8 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
           `propellant down to the ${ROCKET.reserve} % landing reserve; it lands where it is now. Away from the hopper pad it cannot take off again (that needs ${ROCKET.minTakeOff} %): monolith-01 can tow it to the pad`,
         )
       throw e
+    } finally {
+      if (routes.get(dev.id) === route) routes.delete(dev.id)
     }
   }
 

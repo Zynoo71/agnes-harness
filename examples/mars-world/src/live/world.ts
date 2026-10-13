@@ -170,6 +170,13 @@ export const watchers: {
   alert: ((a: Alert, raised: boolean) => void)[]
 } = { activity: [], alert: [] }
 
+/**
+ * The way each device has to go on the call that moves it, for the page to draw: the points it
+ * moves through in order, and the one it heads for now. Set as a call sets off and gone once it
+ * ends; a move by hand or on a cable has none.
+ */
+export const routes = new Map<string, { points: Point[]; next: number }>()
+
 interface AlertLine {
   warn?: number
   bad?: number

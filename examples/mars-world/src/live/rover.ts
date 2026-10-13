@@ -7,7 +7,7 @@ import { addCamera } from './camera.js'
 import { castRay } from './map.js'
 import { addPlace, reading } from './place.js'
 import { fromMap, inTheWay, keepouts, type Point, planNear, planRoute, ROVER, round, toMap } from './route.js'
-import { Blocked, Body, every, everyFrame, type World, WorldDevice, wait } from './world.js'
+import { Blocked, Body, every, everyFrame, routes, type World, WorldDevice, wait } from './world.js'
 
 /** The lidar on the mast: one sweep, all round, every 2 degrees. */
 const LIDAR = { range: 30, step: 2, height: 1.9, ahead: 0.8 }
@@ -386,9 +386,12 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     world.rover.docked = false
     report()
     dev.update({ mode: 'driving' })
+    const route = { points, next: 0 }
+    routes.set(dev.id, route)
     try {
       for (const [i, p] of points.entries()) {
         world.rover.leg = p
+        route.next = i
         await body.go(call, p, {
           speed: DRIVE.speed,
           accel: DRIVE.accel,
@@ -405,6 +408,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
       if (e instanceof Blocked) throw new CallError('estop', e.message)
       throw e
     } finally {
+      if (routes.get(dev.id) === route) routes.delete(dev.id)
       world.rover.leg = undefined
       dev.update({ mode: world.rover.docked ? 'docked' : 'idle' })
     }

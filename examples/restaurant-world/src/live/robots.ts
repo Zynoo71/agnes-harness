@@ -383,7 +383,7 @@ export function cleaner(world: World, log: (line: string) => void): WorldDevice 
     {
       name: 'clean',
       description:
-        'Go to a place (a table, the door, …) and scrub the floor there; at a table that needs clearing, also wipe the table so it is free again.',
+        'Go to a place (a table, the door, …) and scrub the floor there; at a table that needs clearing, also wipe the table so it is free again, once runner-01 has cleared its dishes.',
       timeout: 120,
       params: { place: PLACE_PARAM },
       required: ['place'],

@@ -191,7 +191,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'see_off',
       description:
-        'Walk the guest from their table to the door when they want to leave and the bill is paid (pos-01); they leave, and the table is left for clearing.',
+        'Walk the guest from their table to the door when they want to leave, the bill is paid (pos-01) and a small child is back from the play area (play-01 bring_back); they leave, and the table is left for clearing.',
       timeout: 120,
       uses: ['chassis'],
       motion: true,

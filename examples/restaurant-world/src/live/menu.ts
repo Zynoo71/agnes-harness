@@ -89,7 +89,7 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
   dev.tool(
     {
       name: 'show_menu',
-      description: "Open (or close) the menu on the guest's screen.",
+      description: "Open (or close) the menu on the guest's screen. It opens by itself when the guest is seated (host-01 seat_guest), so open it again only when the guest asks.",
       timeout: 5,
       params: { open: { type: 'boolean', description: 'true opens it (default), false closes it' } },
       uses: ['orders'],

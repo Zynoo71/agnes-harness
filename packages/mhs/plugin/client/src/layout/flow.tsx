@@ -207,7 +207,8 @@ function rate(n: number): string {
 
 function kbps(bytes: number): string {
   if (bytes <= 0) return ''
-  return bytes >= 1_000_000 ? ` · ${num(bytes / 1_000_000, 1)} MB/s` : ` · ${num(bytes / 1000, 0)} kB/s`
+  if (bytes >= 1_000_000) return ` · ${num(bytes / 1_000_000, 1)} MB/s`
+  return ` · ${num(bytes / 1000, bytes < 10_000 ? 1 : 0)} kB/s`
 }
 
 const THUMB_HZ = 5

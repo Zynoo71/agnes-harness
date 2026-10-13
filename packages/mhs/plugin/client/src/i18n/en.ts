@@ -31,7 +31,7 @@ export const en = {
   'flow.lane.mhs.short': 'commands',
   'flow.lane.mos.short': 'data',
   'flow.hub': 'AgnesHub',
-  'flow.hub.sub': '',
+  'flow.hub.sub': '爱思智能中枢',
   'flow.hub.online': '{n}/{total} online',
   'flow.dm': 'Jev',
   'flow.dm.on': 'on duty',

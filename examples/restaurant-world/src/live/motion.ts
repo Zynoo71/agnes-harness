@@ -2,13 +2,16 @@ import { type Call, CallError, type Device } from '@agnes/mhs/device'
 import type * as THREE from 'three'
 import { rotY } from '../shapes.js'
 import { fromMap, type Point, planNear, round, toMap } from './route.js'
-import { Body, every, turnTo, type World, wait } from './world.js'
+import { Body, every, type Trip, turnTo, type World, wait } from './world.js'
 
 /**
  * Moving about the floor: a robot plans its way on the floor map around the furniture and the
  * others, drives it, and faces where it was sent; when nobody needs it for a while it goes back to
  * its home by itself. The guest walks the same way, with a step.
  */
+
+/** Calls made by `quietCall`: motion nobody asked for, whose trips the page does not draw. */
+const quiet = new WeakSet<Call>()
 
 /** A stand-in for a call, for motion nobody asked for (going home); `stop` ends it like an interrupt. */
 export function quietCall(): { call: Call; stop: () => void } {
@@ -26,6 +29,7 @@ export function quietCall(): { call: Call; stop: () => void } {
     },
     progress: () => undefined,
   } as unknown as Call
+  quiet.add(call)
   return { call, stop: () => control.abort() }
 }
 
@@ -51,6 +55,8 @@ export interface RobotOptions {
 
 export class Robot {
   readonly body: Body
+  /** Where a call sent it, for the page to draw. */
+  readonly trip: Trip
   /** The trip home that runs while no call does. */
   private homing: { stop: () => void; done: Promise<void> } | undefined
   private busy = 0
@@ -65,6 +71,8 @@ export class Robot {
     log: (line: string) => void,
   ) {
     this.body = new Body(object, world)
+    this.trip = { id: options.id, body: this.body, path: undefined, caller: undefined }
+    world.trips.push(this.trip)
     world.movers.push(() => ({ id: options.id, label: options.label, ...this.body.at, r: options.radius }))
     every(
       1000,
@@ -145,13 +153,23 @@ export class Robot {
         'unreachable',
         `no way from ${this.where()} to (${round(to.x, 1)}, ${round(to.y, 1)})`,
       )
-    await this.body.follow(call, plan.path, {
-      speed: this.options.speed,
-      accel: 4.5,
-      turnRate: Math.PI * 1.6,
-      arrive: 0.06,
-      ...(step ? { step } : {}),
-    })
+    // The page draws the way while it is driven, unless nobody asked for the trip.
+    const shown = !quiet.has(call)
+    if (shown) {
+      this.trip.path = plan.path
+      this.trip.caller = (call.meta as { caller?: string } | undefined)?.caller
+    }
+    try {
+      await this.body.follow(call, plan.path, {
+        speed: this.options.speed,
+        accel: 4.5,
+        turnRate: Math.PI * 1.6,
+        arrive: 0.06,
+        ...(step ? { step } : {}),
+      })
+    } finally {
+      if (shown && this.trip.path === plan.path) this.trip.path = undefined
+    }
     if (to.yaw !== undefined) await face(call, this.body, to.yaw)
   }
 

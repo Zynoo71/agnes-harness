@@ -155,6 +155,17 @@ export interface Activity {
   detail: string | undefined
 }
 
+/**
+ * A robot's way to where a call sent it, as the page draws it on the floor: the planned points
+ * (world x, z) while it drives them, and who called; no path between trips and on trips home.
+ */
+export interface Trip {
+  id: string
+  body: Body
+  path: Point[] | undefined
+  caller: string | undefined
+}
+
 /** A state value past its alert line: warn or bad. */
 export interface Alert {
   device: string
@@ -388,6 +399,9 @@ export class World {
     this.service.reset()
     for (const reset of this.resets) reset()
   }
+
+  /** Each robot's trip, the robots adding theirs as they come. */
+  readonly trips: Trip[] = []
 
   /** Things that move and must be kept clear of; the devices add theirs as they come. */
   readonly movers: (() => Thing | undefined)[] = []

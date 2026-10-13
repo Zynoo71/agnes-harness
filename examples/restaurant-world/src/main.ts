@@ -240,9 +240,15 @@ if (live) {
     privateLighting = name
   }
 }
-// A ring breathing on the floor under each device while it runs a call, in its caller's colour.
+// A ring breathing on the floor under each device while it runs a call, and the way a robot still has
+// to go, in its caller's colour.
 const focus = live
-  ? buildFocus(scene, new Map(Object.entries(ANCHORS).map(([id, a]) => [id, a.object])), live.devices)
+  ? buildFocus(
+      scene,
+      new Map(Object.entries(ANCHORS).map(([id, a]) => [id, a.object])),
+      live.devices,
+      live.world.trips,
+    )
   : undefined
 // Scripts (an evaluation, a test) reach the world here.
 if (live) Object.assign(window, { restaurant: { world: live.world, reset: live.reset, view } })

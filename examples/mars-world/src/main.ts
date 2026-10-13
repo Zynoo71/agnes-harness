@@ -24,6 +24,7 @@ import { say } from './prompt.js'
 import { applyShot, SHOTS } from './shots.js'
 import { buildSky, type Light, lightAt, updateSky } from './sky.js'
 import { buildRocks, buildTerrain, FROST, PAD_RADIUS } from './terrain.js'
+import { buildTrails } from './trails.js'
 
 const params = new URLSearchParams(location.search)
 const app = document.getElementById('app') as HTMLElement
@@ -163,6 +164,8 @@ const dust = buildDust(dustColor)
 if (params.get('dust') !== '0') scene.add(dust.points)
 // Meteorites and dust devils, drawn only while one happens.
 const effects = buildEffects(scene, dustColor)
+// The rover's wheel tracks and the dust the rover and the hopper raise; ?trails=0 leaves them out.
+const trails = params.get('trails') === '0' ? undefined : buildTrails(scene, devices.parts, dustColor)
 // Every render, the main view's and each device camera's, picks the rocks that camera needs.
 scene.onBeforeRender = (_renderer, _scene, view) => rocks.pick(view)
 
@@ -325,6 +328,7 @@ renderer.setAnimationLoop(() => {
   devices.update(t)
   dust.update(t, storm)
   effects.update(t)
+  trails?.update(t, dt)
   focus?.update(t, dt)
   follow(dt)
   sky.position.copy(camera.position)

@@ -33,7 +33,7 @@ export const MhsV1 = Type.Module({
   "Landmark": Type.Object({ "id": Type.Ref('MapId'), "name": Type.String(), "at": Type.Ref('Vec2'), "yaw": Type.Optional(Type.Number()), "description": Type.Optional(Type.Ref('Text')) }, { additionalProperties: false }),
   "Zone": Type.Object({ "id": Type.Ref('MapId'), "name": Type.String(), "points": Type.Array(Type.Ref('Vec2'), { minItems: 3 }), "description": Type.Optional(Type.Ref('Text')) }, { additionalProperties: false }),
   "MapAnchor": Type.Union([Type.Object({ "map": Type.Ref('MapId'), "x": Type.Number(), "y": Type.Number(), "yaw": Type.Number() }), Type.Object({ "lat": Type.Number({ minimum: -90, maximum: 90 }), "lon": Type.Number({ minimum: -180, maximum: 180 }), "heading": Type.Number() })]),
-  "MapDecl": Type.Object({ "id": Type.Ref('MapId'), "name": Type.Optional(Type.String()), "bounds": Type.Optional(Type.Array(Type.Number(), { minItems: 4, maxItems: 4 })), "anchor": Type.Optional(Type.Ref('MapAnchor')), "places": Type.Optional(Type.Array(Type.Ref('Place'))) }),
+  "MapDecl": Type.Object({ "id": Type.Ref('MapId'), "name": Type.Optional(Type.String()), "bounds": Type.Optional(Type.Array(Type.Number(), { minItems: 4, maxItems: 4 })), "description": Type.Optional(Type.Ref('Text')), "anchor": Type.Optional(Type.Ref('MapAnchor')), "places": Type.Optional(Type.Array(Type.Ref('Place'))) }),
   "ConflictPolicy": Type.Union([Type.Literal('reject'), Type.Literal('queue')]),
   "ErrorCode": Type.Union([Type.Literal(-32700), Type.Literal(-32600), Type.Literal(-32601), Type.Literal(-32602), Type.Literal(-32001), Type.Literal(-32003)]),
   "Request": Type.Object({ "jsonrpc": Type.Literal('2.0'), "id": Type.String({ minLength: 1 }), "method": Type.String(), "params": Type.Optional(Type.Object({  })) }),

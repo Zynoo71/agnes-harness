@@ -2497,6 +2497,7 @@
           "id": "site",
           "name": "Site",
           "bounds": [-20, -20, 20, 20],
+          "description": "A depot yard with a gate camera. Trucks come first at the gate.",
           "anchor": {
             "lat": 52.5,
             "lon": 13.4,

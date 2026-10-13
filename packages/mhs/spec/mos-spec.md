@@ -163,6 +163,7 @@ A device that defines a map, because it built it or because it knows the site, d
 ```json
 "maps": [{
   "id": "base", "name": "Base", "bounds": [-60, -60, 60, 60],
+  "description": "A research base with one astronaut. The astronaut's safety comes first.",
   "places": [
     {"id": "airlock", "name": "Airlock", "at": [-12, 4], "yaw": 180, "description": "Outer door of the habitat airlock"},
     {"id": "dock", "name": "Rover dock", "at": [-15.5, -16]},
@@ -175,6 +176,7 @@ A device that defines a map, because it built it or because it knows the site, d
 | `id` | yes | Map id (MHS 3.3). `pose`, `grid` and `placement` name maps by this id |
 | `name` | no | Display name; defaults to the id |
 | `bounds` | no | `[xmin, ymin, xmax, ymax]` in meters: the part of the frame the map covers |
+| `description` | no | A few sentences about the site the map covers: what it is, who is there, what comes first. Hubs give it to agents with the map |
 | `anchor` | no | Where this frame lies in a wider one: `{map, x, y, yaw}` (this frame's origin and +x direction in the frame of `map`), or `{lat, lon, heading}` (its origin on the Earth, and the compass heading of +x in degrees) |
 | `places` | no | Named places on the map |
 

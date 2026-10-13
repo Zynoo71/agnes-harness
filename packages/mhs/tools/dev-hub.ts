@@ -110,6 +110,7 @@ const robot = new Device({
       id: 'office',
       name: 'Office',
       bounds: [0, 0, 8, 6],
+      description: 'A small office with one robot. Keep the hall clear.',
       places: [
         { id: 'dock', name: 'Charging dock', at: [1, 1], yaw: 180 },
         { id: 'desk', name: 'Desk', at: [6, 2], description: 'The desk with the lamp' },

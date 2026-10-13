@@ -378,7 +378,7 @@ In a browser, `camera.ts` encodes with WebCodecs: `VideoEncoder` with codec `avc
 
 ### A map with places, and a fixed placement
 
-The device that knows a site declares its map: a frame in meters, its bounds, and places, each a landmark (`at`, with an optional `yaw` to face) or a zone (`points`) ([MOS 3.5](../../packages/mhs/spec/mos-spec.md#35-maps-and-places)). Other devices name the map by its id. A device installed at a fixed spot declares `localization: 'fixed'` and its `placement`, whose `yaw` is the direction its body x axis points. Condensed from [`packages/mhs/tools/dev-hub.ts`](../../packages/mhs/tools/dev-hub.ts), where the robot declares the office and the room sensor is installed in it:
+The device that knows a site declares its map: a frame in meters, its bounds, a description of the site for agents, and places, each a landmark (`at`, with an optional `yaw` to face) or a zone (`points`) ([MOS 3.5](../../packages/mhs/spec/mos-spec.md#35-maps-and-places)). Other devices name the map by its id. A device installed at a fixed spot declares `localization: 'fixed'` and its `placement`, whose `yaw` is the direction its body x axis points. Condensed from [`packages/mhs/tools/dev-hub.ts`](../../packages/mhs/tools/dev-hub.ts), where the robot declares the office and the room sensor is installed in it:
 
 ```ts
 const robot = new Device({
@@ -391,6 +391,7 @@ const robot = new Device({
       id: 'office',
       name: 'Office',
       bounds: [0, 0, 8, 6],
+      description: 'A small office with one robot. Keep the hall clear.',
       places: [
         { id: 'dock', name: 'Charging dock', at: [1, 1], yaw: 180 },
         { id: 'desk', name: 'Desk', at: [6, 2], description: 'The desk with the lamp' },
@@ -413,6 +414,7 @@ In Python the same options are keyword arguments:
 ```python
 OFFICE = {
     "id": "office", "name": "Office", "bounds": [0, 0, 8, 6],
+    "description": "A small office with one robot. Keep the hall clear.",
     "places": [
         {"id": "dock", "name": "Charging dock", "at": [1, 1], "yaw": 180},
         {"id": "hall", "name": "Hall", "points": [[0.3, 3.5], [7.7, 3.5], [7.7, 5.7], [0.3, 5.7]]},

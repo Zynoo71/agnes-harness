@@ -348,7 +348,7 @@ for packet in ctx.encode(frame):
 
 ### 带地点的地图与固定安装位置
 
-了解场地的设备声明地图：一个以米为单位的坐标系、它的范围，以及若干地点。地点要么是地标（`at`，可选朝向 `yaw`），要么是区域（`points`）（[MOS 3.5](../../packages/mhs/spec/mos-spec.md#35-maps-and-places)）。其他设备通过 id 引用这张地图。安装在固定位置的设备声明 `localization: 'fixed'` 和 `placement`，其中 `yaw` 是设备机身 x 轴的指向。节选自 [`packages/mhs/tools/dev-hub.ts`](../../packages/mhs/tools/dev-hub.ts)：机器人声明办公室地图，室内传感器安装在其中：
+了解场地的设备声明地图：一个以米为单位的坐标系、它的范围、给智能体看的场地说明，以及若干地点。地点要么是地标（`at`，可选朝向 `yaw`），要么是区域（`points`）（[MOS 3.5](../../packages/mhs/spec/mos-spec.md#35-maps-and-places)）。其他设备通过 id 引用这张地图。安装在固定位置的设备声明 `localization: 'fixed'` 和 `placement`，其中 `yaw` 是设备机身 x 轴的指向。节选自 [`packages/mhs/tools/dev-hub.ts`](../../packages/mhs/tools/dev-hub.ts)：机器人声明办公室地图，室内传感器安装在其中：
 
 ```ts
 const robot = new Device({
@@ -361,6 +361,7 @@ const robot = new Device({
       id: 'office',
       name: 'Office',
       bounds: [0, 0, 8, 6],
+      description: 'A small office with one robot. Keep the hall clear.',
       places: [
         { id: 'dock', name: 'Charging dock', at: [1, 1], yaw: 180 },
         { id: 'desk', name: 'Desk', at: [6, 2], description: 'The desk with the lamp' },
@@ -383,6 +384,7 @@ Python 中这些选项是关键字参数：
 ```python
 OFFICE = {
     "id": "office", "name": "Office", "bounds": [0, 0, 8, 6],
+    "description": "A small office with one robot. Keep the hall clear.",
     "places": [
         {"id": "dock", "name": "Charging dock", "at": [1, 1], "yaw": 180},
         {"id": "hall", "name": "Hall", "points": [[0.3, 3.5], [7.7, 3.5], [7.7, 5.7], [0.3, 5.7]]},

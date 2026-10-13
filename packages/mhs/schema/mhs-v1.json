@@ -304,6 +304,7 @@
         "id": { "$ref": "#/$defs/MapId" },
         "name": { "type": "string" },
         "bounds": { "type": "array", "items": { "type": "number" }, "minItems": 4, "maxItems": 4 },
+        "description": { "$ref": "#/$defs/Text" },
         "anchor": { "$ref": "#/$defs/MapAnchor" },
         "places": { "type": "array", "items": { "$ref": "#/$defs/Place" } }
       }

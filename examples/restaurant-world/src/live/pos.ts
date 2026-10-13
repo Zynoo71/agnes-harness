@@ -1,5 +1,5 @@
 import { CallError } from '@agnes/mhs/device'
-import { FIXTURES } from '../layout.js'
+import { FIXTURES, TABLE_H, TABLES } from '../layout.js'
 import { placed } from './floormap.js'
 import { stageText } from './menu.js'
 import { type World, WorldDevice, wait } from './world.js'
@@ -10,6 +10,11 @@ import { type World, WorldDevice, wait } from './world.js'
  */
 export function pos(world: World, log: (line: string) => void): WorldDevice {
   const { service } = world
+  /** Over the guest's table, for a few seconds: the payment went through. */
+  const paidLine = (en: string, zh: string) => {
+    const t = TABLES.find((x) => x.id === service.table)
+    if (t) world.cheer({ en, zh, at: { x: t.x, z: -t.y }, h: TABLE_H + 0.5, steam: [] })
+  }
   const dev = new WorldDevice({
     id: 'pos-01',
     kind: 'terminal',
@@ -113,6 +118,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
         service.bill = 'paid'
         service.paidWith = 'free'
         service.changed()
+        paidLine('✓ On the house', '✓ 免单')
         return 'on the house: nothing to pay'
       }
       const how = service.payWith
@@ -127,6 +133,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
       service.bill = 'paid'
       service.paidWith = how
       service.changed()
+      paidLine(`✓ Paid ¥${service.total()}`, `✓ 已付款 ¥${service.total()}`)
       return `paid ¥${service.total()} by ${how === 'qr' ? 'QR code' : how}`
     },
   )

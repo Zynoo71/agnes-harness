@@ -166,6 +166,21 @@ export interface Trip {
   caller: string | undefined
 }
 
+/**
+ * A payoff the page shows for a few seconds over a place in the scene: a line of words, in English
+ * and Chinese, floating up over `at` (world x, z) `h` metres up, and steam rising from `steam`
+ * (dishes just served).
+ */
+export interface Moment {
+  en: string
+  zh: string
+  at: Point
+  h: number
+  steam: THREE.Object3D[]
+  /** When it began, ms (performance.now). */
+  started: number
+}
+
 /** A state value past its alert line: warn or bad. */
 export interface Alert {
   device: string
@@ -398,6 +413,14 @@ export class World {
   reset(): void {
     this.service.reset()
     for (const reset of this.resets) reset()
+  }
+
+  /** Payoffs the page shows (a dish served, a bill paid), the newest last; it drops them once they are over. */
+  readonly moments: Moment[] = []
+
+  /** Shows `moment` over the scene from now. */
+  cheer(moment: Omit<Moment, 'started'>): void {
+    this.moments.push({ ...moment, started: performance.now() })
   }
 
   /** Each robot's trip, the robots adding theirs as they come. */

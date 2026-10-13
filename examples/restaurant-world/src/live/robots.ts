@@ -219,7 +219,8 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
           report()
           await robot.goTo(call, t.serve)
           await face(call, robot.body, towards(t.serve, t))
-          for (const i of aboard.splice(0)) {
+          const served = aboard.splice(0)
+          for (const i of served) {
             setOnTable(world, t, i)
             objectOf(i)?.scale.setScalar(1)
             if (i.kind === 'line') i.line.stage = 'served'
@@ -228,6 +229,16 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
             report()
             await wait(call, 150)
           }
+          // The table shows it: the dishes' names over it, and steam rising from the hot ones.
+          const dishes = served.flatMap((i) => (i.kind === 'line' ? [i.line] : []))
+          if (dishes.length)
+            world.cheer({
+              en: `✓ ${dishes.map((l) => l.dish.en).join(', ')} served`,
+              zh: `✓ ${dishes.map((l) => l.dish.zh).join('、')} 上桌`,
+              at: { x: t.x, z: -t.y },
+              h: TABLE_H + 0.5,
+              steam: dishes.flatMap((l) => (l.object && l.dish.station !== 'bar' ? [l.object] : [])),
+            })
           return `served ${things.map(nameOf).join(', ')} at ${t.id}`
         } finally {
           mode = 'docked'

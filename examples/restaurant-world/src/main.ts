@@ -6,6 +6,7 @@ import { DEVICES } from './labels.js'
 import { BACK_OF_HOUSE_Y, BAR_X, FIXTURES, PRIVATE_ROOM, PRIVATE_SPEAKER, ROOM, TABLES } from './layout.js'
 import { connectDevices } from './live/index.js'
 import { buildMinimap } from './minimap.js'
+import { buildMoments } from './moments.js'
 import { buildOverlay, type Lang } from './overlay.js'
 import { buildRoom } from './room.js'
 import { place } from './shapes.js'
@@ -184,6 +185,12 @@ const onScreen = (object: THREE.Object3D, h: number) => {
   if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) return undefined
   return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight }
 }
+/** Screen position of world point (x, y up, z), or undefined off screen. */
+const onScreenAt = (x: number, y: number, z: number) => {
+  v.set(x, y, z).project(view.camera)
+  if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) return undefined
+  return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight }
+}
 function placeTags() {
   if (tags.hidden) return
   for (const { el, id, anchor } of tagEls) {
@@ -277,6 +284,8 @@ const overlay = buildOverlay({
 try {
   localStorage.setItem('restaurant-seen', '1')
 } catch {}
+// The payoffs over the scene: a dish served, a bill paid, for a few seconds.
+const moments = live ? buildMoments(scene, tags, live.world.moments, onScreenAt, overlay.lang) : undefined
 
 // The birthday song through the speakers, once the sound button is on.
 // Either room playing it is enough; the louder of the two sets the volume.
@@ -431,6 +440,7 @@ renderer.setAnimationLoop(() => {
   draws += renderer.info.render.calls
   triangles += renderer.info.render.triangles
   placeTags()
+  moments?.update(start)
   cpu += performance.now() - start
   frames += 1
   fpsFrames += 1

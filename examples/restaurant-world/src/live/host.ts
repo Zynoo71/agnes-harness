@@ -103,7 +103,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'seat_guest',
       description:
-        "Lead the guest to a free table (see floor-01's state) and seat them; their menu opens on their screen. Also moves a seated guest to another table before any dish is served.",
+        "Lead the guest to a free table (see floor-01's state) and seat them; their menu opens on their screen. A guest at the door who asks whether there is a table wants to sit down now. Also moves a seated guest to another table before any dish is served.",
       timeout: 120,
       params: { table: { type: 'string', enum: TABLE_IDS, description: 'the table, t1 to t6' } },
       required: ['table'],

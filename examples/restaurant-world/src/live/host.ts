@@ -233,7 +233,10 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
           service.billOpen = false
           service.dirty.add(t.id)
           service.changed()
-          return `the guest has left; ${t.id} needs clearing: runner-01 clear table ${t.id}, then cleaner-01 clean place ${t.id}`
+          const next = service.onTable().length
+            ? `runner-01 clear table ${t.id}, then cleaner-01 clean place ${t.id}`
+            : `its dishes are cleared; cleaner-01 clean place ${t.id} wipes it free`
+          return `the guest has left; ${t.id} needs clearing: ${next}`
         } finally {
           mode = 'at_door'
           report()

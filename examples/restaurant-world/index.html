@@ -52,18 +52,21 @@
       #bar .warn { color: var(--amber); }
       #bar .bad { color: var(--red); font-weight: 700; }
       #bar .ok { color: var(--ok); }
-      /* The activity list: a panel of its own, kept open, its whole history scrolling under a title row. */
-      #feed { position: fixed; left: 14px; bottom: 40px; width: min(680px, 50vw); display: flex; flex-direction: column; gap: 6px;
-              padding: 8px 10px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-              font: 13px var(--mono); color: var(--text); backdrop-filter: blur(6px); }
+      /* The activity list: a panel of its own, kept open, its whole history scrolling under a title row. At rest it is low and
+         see-through, about five items, to leave the scene in view; under the pointer it grows and turns solid to read back. */
+      #feed { position: fixed; left: 14px; bottom: 40px; width: min(600px, 44vw); display: flex; flex-direction: column; gap: 6px;
+              padding: 8px 10px 10px; background: rgba(22, 16, 13, 0.45); border: 1px solid var(--line); border-radius: 8px;
+              font: 12.5px var(--mono); color: var(--text); transition: background 0.2s; }
+      #feed:hover { background: var(--panel); backdrop-filter: blur(6px); }
       #feed .top { display: flex; align-items: center; gap: 8px; }
       #feed .top b { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
       #feed .top .count { color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
       #feed .fold { margin-left: auto; background: none; border: 0; color: var(--dim); font: inherit; cursor: pointer; padding: 0 4px; }
       #feed .fold:hover, #feed .fold:focus-visible { color: var(--text); }
       #feed.folded .head, #feed.folded .list { display: none; }
-      #feed .list { display: flex; flex-direction: column; gap: 3px; max-height: min(38vh, calc(100vh - 420px)); min-height: 64px;
+      #feed .list { display: flex; flex-direction: column; gap: 3px; max-height: min(150px, 22vh); min-height: 48px;
                     overflow-y: auto; overscroll-behavior: contain; }
+      #feed:hover .list { max-height: min(46vh, calc(100vh - 420px)); }
       #feed .empty { color: var(--dim); padding: 6px 2px; }
       #feed .line { display: flex; gap: 8px; padding: 4px 8px; background: rgba(255, 255, 255, 0.03); border-radius: 5px; border-left: 2px solid var(--line);
                     overflow: hidden; white-space: nowrap; flex: none; }

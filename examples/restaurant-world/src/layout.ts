@@ -20,6 +20,17 @@ export const DOOR = { x0: 10, x1: 12 } as const
  * walls are cut low like the near ones, and a sliding door in its west wall opens on the dining room.
  */
 export const PRIVATE_ROOM = { x0: 16.55, x1: 22, y0: 3.9, y1: 8.8, door: { y0: 5.65, y1: 7.05 } } as const
+/**
+ * The children's play area in the south-west corner, behind a low fence with a gap in its east
+ * side toward the door: a slide, a ball pit and a soft mat for building blocks.
+ */
+export const PLAY_AREA = { x0: 0, x1: 3.9, y0: 0, y1: 3.1, gate: { y0: 0.9, y1: 2.0 } } as const
+/** Where things stand in the play area: the slide's ladder and the foot of its chute, the ball pit, the mat. */
+export const PLAY = {
+  slide: { ladder: { x: 0.75, y: 2.45 }, top: { x: 1.05, y: 2.45 }, foot: { x: 2.35, y: 2.45 } },
+  pit: { x: 3.05, y: 2.35, r: 0.5 },
+  mat: { x: 1.4, y: 1.1 },
+} as const
 /** The private room's speaker, on its north wall near the east end. */
 export const PRIVATE_SPEAKER = { x: PRIVATE_ROOM.x1 - 0.7, y: PRIVATE_ROOM.y1 } as const
 /** How far the street reaches south of the room. */
@@ -177,6 +188,7 @@ export const HOMES = {
   runner: { x: 21.2, y: 3.4, yaw: 180 },
   cleaner: { x: 21.2, y: 1.8, yaw: 180 },
   prep: { x: 5.2, y: 13.55, yaw: 90 },
+  play: { x: 3.2, y: 0.75, yaw: 180 },
 } as const
 
 /** Where the prep robot stands to work, facing the back counters. */
@@ -312,6 +324,17 @@ export const PLACES: Place[] = [
 const foot = (b: Box | Round): Footprint =>
   'r' in b ? { x: b.x, z: -b.y, r: b.r } : { x: b.x, z: -b.y, w: b.w, d: b.d }
 
+/** The play area's fence as boxes: the north side, and the east side either side of its gap. */
+export function playFence(): Box[] {
+  const { x0, x1, y0, y1, gate } = PLAY_AREA
+  const t = 0.08
+  return [
+    { x: (x0 + x1) / 2, y: y1, w: x1 - x0, d: t },
+    { x: x1, y: (y0 + gate.y0) / 2, w: t, d: gate.y0 - y0 },
+    { x: x1, y: (gate.y1 + y1) / 2, w: t, d: y1 - gate.y1 },
+  ]
+}
+
 /** The private room's walls as boxes: the south and north ones, and the west one either side of its door. */
 export function privateWalls(): Box[] {
   const { x0, x1, y0, y1, door } = PRIVATE_ROOM
@@ -328,7 +351,6 @@ export function privateWalls(): Box[] {
 export const PLANTS: Round[] = [
   { x: 9.35, y: 2.05, r: 0.35 },
   { x: 12.7, y: 0.5, r: 0.35 },
-  { x: 0.5, y: 0.5, r: 0.35 },
   { x: 21.45, y: 9.8, r: 0.35 },
   { x: 3.6, y: 9.9, r: 0.3 },
 ]
@@ -345,8 +367,12 @@ export const FOOTPRINTS: Footprint[] = [
   foot({ x: ROOM.w / 2, y: ROOM.d + 0.1, w: ROOM.w + 0.4, d: 0.2 }),
   foot({ x: -0.1, y: ROOM.d / 2, w: 0.2, d: ROOM.d + 0.4 }),
   foot({ x: ROOM.w + 0.1, y: ROOM.d / 2, w: 0.2, d: ROOM.d + 0.4 }),
-  // The private room's walls, the west one either side of its door.
+  // The private room's walls, the west one either side of its door, and the play area's fence,
+  // slide and ball pit.
   ...privateWalls().map(foot),
+  ...playFence().map(foot),
+  foot({ x: (PLAY.slide.ladder.x + PLAY.slide.foot.x) / 2 - 0.1, y: PLAY.slide.top.y, w: 1.75, d: 0.5 }),
+  foot(PLAY.pit),
   // The low wall with the pass, the dish return and the bar counter in it, and the bar's side wall.
   foot({ x: ROOM.w / 2, y: BACK_OF_HOUSE_Y, w: ROOM.w, d: 0.6 }),
   foot({ x: BAR_X, y: (BACK_OF_HOUSE_Y + ROOM.d) / 2, w: 0.15, d: ROOM.d - BACK_OF_HOUSE_Y }),

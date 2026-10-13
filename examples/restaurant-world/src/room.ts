@@ -11,8 +11,11 @@ import {
   FIXTURES,
   HOMES,
   PLANTS,
+  PLAY,
+  PLAY_AREA,
   PRIVATE_ROOM,
   PRIVATE_SPEAKER,
+  playFence,
   privateWalls,
   ROOM,
   STREET_D,
@@ -438,7 +441,7 @@ async function foyer(group: THREE.Group) {
   group.add(place(cat, F.cashier.x - 0.95, F.cashier.y, 1.045, 270))
   await prop(group, 'potted_plant_04', F.cashier.x + 0.95, F.cashier.y, 270, 1.045)
   for (const [i, p] of PLANTS.entries())
-    await prop(group, i < 3 ? 'potted_plant_02' : 'potted_plant_04', p.x, p.y, i * 70, 0, i < 3 ? 1 : 2.4)
+    await prop(group, i < 2 ? 'potted_plant_02' : 'potted_plant_04', p.x, p.y, i * 70, 0, i < 2 ? 1 : 2.4)
 }
 
 /** The dining room: the tables, the display cabinet, the supplies cabinet, lanterns along the wall. */
@@ -731,6 +734,74 @@ function privateRoom(group: THREE.Group) {
   group.add(speaker(PRIVATE_SPEAKER.x, PRIVATE_SPEAKER.y))
 }
 
+/** The children's play area: soft tiles, a low fence, a slide and a ball pit. */
+function playArea(group: THREE.Group) {
+  const { x0, x1, y0, y1 } = PLAY_AREA
+  const colours = [0xff8fa3, 0xffd166, 0x7bd389, 0x6fb3ff, 0xb39ddb]
+  const tiles = colours.map((c) => mat(c, { roughness: 1 }))
+  const size = 0.6
+  for (let i = 0; x0 + i * size < x1 - 0.05; i++)
+    for (let j = 0; y0 + j * size < y1 - 0.05; j++) {
+      const w = Math.min(size, x1 - (x0 + i * size)) - 0.02
+      const d = Math.min(size, y1 - (y0 + j * size)) - 0.02
+      const tile = box(w, 0.03, d, tiles[(i * 2 + j) % tiles.length] as THREE.Material)
+      group.add(place(tile, x0 + i * size + w / 2 + 0.01, y0 + j * size + d / 2 + 0.01, 0.015))
+    }
+  // A low fence of white rails on bright posts.
+  const rail = mat(0xfaf6ee, { roughness: 0.5 })
+  for (const b of playFence()) {
+    group.add(place(box(b.w, 0.05, b.d, rail), b.x, b.y, 0.55))
+    group.add(place(box(b.w, 0.05, b.d, rail), b.x, b.y, 0.3))
+    const along = b.w > b.d
+    const n = Math.max(1, Math.round((along ? b.w : b.d) / 0.5))
+    for (let k = 0; k <= n; k++) {
+      const f = k / n - 0.5
+      group.add(
+        place(
+          box(0.07, 0.62, 0.07, tiles[k % tiles.length] as THREE.Material),
+          b.x + (along ? f * b.w : 0),
+          b.y + (along ? 0 : f * b.d),
+          0.31,
+        ),
+      )
+    }
+  }
+  // The slide: a ladder up to a platform, and a chute down toward the east.
+  const S = PLAY.slide
+  const red = mat(0xe84a4a, { roughness: 0.5 })
+  const yellow = mat(0xffcc33, { roughness: 0.5 })
+  const top = 0.8
+  for (const dy of [-0.2, 0.2]) {
+    group.add(place(box(0.05, top + 0.5, 0.05, yellow), S.ladder.x, S.ladder.y + dy, (top + 0.5) / 2))
+    group.add(place(box(0.05, top, 0.05, yellow), S.top.x + 0.15, S.top.y + dy, top / 2))
+  }
+  for (let k = 1; k <= 3; k++)
+    group.add(place(box(0.04, 0.03, 0.42, yellow), S.ladder.x, S.ladder.y, k * 0.22))
+  group.add(place(box(0.45, 0.06, 0.5, yellow), S.top.x, S.top.y, top))
+  const run = S.foot.x - S.top.x - 0.2
+  const chute = box(Math.hypot(run, top), 0.04, 0.42, red)
+  chute.rotation.z = -Math.atan2(top, run)
+  group.add(place(chute, S.top.x + 0.2 + run / 2, S.top.y, top / 2 + 0.03))
+  for (const dy of [-0.22, 0.22]) {
+    const side = box(Math.hypot(run, top), 0.1, 0.03, red)
+    side.rotation.z = chute.rotation.z
+    group.add(place(side, S.top.x + 0.2 + run / 2, S.top.y + dy, top / 2 + 0.08))
+  }
+  // The ball pit: a soft blue ring full of coloured balls.
+  const P = PLAY.pit
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(P.r, 0.09, 10, 32), mat(0x4d8ee8, { roughness: 0.8 }))
+  ring.rotation.x = Math.PI / 2
+  group.add(place(ring, P.x, P.y, 0.22))
+  group.add(place(cylinder(P.r, P.r, 0.2, mat(0x4d8ee8, { roughness: 0.8 }), 32), P.x, P.y, 0.1))
+  const balls = colours.map((c) => mat(c, { roughness: 0.4 }))
+  for (let k = 0; k < 40; k++) {
+    const a = k * 2.4
+    const r = Math.sqrt((k + 0.5) / 40) * (P.r - 0.08)
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), balls[k % balls.length])
+    group.add(place(ball, P.x + Math.cos(a) * r, P.y + Math.sin(a) * r, 0.24 + (k % 3) * 0.03))
+  }
+}
+
 /** Charging pads for the runner and the cleaner, by the east wall. */
 function pads(group: THREE.Group) {
   for (const home of [HOMES.runner, HOMES.cleaner]) {
@@ -759,6 +830,7 @@ export async function buildRoom(): Promise<Room> {
   await dining(group)
   lowWall(group)
   privateRoom(group)
+  playArea(group)
   await kitchen(group)
   await bar(group)
   pads(group)

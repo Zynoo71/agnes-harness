@@ -4,7 +4,7 @@ import { ROOM } from '../layout.js'
 import { place } from '../shapes.js'
 import { addCamera } from './camera.js'
 import { landmark, PLACE_PARAM, placed } from './floormap.js'
-import { frame, type World, WorldDevice } from './world.js'
+import { frame, PACE, type World, WorldDevice } from './world.js'
 
 /** The camera's mount: high in the south-east corner, looking over the dining room. */
 const MOUNT = { x: ROOM.w - 0.3, y: 0.3, h: 2.8 }
@@ -63,7 +63,7 @@ export function cam(world: World, log: (line: string) => void): WorldDevice {
     head.quaternion.copy(from)
     const start = performance.now()
     for (;;) {
-      const k = Math.min(1, (performance.now() - start) / 900)
+      const k = Math.min(1, ((performance.now() - start) * PACE) / 900)
       head.quaternion.slerpQuaternions(from, target, k * k * (3 - 2 * k))
       if (k >= 1) return
       await frame(call)

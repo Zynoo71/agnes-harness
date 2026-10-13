@@ -6,7 +6,17 @@ import { place, rotY } from '../shapes.js'
 import { addPlace, face, Robot, walk } from './motion.js'
 import { stepTo, Trail } from './party.js'
 import { fromMap, toMap } from './route.js'
-import { Body, type Companion, everyFrame, FRAME_HZ, frame, type World, WorldDevice, wait } from './world.js'
+import {
+  Body,
+  type Companion,
+  everyFrame,
+  FRAME_HZ,
+  frame,
+  PACE,
+  type World,
+  WorldDevice,
+  wait,
+} from './world.js'
 
 /** Where the robot stands in the play area to watch and play, and the mat the child plays on. */
 const STAND = { x: 2.3, y: 1.25, yaw: 180 }
@@ -36,7 +46,7 @@ async function glide(
   const start = performance.now()
   for (;;) {
     await call.checkpoint()
-    const k = Math.min(1, (performance.now() - start) / ms)
+    const k = Math.min(1, ((performance.now() - start) * PACE) / ms)
     o.position.lerpVectors(from, goal, k)
     each?.(k)
     if (k >= 1) return
@@ -55,7 +65,7 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
   const robot = new Robot(
     world,
     model.object,
-    { id: 'play-01', label: 'play robot', radius: 0.26, speed: 2.5, home: HOMES.play, idleS: 20 },
+    { id: 'play-01', label: 'play robot', radius: 0.26, speed: 3.3, home: HOMES.play, idleS: 20 },
     log,
   )
   let mode: 'idle' | 'going' | 'leading' | 'playing' | 'returning' = 'idle'
@@ -94,7 +104,7 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
     localization: 'self',
     profile: {
       size_m: [0.5, 0.5, 1.1],
-      max_speed: 2.5,
+      max_speed: 3.3,
       notes:
         'A small, friendly robot for the guest’s small child (host-01 child): take_child walks the child from the guest’s table to the play area in the south-west corner, play keeps them busy there (the slide, soap bubbles or building blocks), bring_back walks them back to their seat. upset says how unhappy the child is; at 4 or more they are crying, and each game calms them. The guest cannot leave (host-01 see_off) while the child is in the play area.',
     },
@@ -132,7 +142,7 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
     const dt = 1 / FRAME_HZ
     if (leading) {
       trail.record()
-      stepTo(leading, trail.along(GAP), dt, 3)
+      stepTo(leading, trail.along(GAP), dt, 3.9)
     }
     const now = performance.now()
     for (let k = bubbles.length - 1; k >= 0; k--) {

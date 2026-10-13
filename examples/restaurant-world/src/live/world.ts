@@ -118,14 +118,17 @@ export function afterEveryFrame(film: () => void): void {
   afterFrame.add(film)
 }
 
-/** Waits `ms`, at full pace even in a hidden tab, and ends early once the call is interrupted. */
+/** How much faster than real time the devices work: every wait and timed motion takes 1/PACE as long. */
+export const PACE = 1.3
+
+/** Waits `ms` (at PACE), at full pace even in a hidden tab, and ends early once the call is interrupted. */
 export async function wait(call: Call, ms: number): Promise<void> {
   ticks += 1
   const id = ticks
   await Promise.race([
     new Promise<void>((resolve) => {
       waiting.set(id, resolve)
-      ticker.postMessage({ id, ms })
+      ticker.postMessage({ id, ms: ms / PACE })
     }),
     call.aborted(),
   ])
@@ -676,7 +679,7 @@ export class Body {
   }
 }
 
-/** Eases `object`'s rotation toward `target` (radians per axis) over `ms`, interruptibly. */
+/** Eases `object`'s rotation toward `target` (radians per axis) over `ms` (at PACE), interruptibly. */
 export async function turnTo(
   call: Call,
   object: THREE.Object3D,
@@ -687,7 +690,7 @@ export async function turnTo(
   const start = performance.now()
   for (;;) {
     await call.checkpoint()
-    const k = Math.min(1, (performance.now() - start) / ms)
+    const k = Math.min(1, ((performance.now() - start) * PACE) / ms)
     const e = k * k * (3 - 2 * k)
     for (const axis of ['x', 'y', 'z'] as const) {
       const to = target[axis]

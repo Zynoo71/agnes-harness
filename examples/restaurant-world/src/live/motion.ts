@@ -146,8 +146,8 @@ export class Robot {
       )
     await this.body.follow(call, plan.path, {
       speed: this.options.speed,
-      accel: 2.2,
-      turnRate: Math.PI,
+      accel: 2.9,
+      turnRate: Math.PI * 1.3,
       arrive: 0.06,
       ...(step ? { step } : {}),
     })
@@ -193,7 +193,7 @@ export function addPlace(
 
 /** The guest's walk: metres per stride, and speed. */
 const STRIDE = 0.7
-export const WALK = 2
+export const WALK = 2.6
 
 /** Walks `body` through plan points with a step; `stand`/`walk` pose the figure. */
 export async function walk(
@@ -209,8 +209,8 @@ export async function walk(
       points.map((p) => fromMap(p.x, p.y)),
       {
         speed,
-        accel: 2,
-        turnRate: Math.PI * 1.5,
+        accel: 2.6,
+        turnRate: Math.PI * 2,
         arrive: 0.05,
         lookahead: 0.35,
         step: () => pose.walk((body.odometer / STRIDE) * Math.PI),

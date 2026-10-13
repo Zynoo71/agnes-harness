@@ -57,7 +57,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
   const robot = new Robot(
     world,
     model.object,
-    { id: 'runner-01', label: 'runner', radius: 0.34, speed: 3, home: HOMES.runner, idleS: 6 },
+    { id: 'runner-01', label: 'runner', radius: 0.34, speed: 3.9, home: HOMES.runner, idleS: 6 },
     log,
   )
   let mode: 'docked' | 'fetching' | 'delivering' | 'clearing' | 'returning' = 'docked'
@@ -73,7 +73,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
     localization: 'self',
     profile: {
       size_m: [0.55, 0.6, 1.4],
-      max_speed: 3,
+      max_speed: 3.9,
       trays: 3,
       notes:
         'A delivery robot with three trays. deliver fetches up to three items, wherever each waits (dishes on the pass, drinks and desserts on the bar counter, supplies at the supplies cabinet), and serves them at the guest’s table. clear takes dishes and supplies from a table to the dish return. It goes back to its charging pad by itself when it has nothing to do.',
@@ -308,7 +308,7 @@ export function cleaner(world: World, log: (line: string) => void): WorldDevice 
   const robot = new Robot(
     world,
     model.object,
-    { id: 'cleaner-01', label: 'cleaner', radius: 0.36, speed: 2, home: HOMES.cleaner, idleS: 5 },
+    { id: 'cleaner-01', label: 'cleaner', radius: 0.36, speed: 2.6, home: HOMES.cleaner, idleS: 5 },
     log,
   )
   let mode: 'docked' | 'going' | 'cleaning' | 'returning' = 'docked'
@@ -325,7 +325,7 @@ export function cleaner(world: World, log: (line: string) => void): WorldDevice 
     localization: 'self',
     profile: {
       size_m: [0.65, 0.7, 0.55],
-      max_speed: 2,
+      max_speed: 2.6,
       notes:
         'A floor scrubber with a wiping arm: clean goes to a place on the floor map, scrubs spills there, and at a table that needs clearing wipes it so it is free again (its dishes must be cleared first, by runner-01). It goes back to its pad by itself.',
     },

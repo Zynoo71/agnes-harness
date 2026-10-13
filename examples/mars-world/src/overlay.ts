@@ -1,6 +1,6 @@
 import type { MarsClock } from './clock.js'
 import type { Decision } from './dm/watch.js'
-import { progressLabel, toolLabel, valueLabel } from './labels.js'
+import { EMOJI, progressLabel, toolLabel, valueLabel } from './labels.js'
 import type { Director } from './live/director.js'
 import { CATALOG, type EventKind, type Happening } from './live/events.js'
 import { type Activity, type Alert, type Mail, type World, type WorldDevice, watchers } from './live/world.js'
@@ -50,6 +50,9 @@ const TEXT = {
     alertPrompt: (dev: string, field: string, value: string) =>
       `${dev}: ${field} is critical (${value}). Deal with it.`,
     eventPrompt: (headline: string) => `${headline}. Deal with it.`,
+    activity: 'Activity',
+    activityEmpty: 'Calls, alerts and events show up here.',
+    activityFold: 'Fold or unfold the activity list (A)',
     share: 'Decisions',
     spent: 'Time',
     think: 'think',
@@ -128,8 +131,8 @@ const TEXT = {
 <h3>On this page</h3>
 <ul>
 <li>Tags over the devices show the tool each one runs, its progress and who called it: Jev in green with a bolt, the LLM in blue.</li>
-<li>Bottom left: the latest calls, alerts and events, with every decision of Jev; click a Jev line to see how it chose. Top: banners for what needs attention.</li>
-<li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> views · <kbd>P</kbd> picture in picture · <kbd>E</kbd> controls · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
+<li>Bottom left, the activity list (<kbd>A</kbd> folds it): every call, alert and event since the page opened, with every decision of Jev; click a Jev line to see how it chose. Top: banners for what needs attention.</li>
+<li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> views · <kbd>P</kbd> picture in picture · <kbd>E</kbd> controls · <kbd>A</kbd> activity · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
 <li>Address: <code>?time=night</code>, <code>?sol=10</code> (minutes a sol takes), <code>?events=auto&amp;seed=7</code> (an event every few minutes on its own) or <code>off</code>, <code>?lang=zh</code></li>
 </ul>`,
   },
@@ -169,6 +172,9 @@ const TEXT = {
     alertPrompt: (dev: string, field: string, value: string) =>
       `${dev}的${field}告急了（${value}），你处理一下`,
     eventPrompt: (headline: string) => `${headline}，你看着处理一下`,
+    activity: '动态',
+    activityEmpty: '设备调用、告警和事件会出现在这里。',
+    activityFold: '收起或展开动态（A）',
     share: '决策占比',
     spent: '用时',
     think: '思考',
@@ -291,8 +297,8 @@ const TEXT = {
 <h3>页面上</h3>
 <ul>
 <li>设备上方的标签显示它正在执行的工具、进度和调用者：Jev 是绿色带闪电，LLM 是蓝色。</li>
-<li>左下角是最近的调用、告警和事件，Jev 的每次决定也在其中；点 Jev 的那一行看它怎么选的。顶部横幅提示需要注意的事。</li>
-<li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 视角 · <kbd>P</kbd> 画中画 · <kbd>E</kbd> 控制台 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
+<li>左下角的动态列表（<kbd>A</kbd> 收起）记着页面打开以来的每次调用、告警和事件，Jev 的每次决定也在其中；点 Jev 的那一行看它怎么选的。顶部横幅提示需要注意的事。</li>
+<li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 视角 · <kbd>P</kbd> 画中画 · <kbd>E</kbd> 控制台 · <kbd>A</kbd> 动态 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
 <li>地址参数：<code>?time=night</code>、<code>?sol=10</code>（一个火星日的分钟数）、<code>?events=auto&amp;seed=7</code>（每隔几分钟自动来一个事件）或 <code>off</code>、<code>?lang=en</code></li>
 </ul>`,
   },
@@ -337,6 +343,9 @@ interface Live {
   director: Director
 }
 
+/** The activity list keeps this many items, the oldest going first. */
+const KEEP_LINES = 300
+
 /** An item of the activity list: a call, an alert, an event or a step the DM left to the LLM, drawn again when the language changes. */
 interface Line {
   el: HTMLElement
@@ -363,6 +372,7 @@ export function buildOverlay(options: {
 }): {
   stats(text: string): void
   toggleEvents(): void
+  toggleFeed(): void
   toggleHelp(): void
   lang(): Lang
   view(name: string, label: string): string
@@ -404,6 +414,12 @@ export function buildOverlay(options: {
   const name = (id: string, fallback = id) => t().names[id] ?? fallback
   const fieldName = (field: string) => t().fields[field] ?? field.replaceAll('_', ' ')
   const value = (v: string) => valueLabel(lang, v, (id) => name(id))
+  /** A device's name in the activity list, after its emoji. */
+  const devEl = (id: string, label = name(id)) => {
+    const b = el('b', 'dev')
+    b.append(el('span', 'emo', EMOJI[id] ?? '•'), label)
+    return b
+  }
   /** A tool's name for people, its id on hover. */
   const tool = (id: string) => {
     const e = el('span', 'tool', toolLabel(lang, id))
@@ -456,9 +472,38 @@ export function buildOverlay(options: {
   // language of the moment. An item the DM decided opens to show how: the newest for a few seconds,
   // any of them on a click.
   const lines: Line[] = []
+  // On top, the list's name, how many items it holds and a button (or A) to fold it away; then the
+  // share rows; then the items, all of them since the page opened, scrolling.
+  const feedTop = el('div', 'top')
+  const feedTitle = el('b')
+  const feedCount = el('span', 'count')
+  const feedFold = el('button', 'fold')
+  feedFold.type = 'button'
+  feedTop.append(feedTitle, feedCount, feedFold)
   const head = el('div', 'head')
   head.hidden = true
-  feed.appendChild(head)
+  const list = el('div', 'list')
+  const empty = el('div', 'empty')
+  list.append(empty)
+  feed.append(feedTop, head, list)
+  let folded = false
+  const drawFeedTop = () => {
+    feedTitle.textContent = t().activity
+    feedCount.textContent = lines.length ? String(lines.length) : ''
+    feedFold.textContent = folded ? '▸' : '▾'
+    feedFold.title = t().activityFold
+    empty.textContent = t().activityEmpty
+    empty.hidden = lines.length > 0
+    feed.classList.toggle('folded', folded)
+  }
+  const atEnd = () => list.scrollHeight - list.scrollTop - list.clientHeight < 8
+  const toggleFeed = () => {
+    folded = !folded
+    drawFeedTop()
+    if (!folded) list.scrollTop = list.scrollHeight
+  }
+  feedFold.addEventListener('click', toggleFeed)
+  drawFeedTop()
   /** The DM's newest decision, open in the list until `until`. */
   let fresh: { d: Decision; until: number } | undefined
   const time = () =>
@@ -545,20 +590,23 @@ export function buildOverlay(options: {
         // Every line keeps the caret's room, so the time columns line up.
         el('span', 'caret', d ? (open ? '▾' : '▸') : ''),
       )
+      // A line that grows (a decision opening) keeps the list at its end when it was there.
+      const stick = atEnd()
       item.replaceChildren(line, ...(open && d ? [decisionCard(d)] : []))
+      if (stick) list.scrollTop = list.scrollHeight
     }
     line.addEventListener('click', () => {
       if (!decision?.()) return
       clicked = !item.classList.contains('open')
       draw()
     })
+    const stick = atEnd()
+    list.appendChild(item)
     draw()
-    feed.appendChild(item)
     lines.push({ el: item, draw })
-    while (lines.length > 8) lines.shift()?.el.remove()
-    lines.forEach((l, i) => {
-      l.el.style.opacity = String(0.55 + (0.45 * (i + 1)) / lines.length)
-    })
+    while (lines.length > KEEP_LINES) lines.shift()?.el.remove()
+    if (stick) list.scrollTop = list.scrollHeight
+    drawFeedTop()
     drawHead()
     return draw
   }
@@ -583,7 +631,7 @@ export function buildOverlay(options: {
         const d = behind()
         return [
           ...(a.caller ? [chip(a.caller, d ? `${Math.round(d.sure * 100)}%` : '')] : []),
-          el('b', 'dev', name(a.device)),
+          devEl(a.device),
           tool(a.tool),
           el('span', 'state', callText(a)),
           // How long it was thought over, then how long the device took: aligned columns.
@@ -680,7 +728,7 @@ export function buildOverlay(options: {
       push(
         () => `alert ${raised ? a.level : 'ok'}`,
         () => [
-          el('b', 'dev', name(a.device)),
+          devEl(a.device),
           el('span', '', `${fieldName(a.field)} ${a.value}${a.unit ? ` ${a.unit}` : ''}`),
           el('span', 'state', raised ? (a.level === 'bad' ? t().alertBad : t().alertWarn) : t().cleared),
         ],
@@ -723,10 +771,7 @@ export function buildOverlay(options: {
       earth.hidden = false
       push(
         () => 'event start',
-        () => [
-          el('b', 'dev', name('comms-01')),
-          el('span', '', m.photo ? t().earthFeedPhoto(m.photo.id) : t().earthFeed),
-        ],
+        () => [devEl('comms-01'), el('span', '', m.photo ? t().earthFeedPhoto(m.photo.id) : t().earthFeed)],
       )
     })
     live.world.events?.listeners.push((h: Happening, phase) => {
@@ -735,7 +780,7 @@ export function buildOverlay(options: {
         push(
           () => `event ${phase}`,
           () => [
-            el('b', 'dev', t().kinds[h.kind]),
+            devEl(h.kind, t().kinds[h.kind]),
             el('span', '', phase === 'start' ? h.headline[lang] : t().over),
           ],
         )
@@ -812,7 +857,7 @@ export function buildOverlay(options: {
         push(
           () => 'alert warn',
           () => [
-            el('b', 'dev', t().kinds[kind]),
+            devEl(kind, t().kinds[kind]),
             el('span', '', why.endsWith('already happening') ? t().already(t().kinds[kind]) : t().notOnFoot),
           ],
         )
@@ -844,7 +889,7 @@ export function buildOverlay(options: {
       c.apply()
       push(
         () => 'event info',
-        () => [el('b', 'dev', name(c.device)), el('span', '', c[lang])],
+        () => [devEl(c.device), el('span', '', c[lang])],
       )
     })
     item.append(text, b)
@@ -935,6 +980,7 @@ export function buildOverlay(options: {
     closeHelp.textContent = t().close
     for (const tag of tagParts) tag.title.textContent = name(tag.id, tag.name)
     for (const line of lines) line.draw()
+    drawFeedTop()
     drawMail()
   }
 
@@ -1006,7 +1052,7 @@ export function buildOverlay(options: {
             : running
               ? `${toolLabel(lang, running[1] ?? '')} … ${t().stillRunning}`
               : clipped(rest)
-    e.append(el('b', 'dev', name(device)), ` ${text}`)
+    e.append(devEl(device), ` ${text}`)
     return e
   }
   /** How the DM chose: the result it read, how long it took among how many actions, the likeliest four. */
@@ -1157,6 +1203,7 @@ export function buildOverlay(options: {
       status.textContent = text
     },
     toggleEvents,
+    toggleFeed,
     toggleHelp,
     lang: () => lang,
     view: (shot, label) => t().views[shot] ?? label,

@@ -405,6 +405,7 @@ try {
 } catch {}
 addEventListener('keydown', (e) => {
   if (e.key === 'e') overlay.toggleEvents()
+  if (e.key === 'a') overlay.toggleFeed()
   if (e.key === '?' || e.key === 'h') overlay.toggleHelp()
 })
 // The picture in picture, top left: the live view of the device at work, from its own camera when

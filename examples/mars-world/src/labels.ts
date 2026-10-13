@@ -109,6 +109,27 @@ const VALUES_ZH: Record<string, string> = {
   false: '否',
 }
 
+/** A device's or an event's emoji in the activity list. */
+export const EMOJI: Record<string, string> = {
+  'habitat-01': '🏠',
+  'airlock-01': '🚪',
+  'suit-01': '🧑‍🚀',
+  'rover-01': '🚙',
+  'hopper-01': '🚁',
+  'monolith-01': '🤖',
+  'lab-01': '🔬',
+  'greenhouse-01': '🌱',
+  'power-01': '🔋',
+  'weather-01': '🌡️',
+  'comms-01': '📡',
+  'cam-base': '📷',
+  dust_storm: '🌪️',
+  suit_leak: '💨',
+  dust_devil: '🌀',
+  meteorite: '☄️',
+  rockfall: '🪨',
+}
+
 export const toolLabel = (lang: Lang, tool: string) => TOOLS[tool]?.[lang === 'zh' ? 1 : 0] ?? tool
 
 /** An enum value; `name` names device ids. */

@@ -94,7 +94,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
       service.billOpen = true
       service.changed()
       return {
-        detail: `bill for ${service.table} on the guest's screen, to pay by ${service.payWith === 'qr' ? 'QR code' : service.payWith}: ${summary()}`,
+        detail: `bill for ${service.table} on the guest's screen, to pay by ${service.payWith === 'qr' ? 'QR code' : service.payWith} at their table: ${summary()}; pos-01 charge takes it when the guest pays`,
         data: {
           total: service.total(),
           lines: service.billed().map((l) => ({ id: l.id, dish: l.dish.id, price: l.dish.price })),

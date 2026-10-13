@@ -35,7 +35,7 @@ English | [简体中文](restaurant-world.zh-CN.md)
 3. Open `http://127.0.0.1:4200/?hub=ws://127.0.0.1:4180`, once. The devices live in this page; keep it open while you play.
 4. In the workbench, the Devices panel lists the sixteen devices, and its World tab shows the floor plan.
 
-The restaurant and the Mars base use the same ports, so run one at a time: close the other world's page and stop its `dev` first. If you use the DM, point `AGNES_DM_SCENE` at `examples/restaurant-world/dm-scene.md` and restart AGH, so the DM knows where it is.
+The restaurant and the Mars base use the same ports, so run one at a time: close the other world's page and stop its `dev` first. The DM learns which world it serves from the description of the world's map, so switching needs no restart.
 
 <a id="你是这位客人"></a>
 

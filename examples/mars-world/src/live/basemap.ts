@@ -23,6 +23,8 @@ const at = ([x, z]: readonly [number, number]): [number, number] => {
 export const BASE_MAP = {
   id: 'base',
   name: 'Agnes Base',
+  description:
+    'A small research base on Mars with one astronaut, who wears suit-01: a habitat with life support, a solar array and batteries, a comms dish to Earth, an airlock, robots and a lab. Priorities: the astronaut’s life first, then keeping the base powered, then science.',
   bounds: [MAP_AREA.x0, MAP_AREA.y0, MAP_AREA.x1, MAP_AREA.y1],
   places: [
     {

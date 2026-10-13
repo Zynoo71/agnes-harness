@@ -14,8 +14,7 @@ The restaurant and the [Mars world](../mars-world/README.md) use the same ports:
 
 1. Close the other world's page and stop its `dev` (or `start`).
 2. Serve this one: `pnpm --filter @agnes/restaurant-world dev`, and open `http://127.0.0.1:4200/?hub=ws://127.0.0.1:4180` once.
-3. If the DM is configured, point `AGNES_DM_SCENE` at this world's scene file, `examples/restaurant-world/dm-scene.md`, and restart Agnes: AgnesHub reads the file when it starts. The DM then knows it serves a restaurant, not a base on Mars.
-4. Start a new conversation; devices of the other world that are no longer connected show as offline.
+3. Start a new conversation; devices of the other world that are no longer connected show as offline.
 
 ## In the page
 
@@ -84,4 +83,4 @@ Scripts reach the world in the page as `window.restaurant` (`world.service`, `wo
 
 ## DM and LLM
 
-Agnes's DM (`packages/mhs/server/hub-api.md` section 15.5) can take a step in the LLM's place after a device result and hands the rest to the LLM; it is switched per conversation in Agnes's composer. `dm-scene.md` is this world's scene for it (`AGNES_DM_SCENE`). The page shows who acted, as the Mars world does: each tag and line in the activity list carries Jev (the DM, green, a bolt) or LLM (blue, a speech bubble); a step the DM left to the LLM gets a line of its own; any line the DM decided opens to show the result it read and the four likeliest actions; each call shows how long it was thought over and how long the device took; two rows above the list share out the decisions and the time.
+Agnes's DM (`packages/mhs/server/hub-api.md` section 15.5) can take a step in the LLM's place after a device result and hands the rest to the LLM; it is switched per conversation in Agnes's composer. It learns where it is from the description of the floor map that floor-01 declares, so switching worlds needs no restart. The page shows who acted, as the Mars world does: each tag and line in the activity list carries Jev (the DM, green, a bolt) or LLM (blue, a speech bubble); a step the DM left to the LLM gets a line of its own; any line the DM decided opens to show the result it read and the four likeliest actions; each call shows how long it was thought over and how long the device took; two rows above the list share out the decisions and the time.

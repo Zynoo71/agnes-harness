@@ -357,7 +357,7 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
     {
       name: 'play',
       description:
-        'Play a game with the child in the play area: go down the slide, blow soap bubbles for them to chase, or build a tower of blocks. Each game takes about ten seconds and calms a crying child.',
+        'Play a game with the child in the play area: go down the slide, blow soap bubbles for them to chase, or build a tower of blocks. Each game takes about ten seconds and calms a crying child. The child must be in the play area first (take_child).',
       timeout: 60,
       params: { game: { type: 'string', enum: [...GAMES], description: 'which game' } },
       required: ['game'],
@@ -394,7 +394,7 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
   dev.tool(
     {
       name: 'bring_back',
-      description: 'Walk the child back from the play area to their place at the guest’s table.',
+      description: 'Walk the child back from the play area to their place at the guest’s table; the party cannot leave while the child is in the play area.',
       timeout: 90,
       uses: ['chassis'],
       motion: true,

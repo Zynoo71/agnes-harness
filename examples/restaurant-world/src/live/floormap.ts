@@ -13,6 +13,8 @@ export const placed = (x: number, y: number, yaw: number) => ({ map: MAP_ID, x, 
 export const FLOOR_MAP = {
   id: MAP_ID,
   name: 'Agnes Restaurant',
+  description:
+    'A modern Chinese restaurant run only by its devices, with one party of guests at a time: a dining room, a private room, a play area for small children and an open kitchen. Priorities: the guests’ safety and comfort first, then getting what they asked for to their table quickly. The guests decide when to pay and leave: once what they asked for is served, the task is done.',
   bounds: [MAP_AREA.x0, MAP_AREA.y0, MAP_AREA.x1, MAP_AREA.y1],
   places: PLACES.map((p) =>
     p.kind === 'landmark'

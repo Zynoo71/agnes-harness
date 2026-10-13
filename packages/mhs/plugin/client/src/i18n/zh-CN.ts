@@ -19,6 +19,11 @@ export const zhCN: Partial<Record<Key, string>> = {
   'state.off': '离线',
   'flow.lane.mhs': 'MHS：命令、状态和结果',
   'flow.lane.mos': 'MOS：数据流（画面、视频、雷达、遥测）和手动驾驶',
+  'flow.lane.mhs.short': '指令',
+  'flow.lane.mos.short': '数据流',
+  'flow.hub': '爱思智能中枢',
+  'flow.hub.sub': 'AgnesHub',
+  'flow.hub.online': '{n}/{total} 在线',
   'card.dm': '{sure}% · {s} 秒',
   'card.dm.title':
     '这一步由决策模型 Jev（{model}）做，没有经过 LLM：在 {options} 个动作里选中它，把握 {sure}%，用时 {s} 秒。',

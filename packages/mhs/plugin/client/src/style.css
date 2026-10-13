@@ -20,6 +20,7 @@
   /* The DM's colour: what it does is told apart from the LLM's (accent) everywhere. */
   --mhs-dm: #0f8a7a;
   --mhs-on-dm: #ffffff;
+  --mhs-mos: #7c4dd6;
   --mhs-ok: var(--mhs-accent);
   --mhs-good: var(--agnes-status-success-text, #15803d);
   --mhs-warn: var(--agnes-status-warning-text, #805e21);
@@ -93,6 +94,7 @@
   --mhs-accent: var(--agnes-text-emphasis, #6983fc);
   --mhs-dm: #2fc6b0;
   --mhs-on-dm: #0b1f1c;
+  --mhs-mos: #a78bfa;
   --mhs-good: var(--agnes-status-success-text, #4ade80);
   --mhs-warn: var(--agnes-status-warning-text, #ffb547);
   --mhs-bad: var(--agnes-status-danger-text, #ff5c5c);
@@ -1584,7 +1586,7 @@ body.mhs-dragging {
   background: var(--mhs-screen);
 }
 
-/* --- flow: the brain on top, AgnesHub as a bus down the left, one wide card per device --- */
+/* --- flow: the brain on top, AgnesHub as a banner with its bus down the middle, devices either side --- */
 .mhs-root .mhs-flow {
   position: relative;
   min-width: 280px;
@@ -1608,7 +1610,7 @@ body.mhs-dragging {
 }
 .mhs-root .mhs-flow-nerve {
   fill: none;
-  stroke: var(--mhs-line-2);
+  stroke: color-mix(in srgb, var(--mhs-mos) 45%, transparent);
   stroke-width: 1.5;
   stroke-dasharray: 3 3;
 }
@@ -1618,7 +1620,28 @@ body.mhs-dragging {
   stroke-width: 1.5;
 }
 .mhs-root .mhs-flow-port[data-lane="nerve"] {
-  stroke: var(--mhs-text-3);
+  stroke: var(--mhs-mos);
+}
+/* The two channels' badges: MHS solid accent, MOS solid violet, the same in the banner and on every card. */
+.mhs-root .mhs-lane {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--mhs-accent);
+  color: var(--mhs-on-accent);
+  font: 700 10px var(--mhs-mono);
+  letter-spacing: 0.06em;
+}
+.mhs-root .mhs-lane[data-lane="nerve"] {
+  background: var(--mhs-mos);
+}
+.mhs-root .mhs-lane em {
+  font: 500 10.5px var(--mhs-font);
+  font-style: normal;
+  letter-spacing: 0;
+  opacity: 0.85;
 }
 .mhs-root .mhs-flow-lanelabel {
   font: 600 9.5px var(--mhs-mono);
@@ -1755,29 +1778,60 @@ body.mhs-dragging {
 }
 .mhs-root .mhs-flow-hub {
   position: absolute;
+  z-index: 1;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0 14px;
-  border: 1px solid var(--mhs-line);
-  border-radius: 10px;
-  background: var(--mhs-card);
-  box-shadow: var(--mhs-lift);
-  font-size: 11.5px;
+  gap: 12px;
+  padding: 0 14px 0 16px;
+  border: 1px solid var(--mhs-accent-line);
+  border-radius: 12px;
+  background: linear-gradient(100deg, var(--mhs-accent-tint), transparent 60%), var(--mhs-card);
+  box-shadow:
+    var(--mhs-lift),
+    0 0 0 5px var(--mhs-accent-wash);
 }
-.mhs-root .mhs-flow-hub b {
-  font: 600 12.5px var(--mhs-font);
-}
-.mhs-root .mhs-flow-key {
-  display: inline-block;
+/* A diamond that glows: the hub every lane goes through. */
+.mhs-root .mhs-flow-hub-mark {
+  flex: none;
   width: 16px;
-  height: 0;
-  margin: 0 5px 0 12px;
-  vertical-align: middle;
-  border-top: 1.5px solid var(--mhs-accent);
+  height: 16px;
+  border-radius: 3px;
+  background: var(--mhs-accent);
+  box-shadow:
+    0 0 0 4px var(--mhs-accent-tint),
+    0 0 14px var(--mhs-accent-line);
+  transform: rotate(45deg);
 }
-.mhs-root .mhs-flow-key[data-lane="nerve"] {
-  border-top: 1.5px dashed var(--mhs-text-3);
+.mhs-root .mhs-flow-hub-name {
+  display: grid;
+  min-width: 0;
+  line-height: 1.2;
+}
+.mhs-root .mhs-flow-hub-name b {
+  font: 700 17px var(--mhs-font);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.mhs-root .mhs-flow-hub-name small {
+  color: var(--mhs-text-3);
+  font: 600 10.5px var(--mhs-mono);
+  letter-spacing: 0.08em;
+}
+.mhs-root .mhs-flow-hub-side {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+}
+.mhs-root .mhs-flow-hub-stats {
+  color: var(--mhs-text-2);
+  font: 10.5px var(--mhs-mono);
+  white-space: nowrap;
+}
+.mhs-root .mhs-flow-hub-lanes {
+  display: flex;
+  gap: 6px;
 }
 .mhs-root .mhs-flow-device {
   position: absolute;
@@ -1791,9 +1845,9 @@ body.mhs-dragging {
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 12px;
-  row-gap: 4px;
-  padding: 12px 16px 14px;
+  column-gap: 8px;
+  row-gap: 3px;
+  padding: 10px 12px 11px;
 }
 .mhs-root .mhs-flow-thumb {
   flex: none;
@@ -1812,7 +1866,7 @@ body.mhs-dragging {
   border: 0;
   background: none;
   color: var(--mhs-text);
-  font: 600 13.5px var(--mhs-font);
+  font: 600 13px var(--mhs-font);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1829,7 +1883,8 @@ body.mhs-dragging {
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
-  gap: 0 14px;
+  gap: 0 10px;
+  font-size: 11px;
 }
 .mhs-root .mhs-flow-device .mhs-doing-list,
 .mhs-root .mhs-flow-device > .mhs-doing {
@@ -1837,33 +1892,29 @@ body.mhs-dragging {
 }
 .mhs-root .mhs-flow-fields {
   grid-column: 1 / -1;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2px 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 12px;
   align-self: start;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .mhs-root .mhs-flow-fields .mhs-field-value {
-  font-size: 14px;
+  font-size: 13px;
 }
 .mhs-root .mhs-flow-rates {
   grid-column: 1 / -1;
   display: flex;
-  gap: 16px;
-  margin-top: 6px;
-  padding-top: 8px;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 4px;
+  padding-top: 7px;
   border-top: 1px solid var(--mhs-line);
   font: 10px var(--mhs-mono);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   color: var(--mhs-text-3);
 }
-.mhs-root .mhs-flow-rates b {
-  font-weight: 600;
-}
-.mhs-root .mhs-flow-rates [data-lane="mhs"] b {
-  color: var(--mhs-accent);
-}
-.mhs-root .mhs-flow-rates [data-lane="nerve"] b {
-  color: var(--mhs-text-2);
+.mhs-root .mhs-flow-rates .mhs-lane {
+  padding: 1px 5px;
+  font-size: 9px;
 }
 
 /* A narrow dock keeps the header compact; what does not fit moves to a second line, on the right. */

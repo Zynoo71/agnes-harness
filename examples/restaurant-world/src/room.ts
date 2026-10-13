@@ -115,19 +115,31 @@ function sign(text: string, w: number, h: number, mark = false): THREE.Mesh {
     g.lineWidth = 10
     g.strokeRect(14, 14, width - 28, height - 28)
     g.fillStyle = '#f5d68e'
-    g.font = `600 ${Math.round(height * 0.52)}px "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif`
+    const font = (px: number) =>
+      `600 ${Math.round(px)}px "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif`
+    g.font = font(height * 0.52)
     g.textBaseline = 'middle'
-    const size = mark ? height * 0.66 : 0
-    const gap = mark ? height * 0.12 : 0
-    const left = (width - size - gap - g.measureText(text).width) / 2
+    // The mark's ink spans 0.11–0.89 of its square; the pair shrinks to keep clear of the border.
+    const ink = { from: 0.11, to: 0.89 }
+    let size = mark ? height * 0.62 : 0
+    let gap = mark ? height * 0.1 : 0
+    /** How wide the mark's ink and the gap after it are. */
+    const lead = () => size * (ink.to - ink.from) + gap
+    const k = Math.min(1, (width - 2 * height * 0.36) / (lead() + g.measureText(text).width))
+    if (k < 1) {
+      g.font = font(height * 0.52 * k)
+      size *= k
+      gap *= k
+    }
+    const start = (width - lead() - g.measureText(text).width) / 2
     if (mark) {
       g.save()
-      g.translate(left, (height - size) / 2)
+      g.translate(start - size * ink.from, (height - size) / 2)
       g.scale(size, size)
       g.fill(new Path2D(AGNES_MARK), 'evenodd')
       g.restore()
     }
-    g.fillText(text, left + size + gap, height * 0.55)
+    g.fillText(text, start + lead(), height * 0.55)
   })
   const face = mat(0xffffff, { map: texture, emissive: 0x3a0e08, emissiveIntensity: 0.5 })
   const board = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.08), [

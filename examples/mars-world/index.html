@@ -39,7 +39,8 @@
         pointer-events: none; box-shadow: 0 2px 14px rgba(0, 0, 0, 0.45); }
       #pip span { position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 4px; background: var(--panel);
         font: 11px var(--mono); color: var(--text); }
-      #brand h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: 0.02em; }
+      #brand h1 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 17px; font-weight: 650; letter-spacing: 0.02em; }
+      #brand h1 svg { width: 1.35em; height: 1.35em; margin: -3px 0; flex: none; }
       #brand p { margin: 2px 0 0; font-size: 11.5px; color: var(--dim); }
       #bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 5px 12px;
              background: var(--panel); border-top: 1px solid var(--line); color: var(--text); font: 11.5px var(--mono);
@@ -189,7 +190,7 @@
   <body>
     <div id="app"></div>
     <div id="tags"></div>
-    <div id="brand"><h1>Agnes Base</h1><p>Jezero Crater, Mars</p></div>
+    <div id="brand"><h1><span>Agnes Base</span></h1><p>Jezero Crater, Mars</p></div>
     <div id="pip" hidden><span></span></div>
     <div id="banners"></div>
     <div id="feed"></div>

@@ -1,3 +1,4 @@
+import { AGNES_MARK } from './agnes-mark.js'
 import type { MarsClock } from './clock.js'
 import type { Decision } from './dm/watch.js'
 import { EMOJI, progressLabel, toolLabel, valueLabel } from './labels.js'
@@ -428,6 +429,13 @@ export function buildOverlay(options: {
   }
 
   const brand = document.getElementById('brand') as HTMLElement
+  // The Agnes mark before the title, in the title's colour.
+  brand
+    .querySelector('h1')
+    ?.insertAdjacentHTML(
+      'afterbegin',
+      `<svg viewBox="0 0 1 1" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${AGNES_MARK}"/></svg>`,
+    )
   const bar = document.getElementById('bar') as HTMLElement
   const banners = document.getElementById('banners') as HTMLElement
   const feed = document.getElementById('feed') as HTMLElement
@@ -947,7 +955,7 @@ export function buildOverlay(options: {
   /** Texts that change only with the language. */
   const relabel = () => {
     document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
-    ;(brand.querySelector('h1') as HTMLElement).textContent = t().title
+    ;(brand.querySelector('h1 span') as HTMLElement).textContent = t().title
     ;(brand.querySelector('p') as HTMLElement).textContent = t().subtitle
     buttons.events.textContent = t().controls
     buttons.lang.textContent = t().language

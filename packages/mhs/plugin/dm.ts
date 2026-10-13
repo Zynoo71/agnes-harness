@@ -24,9 +24,8 @@ const DEVICE_TOOLS = ['call_device', 'set_device', 'read_device', 'stop_device']
 const MAX_DM_STEPS = 3
 /** An action the DM is less sure of than this goes to the LLM: in tests such picks were mostly wrong. */
 const MIN_SURE = 0.2
-/** The task's last device actions the DM is told of; its own pick may not repeat the last few. */
+/** The task's last device actions the DM is told of. */
 const RECENT = 12
-const NO_REPEAT = 4
 
 /** The parts of core's replacement context this Operation reads. */
 export interface InferenceContext {
@@ -144,7 +143,9 @@ export function dmOperation(link: () => DmLink | undefined) {
       const how = `sure ${Math.round(p * 100)}% among ${picked.options}, ${(picked.ms / 1000).toFixed(1)} s`
       // Only the LLM judges that nothing needs doing; the DM only acts, when sure enough and not
       // again what was just done, or hands over.
-      const repeat = picked.action && moment.lastActions.includes(canonicalJson(picked.action))
+      // The same action again with nothing in between is going round in circles; a cycle
+      // (cook, plate, deliver, cook) is a task's normal work.
+      const repeat = picked.action && moment.lastAction === canonicalJson(picked.action)
       const action = p >= MIN_SURE && !repeat ? picked.action : undefined
       const outcome = action ? 'did' : 'llm'
       hub.log(`DM ${picked.choice} (${how}) for ${conversation}`)
@@ -185,8 +186,8 @@ export function dmOperation(link: () => DmLink | undefined) {
 export type StepMoment = Moment & {
   /** One of the results the step answers is an error: the LLM takes it. */
   failed: boolean
-  /** The task's last device actions, as canonical JSON, for the DM not to repeat them. */
-  lastActions: string[]
+  /** The task's last device action, as canonical JSON, for the DM not to repeat it straight away. */
+  lastAction?: string
 }
 
 /**
@@ -222,7 +223,7 @@ export function momentOf(messages: Message[]): StepMoment | undefined {
 }
 
 /** What a task's device calls tell the DM: the devices they used, and the actions with their results. */
-function taskOf(messages: Message[]): { devices?: string[]; recent?: string[]; lastActions: string[] } {
+function taskOf(messages: Message[]): { devices?: string[]; recent?: string[]; lastAction?: string } {
   const results = new Map<string, string>()
   for (const m of messages) if (m.role === 'tool_result') results.set(m.toolUseId, textOf(m.content))
   const devices = new Set<string>()
@@ -244,7 +245,7 @@ function taskOf(messages: Message[]): { devices?: string[]; recent?: string[]; l
   return {
     ...(devices.size ? { devices: [...devices] } : {}),
     ...(recent.length ? { recent: recent.slice(-RECENT) } : {}),
-    lastActions: done.slice(-NO_REPEAT).map(canonicalJson),
+    ...(done.length ? { lastAction: canonicalJson(done[done.length - 1]) } : {}),
   }
 }
 

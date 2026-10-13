@@ -185,5 +185,18 @@ describe('the DM in the loop', () => {
     expect((await run(jammed)).llm).toBe(true)
     expect(thinkingOf('c1')).toBeGreaterThanOrEqual(0)
     expect(decide).toHaveBeenCalledTimes(1)
+    // The same action straight again is the LLM's; after another action in between it is the DM's.
+    const opened = [
+      user('开门'),
+      said('', 'call_device', call('door-01', 'open'), 't1'),
+      result('opened', 't1'),
+    ]
+    expect((await run(opened)).llm).toBe(true)
+    const cycle = [
+      ...opened,
+      said('', 'call_device', call('door-01', 'unlock'), 't2'),
+      result('unlocked', 't2'),
+    ]
+    expect((await run(cycle)).llm).toBe(false)
   })
 })

@@ -521,7 +521,7 @@ An `agent` client that acts on devices by itself (a fast decision model, say) te
 The DM is a decision model that takes some steps of the brain's loop in the LLM's place, each as a `call_device` or `set_device` call with no LLM:
 
 - **When.** After the results of a `call_device` or `set_device` call, the LLM's or its own, it picks one fixed device action among all the devices allow, or `ask_llm`.
-- **Otherwise the LLM.** A step a person started, a step after the LLM read devices (`read_device`, `list_devices`), a failed result, and the step after 3 DM steps in a row go to the LLM. So does the step when the DM is less than 20 % sure, picks `ask_llm`, or picks one of the task's last 4 actions. Only the LLM judges that nothing needs doing.
+- **Otherwise the LLM.** A step a person started, a step after the LLM read devices (`read_device`, `list_devices`), a failed result, and the step after 3 DM steps in a row go to the LLM. So does the step when the DM is less than 20 % sure, picks `ask_llm`, or picks the task's last action again. Only the LLM judges that nothing needs doing.
 
 What the DM is told: what it is and that anything beyond one fixed action goes to the LLM; the site, as the descriptions of the online devices' maps give it; the online devices by id and name; what the person asked; the task's devices (those the task's device tools named, and those what just happened names) with each tool's whole description, whose preconditions show which step comes next; the task's device actions so far with how they ended, up to 12; what just happened; and the state now of the task's devices. A task starts where the person last spoke.
 

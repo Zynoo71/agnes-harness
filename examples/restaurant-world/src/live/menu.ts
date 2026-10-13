@@ -50,7 +50,7 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
     model: 'Agnes Restaurant ordering',
     localization: 'none',
     profile: {
-      notes: `Takes the guest's orders. Each portion becomes an order line (o1, o2, …) that is made when told: a wok-01 or stove-01 dish is prepped by prep-01 prep, then cooked by its station's cook; a bar-01 item is made by bar-01 make. No device moves a line on by itself: prep, cook or make, plate (kitchen dishes) and runner-01 deliver are each a call, until the line is served. The menu (id: name, price, station): ${MENU.map(menuLine).join('. ')}.`,
+      notes: `Takes the guest's orders. Each portion becomes an order line (o1, o2, …) that is made when told: a wok-01 or stove-01 dish is prepped by prep-01 prep, then cooked by its station's cook; a bar-01 item is made by bar-01 make. No device moves a line on by itself: prep, cook or make, plate (kitchen dishes) and runner-01 deliver are each a call, until the line is served; each call returns when its step is done, within seconds, so nothing in an order needs the guest to wait for a later turn. The menu (id: name, price, station): ${MENU.map(menuLine).join('. ')}.`,
     },
     resources: { orders: 'queue' },
     state: {

@@ -165,7 +165,11 @@ function roomDevice(world: World, log: (line: string) => void, s: Space) {
       ui: { label: 'Temperature' },
     },
     async (call, { celsius }) => {
-      if (!control.acOn) throw new CallError('x_ac_off', 'the air conditioning is off; it cannot be set')
+      if (!control.acOn)
+        throw new CallError(
+          'x_ac_off',
+          'the air conditioning has failed and restarts by itself within a minute or so; set it again then',
+        )
       await wait(call, 800)
       a.temperature = Number(celsius)
       report()

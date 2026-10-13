@@ -240,13 +240,14 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
   dev.tool(
     {
       name: 'shed',
-      description: 'Switch a load off to save power, or back on. Life support cannot be shed.',
+      description:
+        'Switch a load off to save power (on false), or back on (on true). Life support cannot be shed.',
       timeout: 10,
       params: {
         load: { type: 'string', enum: Object.keys(LOADS), description: 'which load' },
-        on: { type: 'boolean', default: false, description: 'true switches the load back on' },
+        on: { type: 'boolean', description: 'false switches the load off, true switches it back on' },
       },
-      required: ['load'],
+      required: ['load', 'on'],
       uses: ['loads'],
       ui: { label: 'Shed load' },
     },

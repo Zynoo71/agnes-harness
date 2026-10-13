@@ -1,3 +1,4 @@
+import { AGNES_MARK } from './agnes-mark.js'
 import type { Decision } from './dm/watch.js'
 import { DEVICES, EMOJI, type Lang, progressLabel, toolLabel, valueLabel } from './labels.js'
 import { TABLES } from './layout.js'
@@ -411,6 +412,12 @@ export function buildOverlay(options: {
   }
 
   const brand = document.getElementById('brand') as HTMLElement
+  // The Agnes mark before the brand's name, as tall as its letters.
+  const brandMark = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  brandMark.setAttribute('viewBox', '0 0 1 1')
+  brandMark.setAttribute('class', 'mark')
+  brandMark.setAttribute('aria-hidden', 'true')
+  brandMark.innerHTML = `<path d="${AGNES_MARK}" fill="currentColor" fill-rule="evenodd"/>`
   const bar = document.getElementById('bar') as HTMLElement
   const banners = document.getElementById('banners') as HTMLElement
   const feed = document.getElementById('feed') as HTMLElement
@@ -848,7 +855,7 @@ export function buildOverlay(options: {
   /** Texts that change only with the language. */
   const relabel = () => {
     document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
-    ;(brand.querySelector('h1') as HTMLElement).textContent = t().title
+    ;(brand.querySelector('h1') as HTMLElement).replaceChildren(brandMark, t().title)
     ;(brand.querySelector('p') as HTMLElement).textContent = t().subtitle
     buttons.controls.textContent = t().controls
     buttons.lang.textContent = t().language

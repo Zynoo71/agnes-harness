@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { AGNES_MARK } from './agnes-mark.js'
 import {
   ARM_BASE,
   BACK_OF_HOUSE_Y,
@@ -68,6 +69,29 @@ function joint(parent: THREE.Object3D, x: number, y: number, z: number): THREE.G
   const g = at(new THREE.Group(), x, y, z)
   parent.add(g)
   return g
+}
+
+/** The deep indigo of the Agnes logo. */
+const AGNES_BLUE = '#3d4194'
+
+/** The Agnes mark as a decal `size` metres square, in `color` on nothing, facing +z. */
+function markDecal(size: number, color: string): THREE.Mesh {
+  const texture = drawn(256, 256, (g) => {
+    g.scale(256, 256)
+    g.fillStyle = color
+    g.fill(new Path2D(AGNES_MARK), 'evenodd')
+  })
+  return new THREE.Mesh(
+    new THREE.PlaneGeometry(size, size),
+    new THREE.MeshStandardMaterial({
+      map: texture,
+      alphaTest: 0.5,
+      roughness: 0.4,
+      metalness: 0.5,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    }),
+  )
 }
 
 type Mood = 'happy' | 'cat' | 'calm'
@@ -271,6 +295,10 @@ function host(): Host {
   }
   bow.add(sphere(0.022, M.bow, 8))
   object.add(at(bow, 0, 0.84, 0.205))
+  // The Agnes mark on the chest, leaning back with the tapered body.
+  const chest = at(markDecal(0.18, AGNES_BLUE), 0, 0.5, 0.237)
+  chest.rotation.x = -Math.atan2(0.07, 0.72)
+  object.add(chest)
   for (const side of [-1, 1]) {
     const arm = at(capsule(0.04, 0.22, M.shell), side * 0.25, 0.62, 0.02)
     arm.rotation.z = side * 0.25
@@ -303,6 +331,13 @@ function runner(): Runner {
     object.add(at(box(0.48, 0.01, 0.42, M.orange), 0, h + 0.017, 0.0))
     return joint(object, 0, h + 0.022, 0.02)
   })
+  // The Agnes mark on both sides of the base, under the trays.
+  const mark = markDecal(0.15, AGNES_BLUE)
+  for (const side of [-1, 1]) {
+    const decal = at(side < 0 ? mark : mark.clone(), side * 0.261, 0.1, 0)
+    decal.rotation.y = (side * Math.PI) / 2
+    object.add(decal)
+  }
   const head = joint(object, 0, 1.28, -0.12)
   head.add(at(box(0.44, 0.32, 0.2, M.shell), 0, 0, 0))
   head.add(at(face(0.38, 0.25, 'cat', '#ffd36e'), 0, 0, 0.101))

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { AGNES_MARK } from './agnes-mark.js'
 import { model, pbr } from './assets.js'
 import { bake } from './bake.js'
 import {
@@ -101,8 +102,11 @@ function wall(b: Box, h: number, material: THREE.Material): THREE.Group {
   return g
 }
 
-/** A signboard: `text` in gold on lacquer red with a gold border, `w` × `h` metres. */
-function sign(text: string, w: number, h: number): THREE.Mesh {
+/**
+ * A signboard: `text` in gold on lacquer red with a gold border, `w` × `h` metres; with `mark`, the
+ * Agnes mark in gold before the text, the two centred together.
+ */
+function sign(text: string, w: number, h: number, mark = false): THREE.Mesh {
   const texture = drawn(1024, Math.round((1024 * h) / w), (g) => {
     const { width, height } = g.canvas
     g.fillStyle = '#9e2a22'
@@ -112,9 +116,18 @@ function sign(text: string, w: number, h: number): THREE.Mesh {
     g.strokeRect(14, 14, width - 28, height - 28)
     g.fillStyle = '#f5d68e'
     g.font = `600 ${Math.round(height * 0.52)}px "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif`
-    g.textAlign = 'center'
     g.textBaseline = 'middle'
-    g.fillText(text, width / 2, height * 0.55)
+    const size = mark ? height * 0.66 : 0
+    const gap = mark ? height * 0.12 : 0
+    const left = (width - size - gap - g.measureText(text).width) / 2
+    if (mark) {
+      g.save()
+      g.translate(left, (height - size) / 2)
+      g.scale(size, size)
+      g.fill(new Path2D(AGNES_MARK), 'evenodd')
+      g.restore()
+    }
+    g.fillText(text, left + size + gap, height * 0.55)
   })
   const face = mat(0xffffff, { map: texture, emissive: 0x3a0e08, emissiveIntensity: 0.5 })
   const board = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.08), [
@@ -404,7 +417,7 @@ async function street(group: THREE.Group) {
   const sx = DOOR.x0 - 1.4
   group.add(place(box(0.08, 0.5, 0.08, M.rosewood), sx - 0.6, -0.5, 0.25))
   group.add(place(box(0.08, 0.5, 0.08, M.rosewood), sx + 0.6, -0.5, 0.25))
-  group.add(place(sign('Agnes 餐厅', 1.6, 0.5), sx, -0.5, 0.75))
+  group.add(place(sign('Agnes 餐厅', 1.6, 0.5, true), sx, -0.5, 0.75))
   for (const x of [DOOR.x0 - 0.35, DOOR.x1 + 0.35]) {
     group.add(place(box(0.08, 1.7, 0.08, M.rosewood), x, -0.35, 0.85))
     group.add(place(box(0.4, 0.05, 0.05, M.rosewood), x, -0.5, 1.68))

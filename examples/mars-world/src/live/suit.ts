@@ -19,6 +19,9 @@ const CHAMBER = { x: 0, z: 10.6 }
 const DOOR_WAIT_S = 90
 /** Oxygen at or below which they cannot walk any more (the suit's `bad` line). */
 const O2_BAD = 15
+/** How someone who cannot walk gets inside. */
+const CARRY_IN =
+  'monolith-01 must carry them to the airlock: monolith-01 follow suit-01, carry suit-01, go_to the airlock, put_down'
 
 type Ask = 'none' | 'return' | 'stay' | 'resume'
 
@@ -431,7 +434,7 @@ export function suit(
   dev.tool(
     {
       name: 'radio',
-      description: `Talk to the wearer over the suit radio. They answer, and do what \`ask\` says when they can: return walks them to the airlock's outer door (about a minute from the far jobs) and, once it is open, into the chamber, where airlock-01 close_outer and cycle_in bring them inside; stay stops them where they are; resume walks them back to work (from the habitat: into the chamber, and out once the outer door opens). They cannot walk with a leaking suit or ${O2_BAD}% oxygen or less.`,
+      description: `Talk to the wearer over the suit radio. They answer, and do what \`ask\` says when they can: return walks them to the airlock's outer door (about a minute from the far jobs) and, once it is open, into the chamber, where airlock-01 close_outer and cycle_in bring them inside; stay stops them where they are; resume walks them back to work (from the habitat: into the chamber, and out once the outer door opens). They cannot walk with a leaking suit or ${O2_BAD}% oxygen or less: then ${CARRY_IN}.`,
       timeout: 240,
       params: {
         text: { type: 'string', description: 'what to say to them' },
@@ -453,10 +456,7 @@ export function suit(
         throw new CallError('x_carried', 'monolith-01 is carrying them; put_down first')
       const why = cannotWalk()
       if (why && (ask === 'return' || ask === 'resume'))
-        throw new CallError(
-          'x_cannot_walk',
-          `they cannot walk: ${why}. monolith-01 must carry them to the airlock (follow suit-01, carry suit-01, go_to the airlock, put_down)`,
-        )
+        throw new CallError('x_cannot_walk', `they cannot walk: ${why}. ${CARRY_IN}`)
       const said = reply[ask]()
       log(`suit-01 radio: "${args.text}" → "${said}"`)
       call.progress({ text: `they answer: "${said}"` })
@@ -464,14 +464,17 @@ export function suit(
         detail: `they answered "${said}"; ${detail}`,
         data: { said, activity: activity(), ...data },
       })
+      // Someone who cannot walk out here waits for Monolith: the result says so.
+      const stuck =
+        why && ['working', 'standing'].includes(at) ? `; they cannot walk: ${why}. ${CARRY_IN}` : ''
       if (ask === 'none')
         return result(
-          `they are ${activity().replace('_', ' ')} and stay there: none only talks (ask return, stay or resume to have them move)`,
+          `they are ${activity().replace('_', ' ')} and stay there: none only talks (ask return, stay or resume to have them move)${stuck}`,
         )
       if (ask === 'stay') {
         if (at === 'working') world.astronaut = 'standing'
         report()
-        return result(`waiting at ${where()}`)
+        return result(`waiting at ${where()}${stuck}`)
       }
       if (ask === 'return') {
         if (at === 'chamber' || at === 'inside')

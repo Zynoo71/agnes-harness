@@ -210,7 +210,7 @@ export function suit(
           'what the wearer is doing: working round the base on their own, walking where the radio sent them, waiting outside, carried by monolith-01, in the airlock chamber, in the habitat',
       },
     },
-    // The helmet camera moves the most, so pages show it first.
+    // The helmet camera moves the most, so pages show it right after the base camera.
     ui: { primary: 'helmet_video', order: -1 },
     resources: { wearer: 'reject' },
   })

@@ -63,7 +63,8 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
       tilt: { type: 'number', unit: 'deg', min: -60, max: 20, description: 'positive looks up' },
       zoom: { type: 'number', min: 1, max: 4, description: 'magnification' },
     },
-    ui: { primary: 'view_video' },
+    // The whole base in one view: pages show it first, the suit's helmet camera next.
+    ui: { primary: 'view_video', order: -2 },
   })
   dev.log = log
   const cam = new THREE.PerspectiveCamera(FOV, 16 / 9, 0.1, 2000)

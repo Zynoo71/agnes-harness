@@ -38,7 +38,7 @@ import {
 
 /** Gaits: top speed in m/s, acceleration in m/s², turning in radians a second. */
 const GAIT = {
-  walk: { speed: 3, accel: 2.4, turn: Math.PI },
+  walk: { speed: 2.5, accel: 2, turn: Math.PI * 0.9 },
   roll: { speed: 6, accel: 2, turn: Math.PI / 2 },
 }
 /** From its front to what it picks up, at most, in metres. */

@@ -394,7 +394,8 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
   dev.tool(
     {
       name: 'bring_back',
-      description: 'Walk the child back from the play area to their place at the guest’s table; the party cannot leave while the child is in the play area.',
+      description:
+        'Walk the child back from the play area to their place at the guest’s table; the party cannot leave while the child is in the play area.',
       timeout: 90,
       uses: ['chassis'],
       motion: true,

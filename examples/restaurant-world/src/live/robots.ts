@@ -239,7 +239,12 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
               h: TABLE_H + 0.5,
               steam: dishes.flatMap((l) => (l.object && l.dish.station !== 'bar' ? [l.object] : [])),
             })
-          return `served ${things.map(nameOf).join(', ')} at ${t.id}`
+          const left = [
+            ...service.lines.map((line): Item => ({ kind: 'line', line })),
+            ...service.supplies.map((supply): Item => ({ kind: 'supply', supply })),
+          ].filter((i) => pickup(i))
+          const more = left.length ? `; still waiting to be served: ${left.map(nameOf).join(', ')}` : ''
+          return `served ${things.map(nameOf).join(', ')} at ${t.id}${more}`
         } finally {
           mode = 'docked'
           report()

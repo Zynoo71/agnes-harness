@@ -9,7 +9,7 @@ const MODES = {
   storm_shelter: {
     color: 0xff8a3a,
     glow: 0.9,
-    sentence: 'storm shelter: crew inside, non-essential loads off',
+    sentence: 'storm shelter: crew inside, the cabin sealed and its lights dimmed',
   },
   medical: { color: 0xdff4ff, glow: 2.4, sentence: 'medical: the bay is lit and warmed, oxygen raised' },
 } as const
@@ -19,6 +19,7 @@ type Mode = keyof typeof MODES
 export function habitat(world: World, log: (line: string) => void): WorldDevice {
   let mode: Mode = 'normal'
   const air = { o2: 20.9, co2: 900, pressure: 101.3, temperature: 21.5, humidity: 38 }
+  let food = 0
   const dev = new WorldDevice({
     id: 'habitat-01',
     kind: 'habitat',
@@ -59,6 +60,13 @@ export function habitat(world: World, log: (line: string) => void): WorldDevice 
         of: 'air',
         alert: { warn: 27, bad: 30 },
       },
+      fresh_food: {
+        type: 'integer',
+        unit: 'kg',
+        min: 0,
+        max: 500,
+        description: 'fresh food grown in the greenhouse, in the pantry',
+      },
     },
   })
   dev.log = log
@@ -69,8 +77,13 @@ export function habitat(world: World, log: (line: string) => void): WorldDevice 
       co2: Math.round(air.co2 / 10) * 10,
       pressure: Math.round(air.pressure * 10) / 10,
       temperature: Math.round(air.temperature * 10) / 10,
+      fresh_food: food,
     })
   report()
+  world.pantryReceive = (_crop, kg) => {
+    food += kg
+    report()
+  }
   const curves = dev.source('air', 'values', 'cabin air quality', {
     hz: 1,
     default: true,
@@ -107,7 +120,7 @@ export function habitat(world: World, log: (line: string) => void): WorldDevice 
     {
       name: 'set_mode',
       description:
-        'Set the habitat up for normal operations, as a storm shelter (crew inside, non-essential loads off), or for medical care (bay lit and warmed, oxygen raised).',
+        'Set the habitat up for normal operations, as a storm shelter (crew inside, the cabin sealed and its lights dimmed), or for medical care (bay lit and warmed, oxygen raised).',
       timeout: 15,
       params: {
         mode: { type: 'string', enum: Object.keys(MODES), description: 'what to set the habitat up for' },
@@ -143,6 +156,7 @@ export function habitat(world: World, log: (line: string) => void): WorldDevice 
   })
   world.onReset(() => {
     mode = 'normal'
+    food = 0
     Object.assign(air, { o2: 20.9, co2: 900, pressure: 101.3, temperature: 21.5, humidity: 38 })
     world.parts.windows.emissive.set(MODES.normal.color)
     world.parts.windows.emissiveIntensity = MODES.normal.glow

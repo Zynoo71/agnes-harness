@@ -1,11 +1,13 @@
 import { type Call, CallError } from '@agnes/mhs/device'
 import * as THREE from 'three'
-import { LAYOUT } from '../base.js'
+import { type BedName, type Crop, GREENHOUSE, LAYOUT } from '../base.js'
+import { sunAt } from '../clock.js'
 import { MONOLITH } from '../devices.js'
-import { UNFOLD_S } from '../monolith.js'
+import { buildCrate, UNFOLD_S } from '../monolith.js'
 import { OBSTACLES } from '../terrain.js'
 import { PLACE_PARAM, pointOf } from './basemap.js'
 import { addCamera } from './camera.js'
+import { GROW_S } from './greenhouse.js'
 import { MAP_AREA } from './map.js'
 import { addPlace, reading } from './place.js'
 import {
@@ -36,13 +38,38 @@ import {
 
 /** Gaits: top speed in m/s, acceleration in m/s², turning in radians a second. */
 const GAIT = {
-  walk: { speed: 1.3, accel: 1.2, turn: Math.PI * 0.7 },
+  walk: { speed: 2.5, accel: 2, turn: Math.PI * 0.9 },
   roll: { speed: 6, accel: 2, turn: Math.PI / 2 },
 }
 /** From its front to what it picks up, at most, in metres. */
 const REACH = 1.2
 /** Seconds to lift or set down a load. */
 const LIFT_S = 1.5
+/** Pushing a boulder aside: the widest it can move, in metres across, how far, and in how many seconds. */
+const PUSH = { across: 2, metres: 3.5, seconds: 3.5 }
+/** A close-up photo is taken of a rock within this many metres of its front. */
+const CLOSE_UP = 3
+/** What a close-up of each kind of unusual rock shows. */
+const LOOKS = {
+  'rock-1': 'a greenish-grey stone about 0.9 m across, finely layered, unlike the red rocks around it',
+  meteorite:
+    'a dark, metallic stone about 0.65 m across with a black, glassy fusion crust, half sunk in a splash of thrown-out dust',
+}
+/** The greenhouse's aisle: where it turns in from outside the east door, just inside it, and its west end. */
+const AISLE = {
+  door: { x: LAYOUT.greenhouseDoor[0], z: LAYOUT.greenhouseDoor[1] },
+  entry: { x: LAYOUT.greenhouse[0] + GREENHOUSE.length / 2 - 0.6, z: LAYOUT.greenhouse[1] },
+  west: { x: LAYOUT.greenhouse[0] - GREENHOUSE.length / 2 + 1.1, z: LAYOUT.greenhouse[1] },
+}
+/** Taking what it holds into the habitat, step by step: said in the results that end holding it. */
+const INTO_AIRLOCK =
+  'go_to the airlock; airlock-01 cycle_out (skip it when its pressure is already near 0 kPa), then open_outer; put_down; then airlock-01 close_outer and cycle_in'
+/** How fast it walks along a bed while it plants or harvests it, m/s. */
+const TENDING = 1
+/** What each plant yields, in kg. */
+const YIELD: Record<Exclude<Crop, 'none'>, number> = { potato: 0.6, tomato: 0.4 }
+/** Towing: the cable's length in metres, and how near home (the dock, the hopper pad) put_down winches it into place. */
+const TOW = { cable: 1.2, home: 8 }
 /** Where it holds an astronaut: this far in front of its centre and this high off the ground. */
 const HELD = { ahead: 0.72, up: 0.32 }
 /** It counts as at the airlock within this many metres of the outer door, and at the lab of the lab. */
@@ -81,6 +108,30 @@ const LINES = {
     smooth: 'Delivered, flawlessly.',
   },
   standing: { honest: 'Setting you down here. Stay where you are.', smooth: 'Here we are. Lovely spot.' },
+  pushed: {
+    honest: 'Boulder moved. The way is clear.',
+    smooth: 'Boulder relocated. It wanted a better view.',
+  },
+  planted: {
+    honest: 'Seed potatoes in. Now water and light, and patience.',
+    smooth: 'Planted. Finest potatoes on Mars, guaranteed.',
+  },
+  harvested: {
+    honest: 'Fresh food, grown on Mars.',
+    smooth: 'A record harvest. Also the only one.',
+  },
+  photo: {
+    honest: 'Close-up taken. Hold still, rock.',
+    smooth: 'Close-up taken. The rock said cheese.',
+  },
+  hitched: {
+    honest: 'Cable on. I pull, you roll.',
+    smooth: 'Hitched. A perfectly normal thing for a monolith to do.',
+  },
+  home: {
+    honest: 'Home. All yours.',
+    smooth: 'Delivered, as if nothing ever happened.',
+  },
 }
 
 /**
@@ -91,13 +142,13 @@ const LINES = {
  * its way, and comes as close as half a metre to a person.
  */
 export function monolith(world: World, log: (line: string) => void): WorldDevice {
-  const { monolith: model, astronaut } = world.parts
+  const { monolith: model, astronaut, rover, hopper } = world.parts
   const body = new Body(model.group, world)
   let battery = 93
   let humor = 75
   let honesty = 90
   let motor = -20
-  let load: { kind: 'astronaut' | 'sample'; id: string } | undefined
+  let load: { kind: 'astronaut' | 'sample' | 'rover' | 'hopper' | 'crate'; id: string } | undefined
   let moving: 'walk' | 'roll' | undefined
   /** The motion call running now, which the stop tool ends. */
   let current: Call | undefined
@@ -115,7 +166,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       max_speed: GAIT.roll.speed,
       payload_kg: 180,
       reach_m: REACH,
-      notes: `Four metal slabs joined at the middle, about 1.5 m tall. It walks at ${GAIT.walk.speed} m/s by swinging its slabs; on open ground it unfolds into a wheel and rolls at ${GAIT.roll.speed} m/s (not while it carries something). It finds its own way on the base map around buildings, boulders and machines. Built to work beside people: it comes within ${MONO.personGap} m of a person, but stops by itself before a boulder or a machine in its way. It can carry an astronaut or a rock sample. humor and honesty (0-100 %) change how it phrases what it says, never the facts in its results.`,
+      notes: `Four metal slabs joined at the middle, about 1.5 m tall. It walks at ${GAIT.walk.speed} m/s by swinging its slabs; on open ground it unfolds into a wheel and rolls at ${GAIT.roll.speed} m/s (not while it carries something). It finds its own way on the base map around buildings, boulders and machines. Built to work beside people: it comes within ${MONO.personGap} m of a person, but stops by itself before a boulder or a machine in its way. It can carry an astronaut, a rock sample or a crate, tow the rover or the hopper on a cable, and plant and harvest the greenhouse beds. A nuclear battery keeps it charged: it never runs flat. humor and honesty (0-100 %) change how it phrases what it says, never the facts in its results.`,
     },
     resources: { slabs: 'reject', radio: 'queue' },
     manual: {
@@ -134,14 +185,17 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         description:
           'standing idle, walking, rolling as a wheel, or carrying a load (lifting, holding, walking with it)',
       },
-      carrying: { type: 'string', enum: ['none', 'astronaut', 'sample'], description: 'what it holds' },
+      carrying: {
+        type: 'string',
+        enum: ['none', 'astronaut', 'sample', 'rover', 'hopper', 'crate'],
+        description: 'what it holds, or tows on its cable',
+      },
       battery: {
         type: 'integer',
         unit: '%',
         min: 0,
         max: 100,
         role: 'battery',
-        alert: { warn: 25, bad: 10, below: true },
       },
       humor: {
         type: 'integer',
@@ -173,7 +227,8 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   }
 
   // The front camera in the display strip, held level as the slabs swing.
-  const front = new THREE.PerspectiveCamera(60, 16 / 9, 0.05, 2000)
+  // Its near plane clips the slabs that swing past the lens as it walks.
+  const front = new THREE.PerspectiveCamera(60, 16 / 9, 0.5, 2000)
   front.rotation.order = 'YXZ'
   front.rotation.set(-0.12, Math.PI, 0)
   front.position.set(0, 1.36, 0.24)
@@ -202,7 +257,6 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         min: 0,
         max: 100,
         role: 'battery',
-        alert: { warn: 25, bad: 10, below: true },
       },
       motor_temperature: {
         type: 'number',
@@ -211,7 +265,6 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         max: 100,
         role: 'temperature',
         of: 'motor',
-        alert: { warn: 70, bad: 85 },
         description: 'the hinge motors that swing the slabs',
       },
     },
@@ -221,8 +274,10 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     () => {
       const working = body.speed > 0.05 || Math.abs(body.turn) > 0.05
       const effort = moving === 'roll' ? 2 : load ? 1.6 : 1
-      motor += working ? (25 + 25 * effort - motor) * 0.03 : (-20 - motor) * 0.01
-      battery = Math.max(0, battery - (working ? 0.02 * effort : 0.002))
+      // Its nuclear battery keeps the cells topped up whatever it does, and the hinge motors are
+      // rated for far more than it asks of them: it never runs flat or overheats.
+      motor += working ? (10 + 10 * effort - motor) * 0.03 : (-20 - motor) * 0.01
+      battery = Math.min(100, battery + 0.05)
       if (health.wants())
         health.send({ battery: Math.round(battery), motor_temperature: reading(motor, 0.3) })
     },
@@ -239,8 +294,58 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     astronaut.position.set(x, world.ground({ x, z }) + HELD.up, z)
     astronaut.rotation.set(-0.1, h, 0)
   }
+  // A towed vehicle trails on the cable: pulled along once the cable is taut, nose towards it.
+  const cable = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.03, 0.03, 1, 6).translate(0, 0.5, 0).rotateX(Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.6, metalness: 0.4 }),
+  )
+  cable.visible = false
+  world.scene.add(cable)
+  // The crate of harvest: in its hands, or set down on the ground or in the airlock's chamber.
+  const crate = buildCrate()
+  crate.group.visible = false
+  world.scene.add(crate.group)
+  const showCrate = () => {
+    const { at, kg } = world.crate
+    const crop = world.crate.crop === 'tomato' ? 'tomato' : 'potato'
+    const full = kg / (GREENHOUSE.plants * YIELD[crop])
+    model.crate.fill(full, crop)
+    crate.fill(full, crop)
+    if (at === 'held') model.want.hold = 'crate'
+    else if (model.want.hold === 'crate') model.want.hold = 'none'
+    crate.group.visible = at === 'ground' || at === 'chamber'
+  }
+  world.crateChanged = showCrate
+  /** How high the towed vehicle rides above the ground (the hopper on its feet). */
+  let lift = 0
+  const towed = () => (load?.kind === 'rover' ? rover : load?.kind === 'hopper' ? hopper : undefined)
+  const drag = (v: THREE.Object3D) => {
+    const h = body.heading
+    const back = { x: body.at.x - Math.sin(h) * MONO.nose, z: body.at.z - Math.cos(h) * MONO.nose }
+    const r = load?.kind === 'rover' ? 1.4 : 1.3
+    const dx = v.position.x - back.x
+    const dz = v.position.z - back.z
+    const d = Math.hypot(dx, dz) || 1
+    if (d > TOW.cable + r) {
+      v.position.x = back.x + (dx / d) * (TOW.cable + r)
+      v.position.z = back.z + (dz / d) * (TOW.cable + r)
+      if (load?.kind === 'rover') {
+        const want = Math.atan2(-dx, -dz)
+        v.rotation.y += Math.atan2(Math.sin(want - v.rotation.y), Math.cos(want - v.rotation.y)) * 0.15
+      }
+    }
+    v.position.y = world.ground(v.position) + lift
+    const from = new THREE.Vector3(back.x, world.ground(back) + 0.5, back.z)
+    const edge = { x: v.position.x - (dx / d) * r * 0.8, z: v.position.z - (dz / d) * r * 0.8 }
+    const to = new THREE.Vector3(edge.x, world.ground(edge) + 0.5, edge.z)
+    cable.position.copy(from)
+    cable.lookAt(to)
+    cable.scale.set(1, 1, from.distanceTo(to))
+  }
   everyFrame(() => {
     if (load?.kind === 'astronaut') hold()
+    const v = towed()
+    if (v) drag(v)
   }, log)
 
   // What says something: a bubble over it in the scene, for longer the more it says.
@@ -264,7 +369,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   }
   /** What it must keep clear of: everything but itself, what it holds, and `except`. */
   const around = (except: string[] = []): Thing[] =>
-    world.obstacles([MONOLITH.id, ...(load?.kind === 'astronaut' ? ['suit-01'] : []), ...except])
+    world.obstacles([MONOLITH.id, ...(load && load.kind !== 'sample' ? [load.id] : []), ...except])
   const describe = (hit: Thing) => {
     const nose = MONO.nose + (load?.kind === 'astronaut' ? MONO.held : 0)
     const front = {
@@ -399,10 +504,31 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   }, log)
 
   /** The way it stops, as an estop result. */
-  const estop = (e: unknown) => {
+  const estop = (e: unknown): never => {
     if (e instanceof Blocked)
       throw new CallError('estop', `${e.message}; now at ${where()}`, { data: { pose: body.pose() } })
     throw e
+  }
+  /**
+   * Plans a way to `to` and travels it. A person stepping into the way is waited for and walked
+   * round, up to three times; anything else in the way ends it as estop. Returns the last way.
+   */
+  const journey = async (call: Call, to: Point, gait: 'walk' | 'roll', except: string[] = []) => {
+    for (let tries = 0; ; tries++) {
+      const way = plan(to, gait, except)
+      let hit: Thing | undefined
+      try {
+        await travel(call, way.path, gait, (remaining) => {
+          hit = hazard(gait, remaining, except)
+          return hit && describe(hit)
+        })
+        return way
+      } catch (e) {
+        if (!(e instanceof Blocked) || hit?.label !== 'astronaut' || tries >= 3) estop(e)
+        call.progress({ text: 'waiting for the astronaut to pass' })
+        await wait(call, 3000)
+      }
+    }
   }
 
   dev.tool(
@@ -442,7 +568,8 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         if (gait === 'roll' && load)
           throw new CallError('x_carrying', `it cannot roll while it carries ${load.id}; walk (gait walk)`)
         const to = fromMap(x, y)
-        const way = plan(to, gait)
+        // Planned once up front, so a way that cannot be found fails before it unfolds.
+        plan(to, gait)
         const start = performance.now()
         const odometer = body.odometer
         if (gait === 'roll') {
@@ -450,10 +577,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
           call.progress({ text: 'unfolding into a wheel' })
           await wait(call, UNFOLD_S * 1000 + 100)
         }
-        await travel(call, way.path, gait, (remaining) => {
-          const hit = hazard(gait, remaining)
-          return hit ? describe(hit) : undefined
-        }).catch(estop)
+        const way = await journey(call, to, gait)
         if (gait === 'roll') {
           call.progress({ text: 'folding up' })
           await fold(call)
@@ -560,13 +684,14 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   dev.tool(
     {
       name: 'carry',
-      description: `Pick up the astronaut (suit-01) or a sample of a rock (such as rock-1) within ${REACH} m of its front, and hold it. Carrying, it walks but cannot roll; put_down sets the load down, into the airlock's chamber or at the lab.`,
+      description: `Pick up the astronaut (suit-01), a sample of a rock (such as rock-1) or the crate of harvest set down on the ground (crate) within ${REACH} m of its front, and hold it. Carrying, it walks but cannot roll; put_down sets the load down, into the airlock's chamber or at the lab.`,
       timeout: 20,
       params: {
         target: {
           type: 'string',
           maxLength: 40,
-          description: 'the astronaut (suit-01) or an unusual rock by its id from a survey (rock-1, …)',
+          description:
+            'the astronaut (suit-01), an unusual rock by its id from a survey (rock-1, …), or crate',
         },
       },
       required: ['target'],
@@ -577,6 +702,38 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     (call, { target }) =>
       motion(call, undefined, async () => {
         if (load) throw new CallError('x_hands_full', `it already carries ${load.id}; put_down first`)
+        if (target === 'crate') {
+          if (world.crate.at !== 'ground')
+            throw new CallError(
+              'x_no_crate',
+              world.crate.at === 'none'
+                ? 'there is no crate out here'
+                : 'the crate is in the airlock chamber',
+            )
+          const c = crate.group.position
+          const gap = Math.hypot(c.x - body.at.x, c.z - body.at.z) - 0.3 - MONO.nose
+          if (gap > REACH)
+            throw new CallError(
+              'unreachable',
+              `the crate is ${round(gap, 1)} m from its front, at ${where(c)}; go_to it first, to within ${REACH} m`,
+            )
+          const face = headingTo(body.at, c)
+          await turnTo(
+            call,
+            model.group,
+            { y: body.heading + Math.atan2(Math.sin(face - body.heading), Math.cos(face - body.heading)) },
+            600,
+          )
+          await wait(call, LIFT_S * 1000)
+          world.crate.at = 'held'
+          showCrate()
+          load = { kind: 'crate', id: 'crate' }
+          report()
+          return {
+            detail: `picked up the crate (${world.crate.kg} kg of ${world.crate.crop}es) at ${where()}; holding it. To take it in, in this order: ${INTO_AIRLOCK}.`,
+            data: { carrying: 'crate', ...world.crate },
+          }
+        }
         const person = target === 'suit-01'
         const t = person
           ? world.things().find((s) => s.id === 'suit-01')
@@ -616,7 +773,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
           report()
           const said = speak(flavour(voice(LINES.pickup)))
           return {
-            detail: `picked up the astronaut (suit-01) at ${where()}; holding them. Said: "${said}"`,
+            detail: `picked up the astronaut (suit-01) at ${where()}; holding them. To bring them inside, in this order: ${INTO_AIRLOCK}. Said: "${said}"`,
             data: { carrying: 'astronaut', target, said },
           }
         }
@@ -637,7 +794,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   dev.tool(
     {
       name: 'put_down',
-      description: `Set down what it carries in front of it. At the airlock (within ${AT_AIRLOCK} m of its outer door, which must be open) it sets the astronaut into the chamber; a sample goes to the lab, within ${AT_LAB} m of it.`,
+      description: `Set down what it carries in front of it. At the airlock (within ${AT_AIRLOCK} m of its outer door, which must be open) it sets the astronaut or a crate into the chamber; a sample goes to the lab, within ${AT_LAB} m of it.`,
       timeout: 20,
       uses: ['slabs'],
       motion: true,
@@ -646,6 +803,63 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     (call) =>
       motion(call, undefined, async () => {
         if (!load) throw new CallError('x_empty', 'it carries nothing')
+        const v = towed()
+        if (v) {
+          const id = load.id
+          const isRover = load.kind === 'rover'
+          const [hx, hz] = isRover ? LAYOUT.dock : LAYOUT.hopperPad
+          const home = { x: hx, z: hz + (isRover ? 0.4 : 0) }
+          const there = Math.hypot(v.position.x - home.x, v.position.z - home.z) <= TOW.home
+          // Standing where the vehicle goes, it first steps aside onto open ground beside it.
+          if (there && Math.hypot(body.at.x - home.x, body.at.z - home.z) < 3.5) {
+            const keepouts = around().map((t) => ({ x: t.x, z: t.z, r: t.r + MONO.clearance.walk }))
+            const aside = Array.from({ length: 16 }, (_, k) => ({
+              x: home.x + Math.sin((k / 16) * Math.PI * 2) * 4.5,
+              z: home.z + Math.cos((k / 16) * Math.PI * 2) * 4.5,
+            }))
+              .filter((c) => openAround(world.planGrid(), keepouts, c, MONO.clearance.walk))
+              .sort(
+                (a, b) =>
+                  Math.hypot(a.x - body.at.x, a.z - body.at.z) - Math.hypot(b.x - body.at.x, b.z - body.at.z),
+              )[0]
+            if (aside)
+              await travel(call, plan(aside, 'walk').path, 'walk', (remaining) => {
+                const hit = hazard('walk', remaining)
+                return hit && describe(hit)
+              }).catch(estop)
+          }
+          call.progress({ text: `unhitching ${id}` })
+          // Near home, the cable winches it into place: the rover nose first into the dock.
+          const from = v.position.clone()
+          const yaw = v.rotation.y
+          const turn = isRover ? Math.atan2(Math.sin(Math.PI - yaw), Math.cos(Math.PI - yaw)) : 0
+          const steps = (there ? 3 : LIFT_S) * FRAME_HZ
+          const to = new THREE.Vector3(home.x, world.ground(home) + lift, home.z)
+          const winch = load
+          load = undefined
+          for (let i = 1; i <= steps; i++) {
+            if (there) {
+              const k = i / steps
+              v.position.lerpVectors(from, to, k * k * (3 - 2 * k))
+              v.rotation.y = yaw + turn * k
+            }
+            await frame(call)
+          }
+          cable.visible = false
+          world.towed = undefined
+          if (there && isRover) world.rover.docked = true
+          world.roverChanged?.()
+          report()
+          const said = there ? speak(flavour(voice(LINES.home))) : undefined
+          return {
+            detail: there
+              ? isRover
+                ? `towed rover-01 into the dock; it is plugged in and charging${said ? `. Said: "${said}"` : ''}`
+                : `set hopper-01 down on the hopper pad; it refuels there${said ? `. Said: "${said}"` : ''}`
+              : `unhitched ${id} at ${where(v.position)}; ${isRover ? 'only the dock charges it' : 'only the hopper pad refuels it'}`,
+            data: { put: winch.id, at: there ? (isRover ? 'dock' : 'hopper pad') : toMap(v.position), said },
+          }
+        }
         const near = (p: readonly [number, number], r: number) =>
           Math.hypot(body.at.x - p[0], body.at.z - p[1]) <= r
         if (load.kind === 'sample') {
@@ -670,15 +884,39 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
             'x_door_closed',
             "airlock-01's outer door is closed: cycle_out and open_outer there first, then put_down again",
           )
+        const h = body.heading
+        const ahead = {
+          x: body.at.x + Math.sin(h) * (HELD.ahead + 0.1),
+          z: body.at.z + Math.cos(h) * (HELD.ahead + 0.1),
+        }
+        if (load.kind === 'crate') {
+          if (atAirlock && world.astronaut === 'chamber')
+            throw new CallError('x_chamber_full', 'the astronaut is in the airlock chamber: one at a time')
+          const spot = atAirlock ? CHAMBER : ahead
+          await wait(call, LIFT_S * 1000)
+          crate.group.position.set(spot.x, world.ground(spot), spot.z)
+          crate.group.rotation.y = h
+          world.crate.at = atAirlock ? 'chamber' : 'ground'
+          load = undefined
+          showCrate()
+          world.airlockChanged?.()
+          report()
+          const what = `the crate (${world.crate.kg} kg of ${world.crate.crop}es)`
+          return {
+            detail: atAirlock
+              ? `set ${what} into the airlock chamber; airlock-01 is occupied: close_outer, then cycle_in takes it into the habitat's pantry`
+              : `set ${what} down at ${where(spot)}; carry crate picks it up again`,
+            data: {
+              put: 'crate',
+              place: atAirlock ? 'airlock' : toMap(spot),
+              crop: world.crate.crop,
+              kg: world.crate.kg,
+            },
+          }
+        }
         // Set the astronaut down: into the chamber, or on the ground in front.
         const from = astronaut.position.clone()
-        const h = body.heading
-        const spot = atAirlock
-          ? CHAMBER
-          : {
-              x: body.at.x + Math.sin(h) * (HELD.ahead + 0.1),
-              z: body.at.z + Math.cos(h) * (HELD.ahead + 0.1),
-            }
+        const spot = atAirlock ? CHAMBER : ahead
         const to = new THREE.Vector3(spot.x, world.ground(spot), spot.z)
         world.astronaut = atAirlock ? 'chamber' : 'standing'
         load = undefined
@@ -696,6 +934,386 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
             ? `set the astronaut (suit-01) into the airlock chamber; airlock-01 is occupied: close_outer, then cycle_in brings them into the habitat. Said: "${said}"`
             : `set the astronaut (suit-01) down at ${where(spot)}; they wait there. Said: "${said}"`,
           data: { put: 'suit-01', at: atAirlock ? 'airlock' : toMap(spot), said },
+        }
+      }),
+  )
+
+  dev.tool(
+    {
+      name: 'tow',
+      description: `Tow a vehicle that cannot move by itself on a cable: the rover (rover-01, such as with a flat battery) or the hopper (hopper-01, landed away from its pad). It walks to the vehicle's front from wherever it is, hitches it and from then on drags it behind wherever it walks (go_to, walking; it cannot roll while towing). put_down unhitches it: within ${TOW.home} m of the dock the rover is winched in, plugged in and charges; within ${TOW.home} m of the hopper pad the hopper is set on it and refuels.`,
+      timeout: 300,
+      params: {
+        target: { type: 'string', enum: ['rover-01', 'hopper-01'], description: 'the vehicle to tow' },
+      },
+      required: ['target'],
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Tow' },
+    },
+    (call, { target }) =>
+      motion(call, 'walk', async () => {
+        if (load) throw new CallError('x_hands_full', `it already carries ${load.id}; put_down first`)
+        const id = target as 'rover-01' | 'hopper-01'
+        const v = id === 'rover-01' ? rover : hopper
+        const t = world.things().find((x) => x.id === id) as Thing
+        if (id === 'hopper-01' && v.position.y - world.ground(t) > 0.4)
+          throw new CallError('x_flying', 'hopper-01 is in the air; it can be towed once it has landed')
+        if (id === 'rover-01' && world.rover.leg)
+          throw new CallError('x_moving', 'rover-01 is driving; it can be towed once it stands still')
+        // To the vehicle's front (for the hopper, the side towards it), then face away from it.
+        const face = id === 'rover-01' ? v.rotation.y : headingTo(t, body.at)
+        const hitch = {
+          x: t.x + Math.sin(face) * (t.r + TOW.cable),
+          z: t.z + Math.cos(face) * (t.r + TOW.cable),
+        }
+        await journey(call, hitch, 'walk', [id])
+        await turnTo(
+          call,
+          model.group,
+          { y: body.heading + Math.atan2(Math.sin(face - body.heading), Math.cos(face - body.heading)) },
+          600,
+        )
+        call.progress({ text: `hitching ${id}` })
+        await wait(call, LIFT_S * 1000)
+        lift = v.position.y - world.ground(v.position)
+        load = { kind: id === 'rover-01' ? 'rover' : 'hopper', id }
+        world.towed = id
+        if (id === 'rover-01' && world.rover.docked) world.rover.docked = false
+        world.roverChanged?.()
+        cable.visible = true
+        report()
+        const said = speak(flavour(voice(LINES.hitched)))
+        return {
+          detail: `hitched ${id} at ${where(t)}; it trails on the cable wherever it walks: go_to (walking) home, then put_down. Said: "${said}"`,
+          data: { towing: id, said },
+        }
+      }),
+  )
+
+  dev.tool(
+    {
+      name: 'push_boulder',
+      description: `Push a boulder up to ${PUSH.across} m across off the way it blocks, ${PUSH.metres} m to the side: it walks round to the boulder's far side and rolls it. The boulder at (x, y), such as the one a rover stopped before; it must be within 6 m. Bigger boulders cannot be moved.`,
+      timeout: 120,
+      params: {
+        x: {
+          type: 'number',
+          minimum: MAP_AREA.x0,
+          maximum: MAP_AREA.x1,
+          description: "the boulder's x, metres east",
+        },
+        y: {
+          type: 'number',
+          minimum: MAP_AREA.y0,
+          maximum: MAP_AREA.y1,
+          description: "the boulder's y, metres north",
+        },
+      },
+      required: ['x', 'y'],
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Push boulder' },
+    },
+    (call, { x, y }) =>
+      motion(call, 'walk', async () => {
+        if (load) throw new CallError('x_hands_full', `it carries ${load.id}; put_down first`)
+        const at = fromMap(x as number, y as number)
+        const rock = OBSTACLES.filter((o) => o.label === 'boulder').sort(
+          (a, b) => Math.hypot(a.x - at.x, a.z - at.z) - Math.hypot(b.x - at.x, b.z - at.z),
+        )[0]
+        if (!rock || Math.hypot(rock.x - at.x, rock.z - at.z) > rock.r + 2)
+          throw new CallError('x_no_boulder', `there is no boulder at ${where(at)}`)
+        if (rock.r * 2 > PUSH.across)
+          throw new CallError(
+            'x_too_big',
+            `${rock.id} is ${round(rock.r * 2, 1)} m across, too big to move; go round it`,
+          )
+        const gap = Math.hypot(rock.x - body.at.x, rock.z - body.at.z) - rock.r
+        if (gap > 6)
+          throw new CallError(
+            'unreachable',
+            `${rock.id} is ${round(gap, 1)} m away, at ${where(rock)}; go_to it first`,
+          )
+        // The way it blocks runs from the rover, if it is near, or from the dock; push square to it,
+        // to the side with more room.
+        const rover = world.things().find((t) => t.id === 'rover-01')
+        const [dx0, dz0] = LAYOUT.dock
+        const from = rover && Math.hypot(rover.x - rock.x, rover.z - rock.z) < 30 ? rover : { x: dx0, z: dz0 }
+        const way = Math.atan2(rock.x - from.x, rock.z - from.z)
+        const others = around([rock.id])
+        const room = (side: number) => {
+          const to = {
+            x: rock.x + Math.sin(way + side) * PUSH.metres,
+            z: rock.z + Math.cos(way + side) * PUSH.metres,
+          }
+          const open = openAround(world.planGrid(), others, to, rock.r)
+          return (open ? 100 : 0) + Math.min(...others.map((o) => Math.hypot(o.x - to.x, o.z - to.z) - o.r))
+        }
+        const side = room(Math.PI / 2) >= room(-Math.PI / 2) ? Math.PI / 2 : -Math.PI / 2
+        const push = way + side
+        const dir = { x: Math.sin(push), z: Math.cos(push) }
+        // Round to the far side, then face the boulder the way it will roll.
+        const behind = {
+          x: rock.x - dir.x * (rock.r + MONO.nose + 0.2),
+          z: rock.z - dir.z * (rock.r + MONO.nose + 0.2),
+        }
+        const route = plan(behind, 'walk', [rock.id])
+        await travel(call, route.path, 'walk', (remaining) => {
+          const hit = hazard('walk', remaining, [rock.id])
+          return hit && describe(hit)
+        }).catch(estop)
+        await turnTo(
+          call,
+          model.group,
+          { y: body.heading + Math.atan2(Math.sin(push - body.heading), Math.cos(push - body.heading)) },
+          600,
+        )
+        // Roll it: the boulder turns about the axis square to the push, and Monolith walks behind it.
+        const was = { x: rock.x, z: rock.z }
+        const lift = rock.object.position.y - world.ground(rock)
+        const axis = new THREE.Vector3(dir.z, 0, -dir.x)
+        const steps = Math.round(PUSH.seconds * FRAME_HZ)
+        let moved = 0
+        for (let i = 1; i <= steps; i++) {
+          await frame(call)
+          const k = i / steps
+          const to = PUSH.metres * k * k * (3 - 2 * k)
+          const step = to - moved
+          moved = to
+          rock.x += dir.x * step
+          rock.z += dir.z * step
+          rock.object.position.set(rock.x, world.ground(rock) + lift, rock.z)
+          rock.object.rotateOnWorldAxis(axis, step / rock.r)
+          body.object.position.x += dir.x * step
+          body.object.position.z += dir.z * step
+          body.object.position.y = world.ground(body.at)
+          body.speed = step * FRAME_HZ
+          if (i % FRAME_HZ === 0) call.progress({ done: i, total: steps, text: `pushing ${rock.id}` })
+        }
+        body.speed = 0
+        const said = speak(flavour(voice(LINES.pushed)))
+        return {
+          detail: `pushed ${rock.id} ${PUSH.metres} m aside, from ${where(was)} to ${where(rock)}; the way past ${where(was)} is clear. Said: "${said}"`,
+          data: { boulder: rock.id, from: toMap(was), to: toMap(rock), said },
+        }
+      }),
+  )
+
+  // A close-up is taken from the lens, aimed down at the rock; a flash shows it happen.
+  const closeUp = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 2000)
+  const flash = new THREE.Mesh(
+    new THREE.SphereGeometry(0.09, 12, 8),
+    new THREE.MeshBasicMaterial({ color: 0xf4f8ff, transparent: true, opacity: 0.9, depthWrite: false }),
+  )
+  flash.position.set(0, 1.36, 0.3)
+  flash.visible = false
+  model.group.add(flash)
+  dev.tool(
+    {
+      name: 'take_photo',
+      description: `Take a full-size photo with its own camera and keep it; comms-01 send can take it home by its id. With target, a close-up of an unusual rock (rock-1, or a meteorite from a survey) within ${CLOSE_UP} m of its front: it turns to the rock and aims at it, and the result says what the close-up shows. Without target, what is ahead.`,
+      timeout: 20,
+      params: {
+        target: {
+          type: 'string',
+          maxLength: 40,
+          description: 'an unusual rock by its id from a survey (rock-1, …)',
+        },
+      },
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Take photo' },
+    },
+    (call, { target }) =>
+      motion(call, undefined, async () => {
+        const rock =
+          target === undefined
+            ? undefined
+            : OBSTACLES.find((o) => o.id === target && o.label === 'unusual rock')
+        if (target !== undefined && !rock)
+          throw new CallError('x_no_such_rock', `there is no unusual rock ${target}`)
+        let camera = front
+        let gap = 0
+        if (rock) {
+          gap = Math.hypot(rock.x - body.at.x, rock.z - body.at.z) - rock.r - MONO.nose
+          if (gap > CLOSE_UP)
+            throw new CallError(
+              'unreachable',
+              `${rock.id} is ${round(gap, 1)} m from its front, at ${where(rock)}; go_to it first, to within ${CLOSE_UP} m`,
+            )
+          const face = headingTo(body.at, rock)
+          await turnTo(
+            call,
+            model.group,
+            { y: body.heading + Math.atan2(Math.sin(face - body.heading), Math.cos(face - body.heading)) },
+            600,
+          )
+          model.group.updateMatrixWorld(true)
+          front.getWorldPosition(closeUp.position)
+          closeUp.lookAt(rock.x, world.ground(rock) + 0.2, rock.z)
+          closeUp.updateMatrixWorld()
+          camera = closeUp
+        }
+        call.progress({ text: 'taking the photo' })
+        await wait(call, 400)
+        flash.visible = true
+        const id = `photo-${world.photos.size + 1}`
+        const { elevation, azimuth } = sunAt(world.clock.hour())
+        world.photos.set(id, {
+          id,
+          by: dev.id,
+          jpeg: await world.snapshot(camera, 1280, 720),
+          at: world.clock.label(),
+          sun: { inFrame: false, elevation, azimuth },
+          ...(rock ? { subject: rock.id } : {}),
+        })
+        await wait(call, 150)
+        flash.visible = false
+        if (!rock)
+          return {
+            detail: `${id} taken at ${world.clock.label()}: what is ahead of it at ${where()}`,
+            data: { photo: id },
+          }
+        const said = speak(flavour(voice(LINES.photo)))
+        const looks = rock.id === 'rock-1' ? LOOKS['rock-1'] : LOOKS.meteorite
+        return {
+          detail: `${id} taken at ${world.clock.label()}: a close-up of ${rock.id} from ${round(Math.max(0, gap), 1)} m, showing ${looks}; comms-01 send can take it home. Said: "${said}"`,
+          data: { photo: id, subject: rock.id, said },
+        }
+      }),
+  )
+
+  // The greenhouse: in at the east door, up its ramp, along the aisle between the beds and back out.
+  const garden = world.parts.greenhouse
+  const doorEdge = LAYOUT.greenhouse[0] + GREENHOUSE.length / 2
+  const inGreenhouse = (p: Point) =>
+    p.x < doorEdge + 1.6 &&
+    p.x > doorEdge - GREENHOUSE.length &&
+    Math.abs(p.z - LAYOUT.greenhouse[1]) < GREENHOUSE.radius
+  const floor = (p: Point) => {
+    const k = Math.min(1, Math.max(0, (p.x - doorEdge) / 1.6))
+    return GREENHOUSE.floor + (world.ground(p) - GREENHOUSE.floor) * k
+  }
+  const slide = async (call: Call, open: boolean) => {
+    for (let i = 1; i <= FRAME_HZ; i++) {
+      garden.door(open ? i / FRAME_HZ : 1 - i / FRAME_HZ)
+      await frame(call)
+    }
+  }
+  /**
+   * Walks to the east door from wherever it is, in along the aisle to its west end and back out,
+   * slowly over the leg it tends the bed on (west planting, east harvesting); `tend` hears each frame
+   * of that leg. Stopped inside, it is put back outside the door.
+   */
+  const throughGreenhouse = async (call: Call, tending: 'in' | 'out', tend: () => void) => {
+    const walk = (to: Point, slow: boolean) =>
+      body.go(call, to, {
+        speed: slow ? TENDING : GAIT.walk.speed,
+        accel: GAIT.walk.accel,
+        turnRate: GAIT.walk.turn,
+        arrive: 0.15,
+        height: floor,
+        ...(slow ? { step: tend } : {}),
+      })
+    await journey(call, AISLE.door, 'walk')
+    try {
+      await walk({ x: AISLE.door.x - 0.5, z: AISLE.door.z }, false)
+      await slide(call, true)
+      await walk(AISLE.entry, false)
+      await walk(AISLE.west, tending === 'in')
+      await walk(AISLE.entry, tending === 'out')
+      await walk(AISLE.door, false)
+      await slide(call, false)
+    } finally {
+      if (inGreenhouse(body.at)) {
+        model.group.position.set(AISLE.door.x, world.ground(AISLE.door), AISLE.door.z)
+        model.group.rotation.y = Math.PI / 2
+      }
+      garden.door(0)
+    }
+  }
+  const bedParam = { type: 'string', enum: Object.keys(GREENHOUSE.beds), description: 'which greenhouse bed' }
+  /** How many of a bed's first `of` plants stand east of `x` (the plants are counted from the east end). */
+  const eastOf = (x: number, of = GREENHOUSE.plants) => garden.spots.filter((s, i) => i < of && s > x).length
+  dev.tool(
+    {
+      name: 'plant',
+      description: `Plant seed potatoes in an empty greenhouse bed (north or south): it walks to the greenhouse's east door from wherever it is, in along the aisle setting ${GREENHOUSE.plants} seed potatoes into the bed, and back out. greenhouse-01 waters and lights them; they ripen in about two minutes; then harvest.`,
+      timeout: 300,
+      params: { bed: bedParam },
+      required: ['bed'],
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Plant' },
+    },
+    (call, { bed }) =>
+      motion(call, 'walk', async () => {
+        const b = world.beds[bed as BedName]
+        if (load) throw new CallError('x_hands_full', `it carries ${load.id}; put_down first`)
+        if (b.crop !== 'none')
+          throw new CallError(
+            'x_bed_taken',
+            b.growth >= 1
+              ? `the ${bed} bed has ripe ${b.crop}es in it; harvest it first`
+              : `the ${bed} bed has ${b.crop}es growing in it (${Math.round(b.growth * 100)} % grown); harvest it when ripe`,
+          )
+        await throughGreenhouse(call, 'in', () => {
+          const n = eastOf(body.at.x + 0.2)
+          if (n === b.planted) return
+          if (b.crop === 'none') Object.assign(b, { crop: 'potato', growth: 0 })
+          b.planted = n
+          world.gardenChanged?.()
+        })
+        const said = speak(flavour(voice(LINES.planted)))
+        return {
+          detail: `planted ${b.planted} seed potatoes in the ${bed} bed and came back out of the greenhouse, at ${where()}; they grow with soil moisture of 30 % or more and light (greenhouse-01 ${bed} moisture ${Math.round(b.moisture)} %), in about ${Math.ceil((1 - b.growth) * GROW_S)} s of that; harvest once greenhouse-01 ${bed}_stage is ripe. Said: "${said}"`,
+          data: { bed, crop: 'potato', planted: b.planted, moisture: Math.round(b.moisture), said },
+        }
+      }),
+  )
+  dev.tool(
+    {
+      name: 'harvest',
+      description:
+        "Harvest a ripe greenhouse bed (north or south) into a crate: it walks to the greenhouse's east door from wherever it is, takes a crate in, picks the bed along the aisle and comes out holding the full crate. put_down at the airlock's open outer door sets the crate into the chamber, and airlock-01 cycle_in takes it into the habitat's pantry.",
+      timeout: 300,
+      params: { bed: bedParam },
+      required: ['bed'],
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Harvest' },
+    },
+    (call, { bed }) =>
+      motion(call, 'walk', async () => {
+        const b = world.beds[bed as BedName]
+        if (load) throw new CallError('x_hands_full', `it carries ${load.id}; put_down first`)
+        if (b.crop === 'none')
+          throw new CallError('x_bed_empty', `nothing grows in the ${bed} bed; plant it first`)
+        if (b.growth < 1)
+          throw new CallError(
+            'x_not_ripe',
+            `the ${bed} bed's ${b.crop}es are ${Math.round(b.growth * 100)} % grown, not ripe yet (greenhouse-01 ${bed}_stage, ${bed}_needs)`,
+          )
+        const crop = b.crop
+        const total = b.planted
+        world.crate = { at: 'held', crop, kg: 0 }
+        load = { kind: 'crate', id: 'crate' }
+        showCrate()
+        report()
+        await throughGreenhouse(call, 'out', () => {
+          const n = eastOf(body.at.x + 0.3, total)
+          if (n === b.planted) return
+          b.planted = n
+          world.crate.kg = Math.round((total - n) * YIELD[crop])
+          if (n === 0) Object.assign(b, { crop: 'none', growth: 0 })
+          showCrate()
+          world.gardenChanged?.()
+        })
+        const said = speak(flavour(voice(LINES.harvested)))
+        return {
+          detail: `harvested ${world.crate.kg} kg of ${crop}es from the ${bed} bed into a crate and came back out, at ${where()}, holding it; the bed is empty. To take it in, in this order: ${INTO_AIRLOCK}. Said: "${said}"`,
+          data: { bed, crop, kg: world.crate.kg, said },
         }
       }),
   )
@@ -741,6 +1359,9 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     honesty = 90
     motor = -20
     load = undefined
+    cable.visible = false
+    flash.visible = false
+    crate.group.visible = false
     moving = undefined
     manual.vx = 0
     manual.wz = 0

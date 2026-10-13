@@ -6,7 +6,7 @@
  */
 import { createContext, type ReactNode, useContext, useEffect, useState } from 'react'
 import { Bar, ByIcon, KindIcon } from '../controls/ui.js'
-import { argsText, BRAIN_TOOLS, displayName, keyFields, untilText } from '../core/describe.js'
+import { argsText, BRAIN_TOOLS, displayName, keyFields } from '../core/describe.js'
 import type {
   By,
   Device,
@@ -471,48 +471,6 @@ function StopCard(props: { node: ToolNode }) {
   )
 }
 
-function WatchCard(props: { node: ToolNode }) {
-  const args = parse(props.node.argsPreview)
-  const data = useDetail(props.node)
-  const events = useEvents()
-  const watch = data?.watch as string | undefined
-  const fired = watch ? events.find((e) => e.type === 'watch' && e.data.watch === watch) : undefined
-  const until = (args.until as Json | undefined) ?? (data?.until as Json | undefined)
-  return (
-    <Shell
-      node={props.node}
-      tone={
-        fired
-          ? fired.data.matched
-            ? 'ok'
-            : 'off'
-          : toneOf(props.node) === 'ok'
-            ? 'busy'
-            : toneOf(props.node)
-      }
-      verb={t('card.watch')}
-      device={(data?.device as string | undefined) ?? (args.device as string | undefined)}
-      what={until ? <code>{untilText(until)}</code> : undefined}
-      status={fired ? fired.text : <Status node={props.node} />}
-    >
-      {typeof args.note === 'string' && <div className="mhs-note">{args.note}</div>}
-    </Shell>
-  )
-}
-
-function UnwatchCard(props: { node: ToolNode }) {
-  const args = parse(props.node.argsPreview)
-  return (
-    <Shell
-      node={props.node}
-      tone={toneOf(props.node)}
-      verb={t('card.unwatch')}
-      what={<code>{String(args.watch ?? '')}</code>}
-      status={<Status node={props.node} />}
-    />
-  )
-}
-
 function Status(props: { node: ToolNode }) {
   const s = props.node.status
   if (s === 'completed') return <>{t('status.done')}</>
@@ -537,10 +495,6 @@ export function ToolCard(props: { owner?: { block?: ToolNode } }) {
       return <SetCard node={node} />
     case 'stop_device':
       return <StopCard node={node} />
-    case 'watch_device':
-      return <WatchCard node={node} />
-    case 'unwatch_device':
-      return <UnwatchCard node={node} />
     default:
       return null
   }

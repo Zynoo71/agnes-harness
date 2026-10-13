@@ -1,7 +1,9 @@
 /**
- * The flow view: the LLM and the DM at the top, AgnesHub below them as a bus down the left edge, and every
- * device in a column of wide cards, each joined to the bus by two lanes: MHS, the command channel
- * (calls, control, state, results), and MOS, the Nerve data channel (data streams, manual input).
+ * The flow view: the LLM and the DM at the top, AgnesHub below them as a banner with its bus down the
+ * middle, and the devices in two columns either side of it (one column, the bus down the left edge, in
+ * a narrow panel), devices with a picture first. Each card is joined to the bus by two lanes: MHS, the
+ * command channel (calls, control, state, results), and MOS, the Nerve data channel (data streams,
+ * manual input).
  * It only moves when something is exchanged: a comet per call (bright, down) and per result (dim,
  * up) on MHS, particles at the rate AgnesHub counted on Nerve (hub/traffic), amber ones while a
  * person drives. A call rides down the line of whoever made it, the LLM's (accent) on the left or
@@ -10,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ByIcon } from '../controls/ui.js'
 import { type Rgb, rgba, rgbOf } from '../core/color.js'
-import { displayName, keyFields, previewImage, tone } from '../core/describe.js'
+import { displayName, keyFields, primaryImage, tone } from '../core/describe.js'
 import type { BrainPulse, Traffic } from '../core/store.js'
 import type { By, Device, HubEvent } from '../core/types.js'
 import { num, t } from '../i18n/i18n.js'
@@ -28,22 +30,31 @@ import { ImageView, VideoView } from '../widgets/image.js'
 import type { Brain } from './panel.js'
 import { Doing, HealthText, PositionText, StatePill } from './parts.js'
 
-/** The two bus lines down the left edge, and where the cards start. */
+/** In one column: the two bus lines down the left edge, and where the cards start. */
 const MHS_X = 22
 const NERVE_X = 34
 const CARD_X = 56
+/**
+ * Either side of the bus from this width, and two columns a side from the next; each inner card's
+ * edge this far from the bus, the outer ones' from the panel's, and this far between columns.
+ */
+const TWO_COLUMNS = 480
+const FOUR_COLUMNS = 1100
+const GUTTER = 30
+const SIDE = 12
+const COLUMN_GAP = 14
 const BRAIN_Y = 10
 const BRAIN_H = 48
 const BRAIN_X = 36
 const HUB_Y = 84
-const HUB_H = 28
+const HUB_H = 64
 /** Where a step the DM hands to the LLM crosses, between the two nodes and AgnesHub. */
 const HAND_Y = BRAIN_Y + BRAIN_H + 13
 /** The DM's last decision stays on its node this long. */
 const DM_SHOWN_MS = 15_000
 /** A card's text part until the card is measured; a device with a picture shows it above, as wide as the card. */
-const INFO_H = 184
-const CARD_GAP = 16
+const INFO_H = 150
+const CARD_GAP = 14
 const PICTURE_MAX = 260
 /** Where each lane enters a card, from its top. */
 const MHS_IN = 24
@@ -66,30 +77,75 @@ interface Dot {
   by?: By
 }
 
+/** Where a card sits: its top and left edge, and which side of the bus it is on. */
+interface Slot {
+  top: number
+  left: number
+  side: 'left' | 'right' | 'one'
+}
+
 interface Geometry {
   width: number
   height: number
-  /** Card tops by device id. */
-  cards: Map<string, number>
+  cards: Map<string, Slot>
+  cardWidth: number
   /** Picture heights by device id: 0 for a device without one. */
   pictures: Map<string, number>
-  /** The AgnesHub bar's top: under the brain, or at the top on a page without one. */
+  /** The AgnesHub banner's top: under the brain, or at the top on a page without one. */
   hub: number
+  /** The bus lines' x. */
+  mhsX: number
+  nerveX: number
 }
 
-/** Devices in one column to the right of the bus, so each card can be wide and as tall as its content. */
+/**
+ * Devices with a picture first, then in rows either side of the bus, the columns next to it filled
+ * first, each row as tall as its tallest card; in a narrow panel, one column to the right of a bus
+ * down the left edge.
+ */
 function layout(devices: Device[], width: number, heights: Map<string, number>, hub: number): Geometry {
-  const cards = new Map<string, number>()
+  const two = width >= TWO_COLUMNS
+  const perSide = width >= FOUR_COLUMNS ? 2 : 1
+  const mid = Math.round(width / 2)
+  const cardWidth = two
+    ? Math.floor((width - 2 * SIDE - 2 * GUTTER - 2 * (perSide - 1) * COLUMN_GAP) / (2 * perSide))
+    : width - CARD_X - SIDE
+  const cards = new Map<string, Slot>()
   const pictures = new Map<string, number>()
-  const picture = Math.min(PICTURE_MAX, Math.round(((width - CARD_X - 12) * 9) / 16))
+  const picture = Math.min(PICTURE_MAX, Math.round(((cardWidth - 16) * 9) / 16))
+  const ordered = [...devices.filter((d) => primaryImage(d)), ...devices.filter((d) => !primaryImage(d))]
+  const perRow = two ? 2 * perSide : 1
+  const step = cardWidth + COLUMN_GAP
   let y = hub + HUB_H + 20
-  for (const d of devices) {
-    const h = previewImage(d) ? picture : 0
-    cards.set(d.id, y)
-    pictures.set(d.id, h)
-    y += (heights.get(d.id) ?? h + INFO_H) + CARD_GAP
+  for (let i = 0; i < ordered.length; i += perRow) {
+    let tallest = 0
+    for (const [k, d] of ordered.slice(i, i + perRow).entries()) {
+      // k: 0 next to the bus on the left, 1 on the right, 2 and 3 the columns beyond them.
+      const side = !two ? 'one' : k % 2 === 0 ? 'left' : 'right'
+      const column = Math.floor(k / 2)
+      const left =
+        side === 'one'
+          ? CARD_X
+          : side === 'left'
+            ? mid - GUTTER - cardWidth - column * step
+            : mid + GUTTER + column * step
+      const h = primaryImage(d) ? picture : 0
+      cards.set(d.id, { top: y, left, side })
+      pictures.set(d.id, h)
+      tallest = Math.max(tallest, heights.get(d.id) ?? h + INFO_H)
+    }
+    y += tallest + CARD_GAP
   }
-  return { width, height: y, cards, pictures, hub }
+  return {
+    width,
+    height: y,
+    cards,
+    cardWidth,
+    pictures,
+    hub,
+    mhsX: two ? mid - 5 : MHS_X,
+    nerveX: two ? mid + 5 : NERVE_X,
+  }
 }
 
 /**
@@ -110,14 +166,16 @@ function path(g: Geometry, lane: Lane, device?: string): [number, number][] {
       [dmX, HAND_Y],
       [BRAIN_X, HAND_Y],
     ]
-  const top = g.cards.get(device ?? '')
-  if (top === undefined) return []
-  const x = lane === 'mhs' ? MHS_X : NERVE_X
-  const y = top + (lane === 'mhs' ? MHS_IN : NERVE_IN)
+  const slot = g.cards.get(device ?? '')
+  if (slot === undefined) return []
+  const x = lane === 'mhs' ? g.mhsX : g.nerveX
+  const y = slot.top + (lane === 'mhs' ? MHS_IN : NERVE_IN)
+  // A lane meets a card at its edge nearest the bus.
+  const edge = slot.side === 'left' ? slot.left + g.cardWidth : slot.left
   return [
     [x, g.hub + HUB_H],
     [x, y],
-    [CARD_X, y],
+    [edge, y],
   ]
 }
 
@@ -149,7 +207,8 @@ function rate(n: number): string {
 
 function kbps(bytes: number): string {
   if (bytes <= 0) return ''
-  return bytes >= 1_000_000 ? ` · ${num(bytes / 1_000_000, 1)} MB/s` : ` · ${num(bytes / 1000, 0)} kB/s`
+  if (bytes >= 1_000_000) return ` · ${num(bytes / 1_000_000, 1)} MB/s`
+  return ` · ${num(bytes / 1000, bytes < 10_000 ? 1 : 0)} kB/s`
 }
 
 const THUMB_HZ = 5
@@ -157,6 +216,7 @@ const THUMB_HZ = 5
 function DeviceCard(props: {
   device: Device
   top: number
+  left: number
   width: number
   picture: number
   traffic: Traffic | undefined
@@ -165,7 +225,7 @@ function DeviceCard(props: {
   const nav = useNav()
   const d = props.device
   const tr = props.traffic
-  const picture = props.picture > 0 ? previewImage(d) : undefined
+  const picture = props.picture > 0 ? primaryImage(d) : undefined
   const card = useRef<HTMLElement | null>(null)
   const { onHeight } = props
 
@@ -183,7 +243,7 @@ function DeviceCard(props: {
       ref={card}
       className="mhs-flow-device"
       data-tone={tone(d)}
-      style={{ left: CARD_X, top: props.top, width: props.width }}
+      style={{ left: props.left, top: props.top, width: props.width }}
     >
       {picture && (
         <div className="mhs-flow-thumb" style={{ height: props.picture }}>
@@ -202,20 +262,26 @@ function DeviceCard(props: {
         <StatePill device={d} />
         <span className="mhs-flow-status">
           <HealthText health={d.health} />
-          {d.position && <PositionText position={d.position} detail />}
+          {d.position && <PositionText position={d.position} />}
         </span>
         <Doing device={d} compact />
         <span className="mhs-fields mhs-flow-fields">
-          {keyFields(d, 3).map(([name, field]) => (
+          {keyFields(d, 2).map(([name, field]) => (
             <FieldView key={name} name={name} field={field} value={d.state.values[name]} />
           ))}
         </span>
         <span className="mhs-flow-rates">
-          <span data-lane="mhs" title={t('flow.lane.mhs')}>
-            <b>MHS</b> ↓{rate(tr?.mhs_down ?? 0)} ↑{rate(tr?.mhs_up ?? 0)}
+          <span title={t('flow.lane.mhs')}>
+            <b className="mhs-lane" data-lane="mhs">
+              MHS
+            </b>{' '}
+            ↓{rate(tr?.mhs_down ?? 0)} ↑{rate(tr?.mhs_up ?? 0)}
           </span>
-          <span data-lane="nerve" title={t('flow.lane.mos')}>
-            <b>MOS</b> ↑{rate(tr?.nerve_up ?? 0)}
+          <span title={t('flow.lane.mos')}>
+            <b className="mhs-lane" data-lane="nerve">
+              MOS
+            </b>{' '}
+            ↑{rate(tr?.nerve_up ?? 0)}
             {kbps(tr?.bytes_up ?? 0)}
             {tr?.nerve_down ? ` ↓${rate(tr.nerve_down)}` : ''}
           </span>
@@ -322,9 +388,10 @@ export function Flow(props: { brain?: Brain | undefined }) {
   // One animation loop draws every comet and particle, in the panel's own colours.
   useEffect(() => {
     let raf = 0
-    let colors: { accent: Rgb; dm: Rgb; dim: Rgb; warn: Rgb; glow: boolean } = {
+    let colors: { accent: Rgb; dm: Rgb; mos: Rgb; dim: Rgb; warn: Rgb; glow: boolean } = {
       accent: [50, 72, 175],
       dm: [15, 138, 122],
+      mos: [124, 77, 214],
       dim: [66, 70, 86],
       warn: [128, 94, 33],
       glow: false,
@@ -350,6 +417,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
         colors = {
           accent: read('--mhs-accent', colors.accent),
           dm: read('--mhs-dm', colors.dm),
+          mos: read('--mhs-mos', colors.mos),
           dim: read('--mhs-text-3', colors.dim),
           warn: read('--mhs-warn', colors.warn),
           glow: glow !== '' && glow !== 'transparent',
@@ -391,7 +459,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
           ctx.shadowBlur = 0
         } else {
           // A data particle: a small dot that fades in and out, so a busy stream stays a dotted line.
-          const color = d.kind === 'drive' ? colors.warn : colors.accent
+          const color = d.kind === 'drive' ? colors.warn : colors.mos
           const fade = Math.min(1, t * 6, (1 - t) * 6)
           ctx.shadowColor = colors.glow || d.kind === 'drive' ? rgba(color, 0.8) : 'rgba(0, 0, 0, 0)'
           ctx.shadowBlur = 5
@@ -427,18 +495,18 @@ export function Flow(props: { brain?: Brain | undefined }) {
           </>
         )}
         {devices.map((d) => {
-          const top = g.cards.get(d.id) ?? 0
+          const top = g.cards.get(d.id)?.top ?? 0
           return (
             <g key={d.id}>
               <polyline points={line(path(g, 'mhs', d.id))} className="mhs-flow-mhs" />
               <polyline points={line(path(g, 'nerve', d.id))} className="mhs-flow-nerve" />
-              <circle cx={MHS_X} cy={top + MHS_IN} r={2.5} className="mhs-flow-port" />
+              <circle cx={g.mhsX} cy={top + MHS_IN} r={2.5} className="mhs-flow-port" />
               <rect
-                x={NERVE_X - 2.5}
+                x={g.nerveX - 2.5}
                 y={top + NERVE_IN - 2.5}
                 width={5}
                 height={5}
-                transform={`rotate(45 ${NERVE_X} ${top + NERVE_IN})`}
+                transform={`rotate(45 ${g.nerveX} ${top + NERVE_IN})`}
                 className="mhs-flow-port"
                 data-lane="nerve"
               />
@@ -486,27 +554,36 @@ export function Flow(props: { brain?: Brain | undefined }) {
         </div>
       )}
       <div className="mhs-flow-hub" style={{ top: g.hub, left: 12, width: g.width - 24, height: HUB_H }}>
-        <b>AgnesHub</b>
-        <span className="mhs-dim">
-          <span title={t('flow.lane.mhs')}>
-            <i className="mhs-flow-key" data-lane="mhs" />
-            MHS
+        <span className="mhs-flow-hub-mark" aria-hidden="true" />
+        <span className="mhs-flow-hub-name">
+          <b>{t('flow.hub')}</b>
+          {t('flow.hub.sub') && <small>{t('flow.hub.sub')}</small>}
+        </span>
+        <span className="mhs-flow-hub-side">
+          <span className="mhs-flow-hub-stats">
+            {t('flow.hub.online', { n: devices.filter((d) => d.available).length, total: devices.length })}
+            {fresh ? hubRates(traffic) : ''}
           </span>
-          <span title={t('flow.lane.mos')}>
-            <i className="mhs-flow-key" data-lane="nerve" />
-            MOS
+          <span className="mhs-flow-hub-lanes">
+            <span className="mhs-lane" data-lane="mhs" title={t('flow.lane.mhs')}>
+              MHS <em>{t('flow.lane.mhs.short')}</em>
+            </span>
+            <span className="mhs-lane" data-lane="nerve" title={t('flow.lane.mos')}>
+              MOS <em>{t('flow.lane.mos.short')}</em>
+            </span>
           </span>
         </span>
       </div>
       {devices.map((d) => {
-        const top = g.cards.get(d.id)
-        if (top === undefined) return null
+        const slot = g.cards.get(d.id)
+        if (slot === undefined) return null
         return (
           <DeviceCard
             key={d.id}
             device={d}
-            top={top}
-            width={g.width - CARD_X - 12}
+            top={slot.top}
+            left={slot.left}
+            width={g.cardWidth}
             picture={g.pictures.get(d.id) ?? 0}
             traffic={fresh ? traffic.devices[d.id] : undefined}
             onHeight={onHeight}
@@ -515,6 +592,17 @@ export function Flow(props: { brain?: Brain | undefined }) {
       })}
     </div>
   )
+}
+
+/** All devices' calls and results a second on MHS, and data on MOS, each only while there is some. */
+function hubRates(traffic: { devices: Record<string, Traffic> }): string {
+  let calls = 0
+  let bytes = 0
+  for (const tr of Object.values(traffic.devices)) {
+    calls += tr.mhs_down + tr.mhs_up
+    bytes += tr.bytes_up
+  }
+  return `${calls > 0 ? ` · MHS ${rate(calls)}` : ''}${bytes > 0 ? ` · MOS${kbps(bytes).slice(2)}` : ''}`
 }
 
 /** What the DM's node says: off, on duty, or its last decision here. */

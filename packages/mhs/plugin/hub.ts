@@ -1,7 +1,7 @@
 /**
  * AgnesHub as an Agnes backend plugin: devices on /ws/mhs and /ws/nerve, clients on /ws/hub and the
  * Devices panel as a page of its own at /, all on its own port while the plugin is loaded, and the
- * brain's device tools, per-turn snapshot and wake-ups (server/hub-api.md section 15). Bundled with
+ * brain's device tools, per-turn snapshot and page prompts (server/hub-api.md section 15). Bundled with
  * its dependencies into dist/hub.mjs (tools/build-plugin.ts), because an installed plugin snapshot
  * carries no node_modules.
  *
@@ -24,7 +24,7 @@ import { Dm } from '../server/dm.js'
 import { ClefModel, type DecisionModel, JevModel } from '../server/dm-models.js'
 import { North } from '../server/north.js'
 import { South } from '../server/south.js'
-import { wake } from './daemon.js'
+import { post } from './daemon.js'
 import { type DmLink, dmOperation } from './dm.js'
 import { type Extension, registerBrainTools } from './tools.js'
 
@@ -139,6 +139,8 @@ export const presets = {
     extends: 'standard',
     model: { prompt_sections: [] },
     compaction: { agent_callable: false },
+    // call_device waits for the device to finish: a walk across the base can take minutes.
+    tools: { timeouts: { call_device: 900_000 } },
   },
 }
 
@@ -162,7 +164,7 @@ export const hub = {
     if (!agnes) return
     const home = env.AGH_HOME ?? join(homedir(), AGH_DIR)
     const brain = new Brain(north, (session, text) =>
-      wake(home, session, text).catch((e: Error) => log(`could not wake ${session}: ${e.message}`)),
+      post(home, session, text).catch((e: Error) => log(`could not post into ${session}: ${e.message}`)),
     )
     const disposers = registerBrainTools(agnes, brain)
     const { CLOUDFLARE_ACCOUNT_ID: account, CLOUDFLARE_API_TOKEN: token, TYPESAFE_API_KEY: key } = env

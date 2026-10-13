@@ -19,6 +19,7 @@ import { connectDevices } from './live/index.js'
 import { watchers } from './live/world.js'
 import { buildMinimap } from './minimap.js'
 import { buildOverlay, type Lang } from './overlay.js'
+import { say } from './prompt.js'
 import { applyShot, SHOTS } from './shots.js'
 import { buildSky, type Light, lightAt, updateSky } from './sky.js'
 import { buildRocks, buildTerrain, FROST, PAD_RADIUS } from './terrain.js'
@@ -397,6 +398,7 @@ const overlay = buildOverlay({
   // The About card opens by itself the first time the page is visited.
   showHelp: !params.has('shot') && !stored('mars-seen'),
   ...(dmWatch ? { dm: { decisions: () => dmWatch.decisions, version: () => dmWatch.version } } : {}),
+  ...(hub ? { say: (text: string) => say(hub, text) } : {}),
 })
 try {
   localStorage.setItem('mars-seen', '1')
@@ -420,6 +422,7 @@ const EVENT_VIEW: Record<EventKind, string> = {
   suit_leak: 'suit',
   dust_devil: 'power',
   meteorite: 'event',
+  rockfall: 'event',
 }
 const PIP = { left: 14, top: 76, w: 320, h: 180, every: 3, holdMs: 8000 }
 const pipBox = document.getElementById('pip') as HTMLElement
@@ -485,11 +488,13 @@ if (live) {
   live.world.events?.listeners.push((h, phase) => {
     if (phase !== 'start') return
     const text = () => overlay.eventName(h.kind)
-    if (h.kind === 'meteorite' && h.place) {
+    if ((h.kind === 'meteorite' || h.kind === 'rockfall') && h.place) {
       // From the base side of the fall, a little above it, so the streak, the flash and the dust show.
       const { x, z } = h.place
-      pipCamera.position.set(x + 16, 7, z + 12)
-      pipCamera.lookAt(x, 2, z)
+      // A boulder is smaller than a meteorite's flash and dust, so closer and lower.
+      const near = h.kind === 'rockfall' ? 0.45 : 1
+      pipCamera.position.set(x + 16 * near, 7 * near, z + 12 * near)
+      pipCamera.lookAt(x, 2 * near, z)
       pipCamera.fov = 50
       pipCamera.updateProjectionMatrix()
     } else applyShot(pipCamera, EVENT_VIEW[h.kind])

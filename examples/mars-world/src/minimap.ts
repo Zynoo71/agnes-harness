@@ -22,6 +22,7 @@ const SHORT: Record<string, string> = {
   'rover-01': 'rover-01',
   'hopper-01': 'hopper-01',
   'lab-01': 'lab',
+  'greenhouse-01': 'greenhouse',
   'power-01': 'power',
   'weather-01': 'weather',
   'comms-01': 'comms',

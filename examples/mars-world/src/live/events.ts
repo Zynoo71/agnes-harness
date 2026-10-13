@@ -1,7 +1,7 @@
 import * as THREE from 'three'
-import { canvasTexture, meshOf } from '../assets.js'
+import { canvasTexture, meshOf, model } from '../assets.js'
 import { LAYOUT } from '../base.js'
-import { heightAt, OBSTACLES, type Obstacle } from '../terrain.js'
+import { heightAt, OBSTACLES, type Obstacle, UNUSUAL_ROCK } from '../terrain.js'
 import { AREAS } from './hopper.js'
 import { FINDINGS } from './lab.js'
 import type { Point } from './route.js'
@@ -36,6 +36,12 @@ export const CATALOG = {
     about:
       'a small meteorite falls with a flash and a puff of dust and lies there as a new unusual rock that a hopper survey of the area finds',
   },
+  rockfall: {
+    severe: false,
+    params: {},
+    about:
+      "a boulder about 1.8 m across tumbles onto the way: 8 m ahead of the rover on its track when it is driving, otherwise on the way from the dock to the west field's unusual rock; the rover stops before it, and Monolith can push it aside",
+  },
 } as const
 
 export type EventKind = keyof typeof CATALOG
@@ -59,6 +65,7 @@ export const HEADLINES: Record<EventKind, (p: Params) => Headline> = {
     en: `A meteorite fell in the ${p.area}`,
     zh: `一颗陨石落在${p.area === 'east dunes' ? '东边沙丘' : '西边野外'}`,
   }),
+  rockfall: () => ({ en: 'A boulder tumbled onto the way', zh: '一块大石头滚到了路上' }),
 }
 
 export interface Happening {
@@ -83,9 +90,12 @@ export interface Effects {
   devil(from: Point, to: Point, seconds: number): void
 }
 
-/** Seconds a dust devil takes to cross the array; a meteorite's flash and dust. */
+/** Seconds a dust devil takes to cross the array; a meteorite's flash and dust; a boulder's fall. */
 const DEVIL_S = 24
 const METEOR_S = 8
+const ROCKFALL_S = 6
+/** A fallen boulder's width on the ground, in metres, and how far ahead of a driving rover it lands. */
+const FALLEN = { across: 1.8, ahead: 8 }
 /** The dust devil's way across the solar array, from the south-east to the north-west. */
 const DEVIL_FROM = { x: 44, z: 36 }
 const DEVIL_TO = { x: 2, z: 6 }
@@ -143,6 +153,11 @@ export class Events {
       // The rock lies there once the flash has gone.
       setTimeout(() => void this.addRock(at, h), 900)
     }
+    if (kind === 'rockfall') {
+      h.end = now + ROCKFALL_S * 1000
+      h.place = this.fallPlace()
+      void this.addBoulder(h.place)
+    }
     this.active.push(h)
     this.log(`event ${kind} by ${by}: ${headline.en} ${JSON.stringify(params)}`)
     for (const listen of this.listeners) listen(h, 'start')
@@ -198,6 +213,75 @@ export class Events {
       this.past.length = Math.min(this.past.length, 10)
       for (const listen of this.listeners) listen(h, 'end')
     }
+  }
+
+  /**
+   * Where a boulder falls: ahead of the rover on the leg it drives, when that leg is long enough;
+   * otherwise on the way from the dock to the unusual rock, at the first spot clear of other rocks.
+   */
+  private fallPlace(): Point {
+    const rover = this.world.things().find((t) => t.id === 'rover-01')
+    const leg = this.world.rover.leg
+    if (rover && leg) {
+      const d = Math.hypot(leg.x - rover.x, leg.z - rover.z)
+      if (d > FALLEN.ahead + 3) {
+        const k = FALLEN.ahead / d
+        return { x: rover.x + (leg.x - rover.x) * k, z: rover.z + (leg.z - rover.z) * k }
+      }
+    }
+    const [x0, z0] = LAYOUT.dock
+    for (let k = 0.3; k < 0.9; k += 0.05) {
+      const p = { x: x0 + (UNUSUAL_ROCK.x - x0) * k, z: z0 + (UNUSUAL_ROCK.z - z0) * k }
+      if (OBSTACLES.every((o) => Math.hypot(o.x - p.x, o.z - p.z) > o.r + FALLEN.across)) return p
+    }
+    return { x: x0 + (UNUSUAL_ROCK.x - x0) * 0.45, z: z0 + (UNUSUAL_ROCK.z - z0) * 0.45 }
+  }
+
+  /** A boulder that tumbles down onto `at` and lies there, in the way, until something moves it. */
+  private async addBoulder(at: Point): Promise<void> {
+    const rock = await model('namaqualand_boulder_02')
+    const boulder = rock.clone()
+    boulder.traverse((o) => {
+      const mesh = o as THREE.Mesh
+      if (mesh.isMesh) {
+        const mat = (mesh.material as THREE.MeshStandardMaterial).clone()
+        mat.color = new THREE.Color(1, 0.72, 0.6)
+        mesh.material = mat
+      }
+    })
+    // The scan is a long, low slab; stood taller, it reads as a boulder in the way.
+    const size = new THREE.Box3().setFromObject(boulder).getSize(new THREE.Vector3())
+    const s = FALLEN.across / size.x
+    boulder.scale.set(s, s * 1.8, s * 1.3)
+    // Held at its middle, so it tumbles and rolls about its centre, not the scan's base.
+    const box = new THREE.Box3().setFromObject(boulder)
+    boulder.position.sub(box.getCenter(new THREE.Vector3()))
+    const holder = new THREE.Group().add(boulder)
+    const ground = heightAt(at.x, at.z) - 0.1 + box.getSize(size).y / 2
+    holder.position.set(at.x, ground + 9, at.z)
+    this.world.scene.add(holder)
+    const id = `boulder-${OBSTACLES.filter((o) => o.label === 'boulder').length + 1}`
+    const obstacle: Obstacle = {
+      id,
+      label: 'boulder',
+      x: at.x,
+      z: at.z,
+      r: FALLEN.across / 2,
+      object: holder,
+    }
+    // It drops and tumbles for a second, then lies in the way.
+    const start = performance.now()
+    const fall = () => {
+      const k = Math.min(1, (performance.now() - start) / 1000)
+      holder.position.y = ground + 9 * (1 - k * k)
+      holder.rotation.set(k * Math.PI * 2, k * 1.1, 0)
+      if (k < 1) requestAnimationFrame(fall)
+      else {
+        OBSTACLES.push(obstacle)
+        this.rocks.push(obstacle)
+      }
+    }
+    fall()
   }
 
   /** Somewhere in `area` clear of the rocks already there. */

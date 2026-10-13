@@ -14,7 +14,7 @@ Agnes MHS（Model Hardware Standard）是机器人、车辆、相机、传感器
 
 ```mermaid
 flowchart LR
-  Brain[AGH 大脑：七个设备工具] --> Hub[AgnesHub]
+  Brain[AGH 大脑：五个设备工具] --> Hub[AgnesHub]
   Panel[设备面板与独立页面] -->|AgnesHub API /ws/hub| Hub
   Hub -->|MHS /ws/mhs| Device[设备]
   Device -->|MOS /ws/nerve| Hub
@@ -106,18 +106,17 @@ AgnesHub 以 `@agnes/mhs` 插件的形式运行在 AGH 中。它是可选的：�
 
 ## 大脑能做什么
 
-大脑通过七个工具使用设备。设备自己的工具是 `call_device` 的参数，所以设备上线下线时工具列表保持不变。
+大脑通过五个工具使用设备。设备自己的工具是 `call_device` 的参数，所以设备上线下线时工具列表保持不变。
 
 | 工具 | 作用 |
 | --- | --- |
 | `list_devices` | 列出每台设备：id、名称、类型、是否可用、健康状况、正在做什么、它的工具和数据源 |
 | `read_device` | 读取设备的状态、健康状况和位置，以及所请求数据源的最新数据 |
-| `call_device` | 调用设备工具并最多等待 50 秒；更长的任务结束时会唤醒对话 |
+| `call_device` | 调用设备工具并等它做完 |
 | `set_device` | 修改可写状态 |
 | `stop_device` | 停止一台设备或所有设备 |
-| `watch_device`、`unwatch_device` | 等待某个条件（例如读数越过某个值），条件成立或超时时唤醒对话 |
 
-`read_device` 声明了 `returnsImages`，所以它读到的相机画面会交给模型。每轮开始时，大脑还会收到一份地图与设备的快照。设备工具不请求审批：设备安全不依赖它们（见[设备控制边界](#设备控制边界)）。快照和唤醒的细节见 [AgnesHub API](../../packages/mhs/server/hub-api.md#15-the-brain)。
+`read_device` 声明了 `returnsImages`，所以它读到的相机画面会交给模型。每轮开始时，大脑还会收到一份地图与设备的快照。设备工具不请求审批：设备安全不依赖它们（见[设备控制边界](#设备控制边界)）。大脑不会被自动唤醒：某一步需要等待时（例如等作物成熟），大脑结束这一轮，由用户在合适的时候告诉它——在 Agnes 里说，或者点设备页面上的按钮，把用户的话发进对话（`hub/prompt`）。快照和页面消息的细节见 [AgnesHub API](../../packages/mhs/server/hub-api.md#15-the-brain)。
 
 ## 地图、地点与固定设备
 

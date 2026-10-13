@@ -40,6 +40,16 @@ const TEXT = {
     eventsHead: 'Events',
     timeHead: 'Skip to',
     conditionsHead: 'Conditions',
+    askAgnes: 'Ask Agnes to handle it',
+    askHarvest: 'Ask Agnes to harvest',
+    asked: 'Told Agnes',
+    noChat: 'Start a chat in Agnes first',
+    ripe: (bed: string, crop: string) => `Greenhouse · the ${crop}es in the ${bed} bed are ripe`,
+    harvestPrompt: (bed: string, crop: string) =>
+      `The ${crop}es in the greenhouse's ${bed} bed are ripe. Harvest them and take them to the habitat pantry.`,
+    alertPrompt: (dev: string, field: string, value: string) =>
+      `${dev}: ${field} is critical (${value}). Deal with it.`,
+    eventPrompt: (headline: string) => `${headline}. Deal with it.`,
     share: 'Decisions',
     spent: 'Time',
     think: 'think',
@@ -81,12 +91,15 @@ const TEXT = {
       suit_leak: 'Suit leak',
       dust_devil: 'Dust devil',
       meteorite: 'Meteorite',
+      rockfall: 'Rockfall',
     } as Record<EventKind, string>,
     kindAbout: {
       dust_storm: 'Wind and dust build, then die down. Dark sky, dusty panels, no flying.',
       suit_leak: 'Oxygen goes ten times as fast; the astronaut cannot walk.',
       dust_devil: 'A whirlwind dusts the solar panels.',
       meteorite: 'A new unusual rock in the west field or the east dunes.',
+      rockfall:
+        'A boulder tumbles onto the way, ahead of the rover if it is driving. Monolith can push it aside.',
     } as Record<EventKind, string>,
     names: {} as Record<string, string>,
     fields: {} as Record<string, string>,
@@ -98,12 +111,12 @@ const TEXT = {
     close: 'Close',
     helpBody: `
 <h2>Agnes Base</h2>
-<p>A small base on Mars, simulated in your browser. Its eleven devices (habitat, airlock, suit, rover, hopper, Monolith, lab, power, weather station, comms dish, base camera) each speak <b>MHS</b> to <b>AgnesHub</b>, the same way real hardware would. Agnes runs the base only through their tools, state and cameras, with two deciders: the <b class="by-llm">LLM</b>, which reads, plans and talks, and <b class="by-dm">Jev</b>, a fast decision model that takes the obvious next step on its own and hands everything else to the LLM.</p>
+<p>A small base on Mars, simulated in your browser. Its twelve devices (habitat, airlock, suit, rover, hopper, Monolith, lab, greenhouse, power, weather station, comms dish, base camera) each speak <b>MHS</b> to <b>AgnesHub</b>, the same way real hardware would. Agnes runs the base only through their tools, state and cameras, with two deciders: the <b class="by-llm">LLM</b>, which reads, plans and talks, and <b class="by-dm">Jev</b>, a fast decision model that takes the obvious next step on its own and hands everything else to the LLM.</p>
 <p>The world moves on its own, so Agnes has to notice and act:</p>
 <ul>
 <li><b>Time.</b> A sol takes 40 minutes. The sun, the light, the solar output and the cold follow the clock; at night the batteries carry the base.</li>
 <li><b>Drift.</b> Dust settles on the panels, the suit's oxygen runs down, a hopper away from its pad boils off propellant.</li>
-<li><b>Controls</b> (<kbd>E</kbd>). Start an event (a dust storm, a suit leak, a dust devil, a meteorite) with the parameters you choose, end it, skip the clock to morning, noon, sunset or night, or bring about trouble: low suit oxygen, a low battery bank, dusty panels, a drop in cabin oxygen.</li>
+<li><b>Controls</b> (<kbd>E</kbd>). Start an event (a dust storm, a suit leak, a dust devil, a meteorite, a rockfall) with the parameters you choose, end it, skip the clock to morning, noon, sunset or night, or bring about trouble: low suit oxygen, a low battery bank, dusty panels, a drop in cabin oxygen.</li>
 </ul>
 <h3>Ask Agnes</h3>
 <ul>
@@ -147,6 +160,15 @@ const TEXT = {
     eventsHead: '事件',
     timeHead: '跳到',
     conditionsHead: '状况',
+    askAgnes: '让 Agnes 处理',
+    askHarvest: '让 Agnes 收获',
+    asked: '已告诉 Agnes',
+    noChat: '先在 Agnes 里开个对话',
+    ripe: (bed: string, crop: string) => `温室 · ${bed}边苗床的${crop}熟了`,
+    harvestPrompt: (bed: string, crop: string) => `温室${bed}边苗床的${crop}熟了，收下来送进栖息舱吧`,
+    alertPrompt: (dev: string, field: string, value: string) =>
+      `${dev}的${field}告急了（${value}），你处理一下`,
+    eventPrompt: (headline: string) => `${headline}，你看着处理一下`,
     share: '决策占比',
     spent: '用时',
     think: '思考',
@@ -185,12 +207,14 @@ const TEXT = {
       suit_leak: '宇航服漏气',
       dust_devil: '尘卷风',
       meteorite: '陨石',
+      rockfall: '落石',
     } as Record<EventKind, string>,
     kindAbout: {
       dust_storm: '风和沙尘升起又减弱：天变暗，太阳能板积灰，不能飞。',
       suit_leak: '氧气消耗快 10 倍，宇航员走不动。',
       dust_devil: '一股旋风给太阳能板蒙上灰。',
       meteorite: '西边野外或东边沙丘多出一块可疑岩石。',
+      rockfall: '一块大石头滚到路上，火星车正在开时落在它前方。Monolith 能把它推开。',
     } as Record<EventKind, string>,
     names: {
       'habitat-01': '栖息舱',
@@ -200,6 +224,7 @@ const TEXT = {
       'hopper-01': '飞行器',
       'monolith-01': 'Monolith',
       'lab-01': '实验室',
+      'greenhouse-01': '温室',
       'power-01': '电力',
       'weather-01': '气象站',
       'comms-01': '通信天线',
@@ -249,12 +274,12 @@ const TEXT = {
     close: '关闭',
     helpBody: `
 <h2>Agnes 基地</h2>
-<p>一座在浏览器里模拟的火星小基地。十一台设备（栖息舱、气闸、宇航服、火星车、飞行器、Monolith、实验室、电力、气象站、通信天线、基地相机）都像真实硬件一样，用 <b>MHS</b> 连到 <b>AgnesHub</b>。Agnes 只通过它们的工具、状态和相机来管理基地，由两个角色做决定：<b class="by-llm">LLM</b> 负责读、规划和沟通；<b class="by-dm">Jev</b> 是快速的决策模型，明摆着的下一步自己直接做，其余都交给 LLM。</p>
+<p>一座在浏览器里模拟的火星小基地。十二台设备（栖息舱、气闸、宇航服、火星车、飞行器、Monolith、实验室、温室、电力、气象站、通信天线、基地相机）都像真实硬件一样，用 <b>MHS</b> 连到 <b>AgnesHub</b>。Agnes 只通过它们的工具、状态和相机来管理基地，由两个角色做决定：<b class="by-llm">LLM</b> 负责读、规划和沟通；<b class="by-dm">Jev</b> 是快速的决策模型，明摆着的下一步自己直接做，其余都交给 LLM。</p>
 <p>世界自己会变，Agnes 得自己发现、自己处理：</p>
 <ul>
 <li><b>时间。</b>一个火星日 40 分钟。太阳、光照、发电量和气温都跟着时钟走；夜里靠电池撑着。</li>
 <li><b>漂移。</b>太阳能板慢慢积灰，宇航服的氧气一直在减少，离开停机坪的飞行器推进剂会蒸发。</li>
-<li><b>控制台</b>（<kbd>E</kbd>）。按自己选的参数触发事件（沙尘暴、宇航服漏气、尘卷风、陨石）或提前结束；把时钟跳到清晨、正午、日落或夜里；制造状况：宇航服氧气不足、储能电池电量低、太阳能板积灰、舱内氧气骤降。</li>
+<li><b>控制台</b>（<kbd>E</kbd>）。按自己选的参数触发事件（沙尘暴、宇航服漏气、尘卷风、陨石、落石）或提前结束；把时钟跳到清晨、正午、日落或夜里；制造状况：宇航服氧气不足、储能电池电量低、太阳能板积灰、舱内氧气骤降。</li>
 </ul>
 <h3>可以让 Agnes 做</h3>
 <ul>
@@ -333,6 +358,8 @@ export function buildOverlay(options: {
   showHelp: boolean
   /** The DM's decisions from AgnesHub, newest first; the panel shows once there is one. */
   dm?: { decisions(): Decision[]; version(): number }
+  /** Posts the person's words into their conversation with Agnes; resolves whether it was posted. */
+  say?: (text: string) => Promise<boolean>
 }): {
   stats(text: string): void
   toggleEvents(): void
@@ -573,12 +600,16 @@ export function buildOverlay(options: {
   const lastEnded = new Map<string, Activity>()
 
   // Banners along the top: severe events and alarms stay while they last, the rest a few seconds.
+  // With `ask`, a button tells Agnes about it in the person's words: nothing wakes Agnes by itself.
+  // Such a banner stays until what it tells of is over, or else until the person presses its button
+  // or closes it.
   const banner = (
     key: string,
     level: 'info' | 'warn' | 'bad' | 'dm',
     text: () => string,
     until?: () => boolean,
     head?: HTMLElement,
+    ask?: { label: () => string; prompt: () => string },
   ) => {
     banners.querySelector(`[data-key="${key}"]`)?.remove()
     const b = el('div', `banner ${level}`)
@@ -587,11 +618,36 @@ export function buildOverlay(options: {
     const left = el('span', 'left')
     if (head) b.append(head)
     b.append(label, left)
+    const say = options.say
+    let button: HTMLButtonElement | undefined
+    let toldAt: number | undefined
+    if (ask && say) {
+      const btn = el('button', 'ask')
+      btn.type = 'button'
+      btn.addEventListener('click', async () => {
+        btn.disabled = true
+        const told = await say(ask.prompt())
+        btn.textContent = told ? t().asked : t().noChat
+        if (told) toldAt = performance.now()
+        else setTimeout(() => (btn.disabled = false), 3000)
+      })
+      const close = el('button', 'dismiss', '×')
+      close.type = 'button'
+      close.addEventListener('click', () => b.remove())
+      b.append(btn, close)
+      button = btn
+    }
     banners.appendChild(b)
     const started = performance.now()
     const refresh = () => {
       label.textContent = text()
-      const over = until ? until() : performance.now() - started > 8000
+      if (button && !button.disabled && ask) button.textContent = ask.label()
+      const now = performance.now()
+      const over = until
+        ? until()
+        : button
+          ? toldAt !== undefined && now - toldAt > 4000
+          : now - started > 8000
       if (over) b.remove()
     }
     refresh()
@@ -636,9 +692,26 @@ export function buildOverlay(options: {
           'bad',
           () => `${name(a.device)} · ${fieldName(a.field)} ${t().alertBad}`,
           () => dev?.alerts.get(a.field)?.level !== 'bad',
+          undefined,
+          {
+            label: () => t().askAgnes,
+            prompt: () =>
+              t().alertPrompt(name(a.device), fieldName(a.field), `${a.value}${a.unit ? ` ${a.unit}` : ''}`),
+          },
         )
       }
     })
+    // A ripe bed stays on a banner until it is harvested.
+    live.world.ripeListeners.push((bed, crop) =>
+      banner(
+        `ripe-${bed}`,
+        'info',
+        () => t().ripe(value(bed), value(crop)),
+        () => live.world.beds[bed].growth < 1,
+        undefined,
+        { label: () => t().askHarvest, prompt: () => t().harvestPrompt(value(bed), value(crop)) },
+      ),
+    )
     // What reached Earth: a card with the photo, the report and Mission Control's answer.
     live.world.mailListeners.push((m: Mail) => {
       lastMail = m
@@ -676,6 +749,8 @@ export function buildOverlay(options: {
             return `${t().kinds[h.kind]} · ${h.headline[lang]}${severe ? ` · ${left === undefined ? t().untilHandled : clockTime(left)}` : ''}`
           },
           severe ? () => !live.world.events?.active.includes(h) : undefined,
+          undefined,
+          { label: () => t().askAgnes, prompt: () => t().eventPrompt(h.headline[lang]) },
         )
       }
     })

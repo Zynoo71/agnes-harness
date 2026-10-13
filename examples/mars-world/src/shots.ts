@@ -111,6 +111,14 @@ export const SHOTS: {
     follow: 'suit-01',
     behind: [6, 2.6],
   },
+  {
+    name: 'greenhouse',
+    label: 'Greenhouse',
+    from: [28.5, 5.2, 7.5],
+    to: [18, 0.9, -2],
+    fov: 46,
+    devices: ['greenhouse-01', MONOLITH.id],
+  },
 ]
 
 export function applyShot(camera: THREE.PerspectiveCamera, name: string): string {

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { nasaModel } from './assets.js'
 import { bake } from './bake.js'
-import { type Base, LAYOUT, part } from './base.js'
+import { type Base, type GreenhouseView, LAYOUT, part } from './base.js'
 import { buildMonolith, type Monolith } from './monolith.js'
 import { heightAt } from './terrain.js'
 
@@ -17,6 +17,7 @@ export const DEVICES: { id: string; name: string }[] = [
   { id: 'hopper-01', name: 'Hopper' },
   { id: MONOLITH.id, name: MONOLITH.name },
   { id: 'lab-01', name: 'Lab' },
+  { id: 'greenhouse-01', name: 'Greenhouse' },
   { id: 'power-01', name: 'Power' },
   { id: 'weather-01', name: 'Weather station' },
   { id: 'comms-01', name: 'Comms dish' },
@@ -306,7 +307,9 @@ export interface Parts {
   /** The airlock's outer door on its hinge. */
   door: THREE.Object3D
   windows: THREE.MeshStandardMaterial
+  greenhouse: GreenhouseView
   tiltPanels(deg: number): void
+  soilPanels(levels: number[]): void
 }
 
 export interface Devices {
@@ -390,7 +393,9 @@ export async function buildDevices(base: Base): Promise<Devices> {
     camHead,
     door: base.door,
     windows: base.windows,
+    greenhouse: base.greenhouse,
     tiltPanels: base.tiltPanels,
+    soilPanels: base.soilPanels,
   }
   let lastT = 0
   const was = hopper.group.position.clone()

@@ -11,7 +11,7 @@ let south: South
 let north: North
 let brain: Brain
 let dev: Device
-let woken: [string, string][]
+let posted: [string, string][]
 let steps: number
 let feeder: NodeJS.Timeout
 let port: number
@@ -19,14 +19,10 @@ let port: number
 beforeEach(async () => {
   south = new South({ timing: { accept: 500, grace: 100, control: 500 } })
   north = new North(south)
-  woken = []
-  brain = new Brain(
-    north,
-    (conversation, text) => {
-      woken.push([conversation, text])
-    },
-    { callWaitMs: 300, mergeMs: 50 },
-  )
+  posted = []
+  brain = new Brain(north, (conversation, text) => {
+    posted.push([conversation, text])
+  })
   const address = await south.listen(0, '127.0.0.1', north.handleUpgrade)
   port = address.port
   steps = 5
@@ -110,7 +106,7 @@ describe('brain tools', () => {
         'Tools (call_device; argument names exactly as listed):',
         '- move: Drive straight x meters. Arguments: x: number -2–2, required.',
         '- plan: Plan a route. No arguments.',
-        'Data sources (read_device sources; watch_device {"source", "field"} for values and switch):',
+        'Data sources (read_device sources):',
         '- cam: image, 10 Hz — front camera',
         'Settable state (set_device {values: {field: value}}):',
         '- volume: integer 0–10, now 3',
@@ -121,9 +117,9 @@ describe('brain tools', () => {
     expect([...(seen.pictures?.[0]?.bytes ?? [])]).toEqual([0xff, 0xd8, 0x01])
   })
 
-  it('returns a short job with its result, and wakes the conversation when a long one ends', async () => {
+  it('waits for a job to end, says it goes on near the deadline, and cancels it when the turn stops', async () => {
     steps = 1
-    const short = await brain.callDevice({ tool: 'move', args: { x: 1 } }, 'conv-a')
+    const short = await brain.callDevice({ tool: 'move', args: { x: 1 } })
     expect(short.text).toBe(
       'mover-01: moved 1 m. Took 0 s. mover-01 is available. State: mode idle, battery 80 %, volume 3.',
     )
@@ -136,46 +132,63 @@ describe('brain tools', () => {
       detail: 'moved 1 m',
     })
     steps = 6
-    const running = await brain.callDevice(
+    // Longer than call_device used to wait: it still returns the result.
+    const long = await brain.callDevice(
       { device: 'mover-01', tool: 'move', args: { x: 1 } },
-      'conv-b',
+      undefined,
       undefined,
       'toolu-7',
     )
-    expect(running.text).toBe(
-      'mover-01: move is still running (AgnesHub job j2, not a subagent). This conversation is woken with its result when it ends: go on with other work or end your turn, and do not wait for it with other tools. stop_device stops it.',
+    expect(long.data).toMatchObject({ job: 'j2', status: 'done' })
+    const late = await brain.callDevice({ device: 'mover-01', tool: 'move', args: { x: 1 } }, 3200)
+    expect(late.text).toBe(
+      'mover-01: move is still running (AgnesHub job j3) and goes on by itself; nothing tells you when it ends. read_device shows how it is doing; stop_device stops it.',
     )
-    expect(running.data).toMatchObject({ job: 'j2', status: 'running' })
+    expect(late.data).toMatchObject({ job: 'j3', status: 'running' })
     // Pages find the conversation step a job belongs to by its ref.
     expect(north.devices()[0]?.jobs).toMatchObject([
-      { job: 'j2', tool: 'move', caller: 'LLM', state: 'running', arguments: { x: 1 }, ref: 'toolu-7' },
+      { job: 'j3', tool: 'move', caller: 'LLM', state: 'running', arguments: { x: 1 } },
     ])
-    await until(() => woken.length === 1, 3000)
-    expect(woken[0]).toEqual(['conv-b', '[AgnesHub] mover-01: moved 1 m.'])
+    await until(() => (north.devices()[0]?.jobs as unknown[] | undefined)?.length === 0, 3000)
+    const stop = new AbortController()
+    const cancelled = brain.callDevice(
+      { device: 'mover-01', tool: 'move', args: { x: 1 } },
+      undefined,
+      stop.signal,
+    )
+    await until(() => (north.devices()[0]?.jobs as unknown[] | undefined)?.length === 1)
+    stop.abort()
+    expect(await cancelled).toMatchObject({
+      text: 'mover-01: move cancelled, since the turn was stopped.',
+      isError: true,
+      data: { status: 'cancelled' },
+    })
+    expect(posted).toEqual([])
   })
 
   it('records a call the DM made with the DM as its caller', async () => {
     steps = 6
-    await brain.callDevice(
+    const done = brain.callDevice(
       { device: 'mover-01', tool: 'move', args: { x: 1 } },
-      'c',
+      undefined,
       undefined,
       'toolu-9',
       DM,
     )
+    await until(() => (north.devices()[0]?.jobs as unknown[] | undefined)?.length === 1)
     expect(north.devices()[0]?.jobs).toMatchObject([{ tool: 'move', caller: 'DM', ref: 'toolu-9' }])
-    await until(() => woken.length === 1, 3000)
+    await done
   })
 
   it('gives the model the data a tool returns, such as a planned route', async () => {
-    const planned = await brain.callDevice({ device: 'mover-01', tool: 'plan' }, 'c')
+    const planned = await brain.callDevice({ device: 'mover-01', tool: 'plan' })
     expect(planned.text).toMatch(
       /^mover-01: planned a route in 2 legs\. Data: \{"route":\[\{"x":1,"y":2\},\{"x":3,"y":4\}\]\}/,
     )
   })
 
   it('reports rejections as errors and asks which device when it is unclear', async () => {
-    const wrong = await brain.callDevice({ device: 'mover-01', tool: 'fly' }, 'c')
+    const wrong = await brain.callDevice({ device: 'mover-01', tool: 'fly' })
     expect(wrong).toMatchObject({
       text: 'mover-01 rejected fly (invalid): mover-01 has no tool fly.',
       isError: true,
@@ -187,20 +200,7 @@ describe('brain tools', () => {
     })
   })
 
-  it('wakes the conversation that set a watch', async () => {
-    brain.watchDevice(
-      { until: { state: 'battery', lt: 20 }, note: 'charge before the battery runs out' },
-      'conv-w',
-    )
-    dev.update({ battery: 15 })
-    await until(() => woken.length === 1)
-    expect(woken[0]).toEqual([
-      'conv-w',
-      '[AgnesHub] mover-01: battery < 20 (charge before the battery runs out).',
-    ])
-  })
-
-  it('wakes the conversation on duty with a brief, and keeps the others for the snapshot', async () => {
+  it('keeps briefs for the snapshot, and posts a page prompt into the conversation on duty', async () => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/hub`)
     await new Promise((resolve) => ws.once('open', resolve))
     let n = 0
@@ -214,15 +214,15 @@ describe('brain tools', () => {
         ws.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }))
       })
     await request('hub/hello', { role: 'agent', client: { name: 'DM' } })
-    // No conversation has used a device yet: nobody to wake.
-    expect((await request('hub/brief', { text: 'battery low', wake: true })).result).toEqual({ woken: false })
-    brain.onDuty = 'conv-d'
-    expect((await request('hub/brief', { text: 'battery low', wake: true })).result).toEqual({ woken: true })
-    await until(() => woken.length === 1)
-    expect(woken[0]).toEqual(['conv-d', '[AgnesHub] DM: battery low'])
-    expect((await request('hub/brief', { text: 'did mover-01 plan' })).result).toEqual({ woken: false })
+    expect((await request('hub/brief', { text: 'did mover-01 plan' })).result).toEqual({})
     expect(brain.context()).toContain('\nOther agents reported:\n- now, DM: did mover-01 plan')
     expect((await request('hub/brief', { text: ' ' })).error.code).toBe(-32602)
+    // No conversation has used a device yet: nowhere to post.
+    expect((await request('hub/prompt', { text: 'harvest the potatoes' })).result).toEqual({ posted: false })
+    brain.onDuty = 'conv-d'
+    expect((await request('hub/prompt', { text: ' harvest the potatoes ' })).result).toEqual({ posted: true })
+    expect(posted).toEqual([['conv-d', 'harvest the potatoes']])
+    expect(posted.some(([, text]) => text.includes('[AgnesHub]'))).toBe(false)
     ws.close()
   })
 

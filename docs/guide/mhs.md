@@ -18,7 +18,7 @@ In AGH's [brain, cerebellum, memory, and body metaphor](../develop/architecture.
 
 ```mermaid
 flowchart LR
-  Brain[AGH brain: seven device tools] --> Hub[AgnesHub]
+  Brain[AGH brain: five device tools] --> Hub[AgnesHub]
   Panel[Devices panel and page] -->|AgnesHub API /ws/hub| Hub
   Hub -->|MHS /ws/mhs| Device[Devices]
   Device -->|MOS /ws/nerve| Hub
@@ -118,18 +118,17 @@ While the plugin is enabled:
 
 ## What the brain can do
 
-The brain uses devices through seven tools. A device's own tools are an argument of `call_device`, so the tool list stays the same as devices come and go.
+The brain uses devices through five tools. A device's own tools are an argument of `call_device`, so the tool list stays the same as devices come and go.
 
 | Tool | What it does |
 | --- | --- |
 | `list_devices` | Every device: id, name, kind, availability, health, what it is doing, its tools and sources |
 | `read_device` | A device's state, health and position, and the newest data of the sources asked for |
-| `call_device` | Calls a device tool and waits up to 50 s; a longer job wakes the conversation when it ends |
+| `call_device` | Calls a device tool and waits for it to finish |
 | `set_device` | Changes writable state |
 | `stop_device` | Stops one device, or every device |
-| `watch_device`, `unwatch_device` | Waits for a condition, such as a reading crossing a value, and wakes the conversation when it holds or times out |
 
-`read_device` declares `returnsImages`, so the camera pictures it reads reach the model. At the start of every turn the brain also gets a snapshot of the maps and devices. The device tools ask for no approval: device safety does not depend on them (see [device control boundaries](#device-control-boundaries)). The [AgnesHub API](../../packages/mhs/server/hub-api.md#15-the-brain) describes the snapshot and the wake-ups.
+`read_device` declares `returnsImages`, so the camera pictures it reads reach the model. At the start of every turn the brain also gets a snapshot of the maps and devices. The device tools ask for no approval: device safety does not depend on them (see [device control boundaries](#device-control-boundaries)). Nothing wakes the brain by itself: when a step has to wait, such as for a crop to ripen, the brain ends its turn, and the person tells it when it is time, in Agnes or with a button on a device page that posts their words into the conversation (`hub/prompt`). The [AgnesHub API](../../packages/mhs/server/hub-api.md#15-the-brain) describes the snapshot and page prompts.
 
 <a id="地图位置与固定设备"></a>
 

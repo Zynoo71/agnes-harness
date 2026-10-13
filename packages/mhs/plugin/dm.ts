@@ -1,7 +1,7 @@
 /**
  * The DM in the Agnes loop: an Operation standing in for the step's model call (core's `Inference`
  * segment). The decision model takes a step, as a call_device or set_device with no LLM, when a
- * device action's results or a wake-up from AgnesHub came last: told the task's devices, what was
+ * device action's results came last: told the task's devices, what was
  * done and what just happened, it picks one fixed device action or `ask_llm`. The LLM takes the
  * step the person started, a step after it read devices, every failed result, every choice of
  * `ask_llm`, and the step after MAX_DM_STEPS DM steps in a row.
@@ -19,7 +19,7 @@ const ACTIONS = ['call_device', 'set_device']
 /** A step that read devices is the LLM looking before it plans: the next step stays the LLM's. */
 const READS = ['read_device', 'list_devices']
 /** The device tools whose `device` makes it one of the task's devices. */
-const DEVICE_TOOLS = ['call_device', 'set_device', 'read_device', 'watch_device', 'stop_device']
+const DEVICE_TOOLS = ['call_device', 'set_device', 'read_device', 'stop_device']
 /** At most this many DM steps in a row; then the LLM looks again. */
 const MAX_DM_STEPS = 3
 /** An action the DM is less sure of than this goes to the LLM: in tests such picks were mostly wrong. */
@@ -52,7 +52,7 @@ export interface DmLink {
 /** One decision, as the `dm` hub event's data carries it (hub-api.md section 15.5). */
 export interface Decision {
   conversation: string
-  /** What the step answered: tool results or a wake-up. */
+  /** What the step answered: tool results. */
   happened: string
   /** did: the step is the action; llm: the LLM takes the step. */
   outcome: 'did' | 'llm'
@@ -89,11 +89,20 @@ export interface DmNote {
  */
 export const dmNotes = new Map<string, { call: string; note: DmNote }>()
 
+/** Per conversation, when its newest step began and, once known, how long it took to decide (ms). */
+const steps = new Map<string, { began: number; think?: number }>()
+
 /**
- * Per conversation, how long its newest step took to decide, in ms: from the step's start to the
- * DM's pick or the model call's newest event. Its device calls carry it as their thinking time.
+ * How long the conversation's newest step took to decide, in ms: from its start to the DM's pick,
+ * or to its first device call for the LLM's step (the model call has ended by then). Core needs
+ * the LLM's result passed on untouched, so it is not timed inside.
  */
-export const thinking = new Map<string, number>()
+export function thinkingOf(conversation: string): number | undefined {
+  const step = steps.get(conversation)
+  if (!step) return undefined
+  step.think ??= Date.now() - step.began
+  return step.think
+}
 
 /** The key a call is matched by: the tool and its arguments. */
 export const callKey = (name: string, args: unknown) => `${name} ${canonicalJson(args)}`
@@ -112,18 +121,10 @@ export function dmOperation(link: () => DmLink | undefined) {
       const hub = link()
       const conversation = request.sessionKey
       const began = Date.now()
-      const timed = async () => {
-        const events = await ctx.next()
-        return (async function* () {
-          for await (const e of events) {
-            thinking.set(conversation, Date.now() - began)
-            yield e
-          }
-        })()
-      }
+      steps.set(conversation, { began })
       const llm = () => {
         streak.delete(conversation)
-        return timed()
+        return ctx.next()
       }
       if (!hub?.on(conversation) || !options.toolNames.includes('call_device')) return llm()
       const moment = momentOf(request.messages)
@@ -167,7 +168,7 @@ export function dmOperation(link: () => DmLink | undefined) {
       const parser = (ctx.session.d.contractForModel?.(target) ?? ctx.session.d.contract).parser_version
       if (call) {
         streak.set(conversation, chain + 1)
-        thinking.set(conversation, Date.now() - began)
+        steps.set(conversation, { began, think: Date.now() - began })
         dmNotes.set(conversation, {
           call: callKey(call.name, call.args),
           note: { model: hub.dm.model.name, sure: p, options: picked.options, ms: picked.ms },
@@ -175,7 +176,7 @@ export function dmOperation(link: () => DmLink | undefined) {
         return step(request, parser, call)
       }
       streak.delete(conversation)
-      return timed()
+      return ctx.next()
     },
   }
 }
@@ -190,8 +191,8 @@ export type StepMoment = Moment & {
 
 /**
  * The step the DM may take, read from the request: the results of a device action, to carry the
- * task on, or a wake-up from AgnesHub. Undefined when the person spoke last or the LLM was reading
- * devices: then the LLM is making its plan.
+ * task on. Undefined when the person spoke last or the LLM was reading devices: then the LLM is
+ * making its plan.
  */
 export function momentOf(messages: Message[]): StepMoment | undefined {
   const results: Message[] = []
@@ -202,9 +203,7 @@ export function momentOf(messages: Message[]): StepMoment | undefined {
     else if (!(m.role === 'user' && isNote(textOf(m.content)))) break
   }
   const last = messages[i]
-  const start = messages.findLastIndex(
-    (m, k) => k <= i && m.role === 'user' && !isNote(textOf(m.content)) && !isWake(textOf(m.content)),
-  )
+  const start = messages.findLastIndex((m, k) => k <= i && m.role === 'user' && !isNote(textOf(m.content)))
   const instruction = messages[start]
   const asked = instruction ? { instruction: textOf(instruction.content) } : {}
   const task = taskOf(messages.slice(start + 1))
@@ -219,8 +218,6 @@ export function momentOf(messages: Message[]): StepMoment | undefined {
       failed: results.some((r) => r.role === 'tool_result' && r.isError),
     }
   }
-  if (last?.role === 'user' && isWake(textOf(last.content)))
-    return { ...asked, happened: textOf(last.content), ...task, failed: false }
   return undefined
 }
 
@@ -268,7 +265,6 @@ const textOf = (content: { type: string; text?: string }[]) =>
     .join('\n')
     .trim()
 const isNote = (text: string) => text.startsWith('[hook context]') || text.startsWith('[skill loaded]')
-const isWake = (text: string) => text.includes('[AgnesHub]')
 
 /** A step as a provider would stream it, so core records and runs it like any other. */
 async function* step(

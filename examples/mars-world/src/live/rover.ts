@@ -1,12 +1,12 @@
 import { type Call, CallError } from '@agnes/mhs/device'
 import * as THREE from 'three'
-import { LAYOUT } from '../base.js'
+import { LAYOUT, SOLAR_PANELS } from '../base.js'
 import { OBSTACLES } from '../terrain.js'
 import { PLACE_PARAM, pointOf } from './basemap.js'
 import { addCamera } from './camera.js'
 import { castRay } from './map.js'
 import { addPlace, reading } from './place.js'
-import { fromMap, inTheWay, type Point, planRoute, ROVER, round, toMap } from './route.js'
+import { fromMap, inTheWay, keepouts, type Point, planNear, planRoute, ROVER, round, toMap } from './route.js'
 import { Blocked, Body, every, everyFrame, type World, WorldDevice, wait } from './world.js'
 
 /** The lidar on the mast: one sweep, all round, every 2 degrees. */
@@ -16,6 +16,110 @@ const REACH = 4
 const DRIVE = { speed: 2, accel: 1.2, turn: Math.PI / 2 }
 /** Seconds the drill takes for one sample. */
 const DRILL_S = 4
+/**
+ * The lanes the rover cleans the solar array from, 2 m clear of its blocks: along the north side,
+ * down the aisle between the blocks, along the south side. From each it brushes the rows beside it.
+ */
+const LANES = (() => {
+  const xs = [...new Set(SOLAR_PANELS.map((p) => p.x))]
+  const rowZ = (row: number) => SOLAR_PANELS.find((p) => p.row === row)?.z ?? 0
+  return [
+    { z: rowZ(0) - 0.9 - 2, xs, rows: [0] },
+    { z: (rowZ(1) + rowZ(2)) / 2, xs: [...xs].reverse(), rows: [1, 2] },
+    { z: rowZ(3) + 0.9 + 2, xs, rows: [3] },
+  ]
+})()
+
+/** The cleaning arm: links in metres, how far the brush hangs under the wrist, and its moves in ms. */
+const ARM = {
+  mount: new THREE.Vector3(0, 1.35, -0.55),
+  upper: 2,
+  fore: 2,
+  hang: 0.32,
+  reach: 600,
+  sweep: 450,
+}
+/** The arm's joints: turret yaw, shoulder and elbow pitch (radians), folded flat along the deck. */
+type Pose = { yaw: number; shoulder: number; elbow: number }
+const STOWED: Pose = { yaw: Math.PI, shoulder: 0.12, elbow: 2.9 }
+
+/**
+ * The rover's cleaning arm on its rear deck: a turret, two links and a brush that stays level, with
+ * a roller that spins while it brushes. Folded along the deck until it cleans panels.
+ */
+function cleaningArm() {
+  const metal = new THREE.MeshStandardMaterial({ color: 0xc9c6bf, roughness: 0.4, metalness: 0.6 })
+  const dark = new THREE.MeshStandardMaterial({ color: 0x3a3632, roughness: 0.7, metalness: 0.3 })
+  const turret = new THREE.Group()
+  turret.position.copy(ARM.mount)
+  turret.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.18, 16), dark))
+  const shoulder = new THREE.Group()
+  shoulder.position.y = 0.12
+  turret.add(shoulder)
+  const link = (length: number, width: number) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(width, width, length), metal)
+    m.position.z = length / 2
+    return m
+  }
+  shoulder.add(link(ARM.upper, 0.11), new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), dark))
+  const elbow = new THREE.Group()
+  elbow.position.z = ARM.upper
+  shoulder.add(elbow)
+  elbow.add(link(ARM.fore, 0.08), new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 8), dark))
+  const wrist = new THREE.Group()
+  wrist.position.z = ARM.fore
+  elbow.add(wrist)
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, 0.16), dark)
+  head.position.y = -0.11
+  const roller = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.1, 0.1, 1.1, 14),
+    new THREE.MeshStandardMaterial({ color: 0xd9822b, roughness: 0.95 }),
+  )
+  roller.rotation.z = Math.PI / 2
+  roller.position.y = -ARM.hang
+  wrist.add(head, roller)
+  let pose = { ...STOWED }
+  const set = (p: Pose) => {
+    pose = p
+    turret.rotation.y = p.yaw
+    shoulder.rotation.x = -p.shoulder
+    elbow.rotation.x = p.elbow
+    // The brush stays level whatever the links do.
+    wrist.rotation.x = p.shoulder - p.elbow
+  }
+  set(STOWED)
+  /** The pose that puts the roller on `at`, a point in the rover's own frame. */
+  const reach = (at: THREE.Vector3): Pose => {
+    const dx = at.x - ARM.mount.x
+    const dz = at.z - ARM.mount.z
+    const d = Math.hypot(dx, dz)
+    const dy = at.y + ARM.hang - (ARM.mount.y + 0.12)
+    const span = Math.min(ARM.upper + ARM.fore - 0.01, Math.hypot(d, dy))
+    const cos = (span ** 2 - ARM.upper ** 2 - ARM.fore ** 2) / (2 * ARM.upper * ARM.fore)
+    const elbow = Math.acos(THREE.MathUtils.clamp(cos, -1, 1))
+    const shoulder =
+      Math.atan2(dy, d) + Math.atan2(ARM.fore * Math.sin(elbow), ARM.upper + ARM.fore * Math.cos(elbow))
+    return { yaw: Math.atan2(dx, dz), shoulder, elbow }
+  }
+  /** Moves the arm to `to` over `ms`, eased, the yaw the short way round. */
+  const move = async (call: Call, to: Pose, ms: number, spin = false) => {
+    const from = { ...pose }
+    const turn = Math.atan2(Math.sin(to.yaw - from.yaw), Math.cos(to.yaw - from.yaw))
+    const steps = Math.max(1, Math.round(ms / 40))
+    for (let i = 1; i <= steps; i++) {
+      await wait(call, 40)
+      const k = i / steps
+      const e = k * k * (3 - 2 * k)
+      set({
+        yaw: from.yaw + turn * e,
+        shoulder: from.shoulder + (to.shoulder - from.shoulder) * e,
+        elbow: from.elbow + (to.elbow - from.elbow) * e,
+      })
+      if (spin) roller.rotation.x += 0.6
+    }
+  }
+  return { group: turret, reach, move, stow: () => set(STOWED) }
+}
 
 /** The rover: drives routes, stops by itself before boulders and people (from the scene's truth), collects samples, docks. */
 export function rover(world: World, log: (line: string) => void): WorldDevice {
@@ -36,7 +140,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
       max_speed: DRIVE.speed,
       reach_m: REACH,
       notes:
-        'Six-wheeled rover with a sampling arm and a drill. Stops by itself before boulders and people. Charges in the dock beside the lab.',
+        'Six-wheeled rover with a sampling arm and a drill. Stops by itself before boulders and people. Charges in the dock beside the lab while power-01 feeds the charger (not shed, not unpowered). With a flat battery (0 %) it cannot drive: monolith-01 can tow it to the dock, where it charges.',
     },
     resources: { chassis: 'reject', arm: 'reject' },
     manual: {
@@ -49,7 +153,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     },
     ui: { primary: 'front_video' },
     state: {
-      mode: { type: 'string', enum: ['idle', 'driving', 'sampling', 'docked'] },
+      mode: { type: 'string', enum: ['idle', 'driving', 'sampling', 'cleaning', 'docked'] },
       battery: {
         type: 'integer',
         unit: '%',
@@ -65,7 +169,10 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
   dev.log = log
   const report = () => dev.update({ battery, cargo: world.rover.cargo.length, docked: world.rover.docked })
   dev.update({ mode: 'docked', battery, cargo: 0, docked: true })
-  world.roverChanged = report
+  world.roverChanged = () => {
+    report()
+    dev.update({ mode: world.rover.docked ? 'docked' : 'idle' })
+  }
 
   const front = new THREE.PerspectiveCamera(42, 16 / 9, 0.1, 2000)
   front.rotation.order = 'YXZ'
@@ -197,13 +304,25 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
   every(
     5000,
     () => {
-      battery = Math.max(0, Math.min(100, battery + (world.rover.docked ? 2 : body.speed > 0 ? -1 : 0)))
+      battery = Math.max(
+        0,
+        Math.min(100, battery + (world.rover.docked ? (world.charging ? 2 : 0) : body.speed > 0 ? -1 : 0)),
+      )
       report()
     },
     log,
   )
 
   dev.after = () => ({ pose: body.pose(), odometry: body.odometry() })
+  /** Why it cannot drive now, if it cannot. */
+  const stuck = () =>
+    world.towed === 'rover-01'
+      ? 'monolith-01 is towing it; it moves again after put_down'
+      : battery <= 0
+        ? 'battery flat (0 %): it cannot drive; monolith-01 can tow it to the dock (tow, go_to the dock, put_down), where it charges'
+        : undefined
+  dev.unsafe = (tool) =>
+    ['drive_to', 'follow_route', 'clean_panels', 'dock'].includes(tool) ? stuck() : undefined
   // Manual driving: the latest axes, applied frame by frame; the deadman zeroes them (MAN-4).
   const manual = { vx: 0, wz: 0 }
   dev.onManual = (axes) => {
@@ -235,7 +354,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     }
     steering = true
     // The safety stop holds under manual control too: no driving forward into a boulder or a person.
-    const vx = manual.vx > 0 && ahead() ? 0 : manual.vx
+    const vx = stuck() || (manual.vx > 0 && ahead()) ? 0 : manual.vx
     body.object.rotation.y += ((manual.wz * Math.PI) / 180) * dt
     body.object.position.x += Math.sin(body.heading) * vx * dt
     body.object.position.z += Math.cos(body.heading) * vx * dt
@@ -262,25 +381,31 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     return `stopped ${round(gap, 1)} m before ${what === 'astronaut' ? 'an astronaut' : `a ${what}`} at (${at.x}, ${at.y})`
   }
 
-  const drive = async (call: Call, points: Point[]) => {
+  /** Drives through `points`; `legs` reports each leg done as progress. */
+  const drive = async (call: Call, points: Point[], legs = true) => {
     world.rover.docked = false
     report()
     dev.update({ mode: 'driving' })
     try {
       for (const [i, p] of points.entries()) {
+        world.rover.leg = p
         await body.go(call, p, {
           speed: DRIVE.speed,
           accel: DRIVE.accel,
           turnRate: DRIVE.turn,
           arrive: 0.25,
-          blocked: ahead,
+          blocked: (remaining) => (battery <= 0 ? 'flat' : ahead(remaining)),
         })
-        call.progress({ done: i + 1, total: points.length, text: `leg ${i + 1} of ${points.length} done` })
+        if (legs)
+          call.progress({ done: i + 1, total: points.length, text: `leg ${i + 1} of ${points.length} done` })
       }
     } catch (e) {
+      if (e instanceof Blocked && battery <= 0)
+        throw new CallError('x_battery_flat', `the battery ran flat ${where()}; ${stuck()}`)
       if (e instanceof Blocked) throw new CallError('estop', e.message)
       throw e
     } finally {
+      world.rover.leg = undefined
       dev.update({ mode: world.rover.docked ? 'docked' : 'idle' })
     }
   }
@@ -382,6 +507,67 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
       }
     },
   )
+  const arm = cleaningArm()
+  model.add(arm.group)
+  /** A point beside a panel, in the rover's own frame: `along` metres along its row, on its face. */
+  const onPanel = (panel: { x: number; z: number }, along: number) => {
+    const p = new THREE.Vector3(panel.x + along, world.ground(panel) + 1.3, panel.z)
+    model.updateMatrixWorld()
+    return model.worldToLocal(p)
+  }
+  dev.tool(
+    {
+      name: 'clean_panels',
+      description:
+        'Brush the dust off the solar array with the arm, panel by panel: drive to it, along its north side, down the aisle between its two blocks and along its south side, and stop there. The array must be deployed (power-01 panels). Dock afterwards to charge.',
+      timeout: 420,
+      uses: ['chassis', 'arm'],
+      motion: true,
+      pausable: true,
+    },
+    async (call) => {
+      if (!world.solar?.deployed())
+        throw new CallError(
+          'x_array_not_deployed',
+          'the array is not deployed (power-01 panels); deploy it first',
+        )
+      const grid = world.planGrid()
+      const total = SOLAR_PANELS.length
+      let done = 0
+      let dust = 0
+      try {
+        for (const lane of LANES)
+          for (const x of lane.xs) {
+            const { stops, others } = world.inTheWay()
+            const way = planNear(
+              grid,
+              body.at,
+              { x, z: lane.z },
+              keepouts(body.at, stops, others),
+              ROVER.bodyClearance,
+            )
+            if (!way) throw new CallError('x_no_way', `no way to the solar array from ${where()}`)
+            await drive(call, way.path, false)
+            dev.update({ mode: 'cleaning' })
+            for (const row of lane.rows) {
+              const i = SOLAR_PANELS.findIndex((p) => p.row === row && p.x === x)
+              const panel = SOLAR_PANELS[i] as (typeof SOLAR_PANELS)[number]
+              await arm.move(call, arm.reach(onPanel(panel, -0.9)), ARM.reach)
+              await arm.move(call, arm.reach(onPanel(panel, 0.9)), ARM.sweep, true)
+              await arm.move(call, arm.reach(onPanel(panel, -0.9)), ARM.sweep, true)
+              dust = world.solar.clean(i)
+              done++
+              call.progress({ done, total, text: `brushed ${done} of ${total} panels` })
+            }
+          }
+        await arm.move(call, STOWED, ARM.reach)
+      } finally {
+        arm.stow()
+        dev.update({ mode: world.rover.docked ? 'docked' : 'idle' })
+      }
+      return `brushed all ${total} panels; dust now ${dust} %, ${where()} beside the array`
+    },
+  )
   dev.tool(
     {
       name: 'dock',
@@ -403,7 +589,17 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
       return 'docked; charging'
     },
   )
+  world.conditions.push({
+    device: dev.id,
+    en: 'Rover battery flat',
+    zh: '火星车电池耗尽',
+    apply: () => {
+      battery = 0
+      report()
+    },
+  })
   world.onReset(() => {
+    arm.stow()
     battery = 81
     manual.vx = 0
     manual.wz = 0

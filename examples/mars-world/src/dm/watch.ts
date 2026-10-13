@@ -10,10 +10,8 @@ type Json = Record<string, unknown>
 export interface Decision {
   /** Hub time, in seconds. */
   time: number
-  /** What the step answered: tool results or the wake-up text, a line each. */
+  /** What the step answered: the tool results, a line each. */
   trigger: string[]
-  /** Whether a wake-up from AgnesHub (a job ended, a watch) started the step. */
-  woken: boolean
   choice: string
   /** With `did`: the device the action went to. */
   device: string | undefined
@@ -72,12 +70,7 @@ export class DmWatch {
     const happened = String(d.happened ?? '')
     this.decisions.unshift({
       time,
-      woken: happened.includes('[AgnesHub]'),
-      trigger: happened
-        .replace(/^[\s\S]*?\[AgnesHub\]\s*/, '')
-        .split('\n')
-        .filter(Boolean)
-        .slice(0, 4),
+      trigger: happened.split('\n').filter(Boolean).slice(0, 4),
       choice: String(d.choice ?? ''),
       device: typeof d.device === 'string' ? d.device : undefined,
       sure: ((d.top as [string, number][] | undefined)?.[0]?.[1] as number | undefined) ?? 0,

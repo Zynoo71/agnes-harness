@@ -12,7 +12,7 @@ type Values = Parameters<Device['update']>[0]
 import * as THREE from 'three'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js'
-import { FOOTPRINTS } from '../base.js'
+import { type BedName, type Crop, FOOTPRINTS, GREENHOUSE } from '../base.js'
 import type { MarsClock } from '../clock.js'
 import { MONOLITH, type Parts } from '../devices.js'
 import { heightAt, OBSTACLES } from '../terrain.js'
@@ -297,7 +297,8 @@ export class WorldDevice extends Device {
         for (const w of watchers.alert) w(alert, true)
       } else if (was) {
         this.alerts.delete(field)
-        for (const w of watchers.alert) w(was, false)
+        // Cleared with the value it came back to, not the one it was raised at.
+        for (const w of watchers.alert) w({ ...was, value }, false)
       }
     }
   }
@@ -327,6 +328,8 @@ export interface Photo {
   at: string
   /** The sun was in the picture, how high it stood and where (degrees; azimuth clockwise from north). */
   sun: { inFrame: boolean; elevation: number; azimuth: number }
+  /** What a close-up shows: an unusual rock's id. */
+  subject?: string
 }
 
 /** A report that reached Earth, and Mission Control's answer. */
@@ -337,12 +340,21 @@ export interface Mail {
   at: string
 }
 
+export type Bed = { crop: Crop; growth: number; moisture: number; planted: number }
+/** Tomatoes ripe in the north bed, the south bed bare and dry. */
+const freshBeds = (): Record<BedName, Bed> => ({
+  north: { crop: 'tomato', growth: 1, moisture: 60, planted: GREENHOUSE.plants },
+  south: { crop: 'none', growth: 0, moisture: 20, planted: 0 },
+})
+
 /** What the live devices share: the scene, its truth, and the state that ties devices together. */
 export class World {
-  /** The rover reports these; the lab reads them before it unloads. */
-  rover = { docked: true, cargo: [] as string[] }
+  /** The rover reports these (and `leg`, where it drives to now); the lab reads them before it unloads. */
+  rover = { docked: true, cargo: [] as string[], leg: undefined as Point | undefined }
   /** Set by the rover: tells it to report its state after another device changed it. */
   roverChanged: (() => void) | undefined
+  /** The vehicle Monolith tows now (rover-01 or hopper-01): it cannot move by itself meanwhile. */
+  towed: string | undefined
   /**
    * Where the astronaut is: at work in the field, walking about it on their own; carried by
    * Monolith; set down somewhere outside, waiting there; in the airlock's chamber; or in the habitat.
@@ -362,10 +374,30 @@ export class World {
   earthWindow: (() => { open: boolean; changes: number }) | undefined
   /** Set by the power system: dust settles on the panels, in percent of their light. */
   dustPanels: ((percent: number) => void) | undefined
+  /** Set by power: whether the dock's charger has power (not shed, not dark). */
+  charging = true
+  /** Set by the power system: whether the array is deployed, and a panel brushed clean (gives the mean dust). */
+  solar: { deployed(): boolean; clean(panel: number): number } | undefined
+  /** The greenhouse's beds: crop, growth (0 just planted to 1 ripe), soil moisture (%), plants standing. */
+  beds = freshBeds()
+  /** Set by the greenhouse: shows its beds and reports them after another device changed them. */
+  gardenChanged: (() => void) | undefined
+  /** Set by power: whether the greenhouse has power (not shed, not dark). */
+  greenhousePowered = true
+  /** Set by the greenhouse: its grow lights, most of its power load, are switched on. */
+  growLights = true
+  /** Monolith's crate of harvest: where it is and what is in it. */
+  crate = { at: 'none' as 'none' | 'held' | 'ground' | 'chamber', crop: 'potato' as Crop, kg: 0 }
+  /** Set by Monolith: shows the crate where it is now. */
+  crateChanged: (() => void) | undefined
+  /** Set by the habitat: takes in a crate of harvest the airlock brought in. */
+  pantryReceive: ((crop: Crop, kg: number) => void) | undefined
   /** Set by the lab: takes a sample handed to it and queues it for analysis. */
   labReceive: ((sample: string) => void) | undefined
   /** Photos the cameras took, by id (`photo-1`). */
   readonly photos = new Map<string, Photo>()
+  /** Hear each bed as its crop turns ripe; the page offers to tell Agnes. */
+  readonly ripeListeners: ((bed: BedName, crop: Crop) => void)[] = []
   /** Hear each report as it reaches Earth; the page shows it. */
   readonly mailListeners: ((mail: Mail) => void)[] = []
   /** Conditions the devices offer the controls panel. */
@@ -398,10 +430,14 @@ export class World {
 
   /** Puts the shared state and every device back as a fresh page has them. */
   reset(): void {
-    this.rover = { docked: true, cargo: [] }
+    this.rover = { docked: true, cargo: [], leg: undefined }
+    this.towed = undefined
     this.astronaut = 'working'
     this.airlock = { inner: 'open', outer: 'closed' }
     this.suitLeak = false
+    this.beds = freshBeds()
+    this.growLights = true
+    this.crate = { at: 'none', crop: 'potato', kg: 0 }
     this.photos.clear()
     this.events?.reset()
     for (const [rock, scale] of this.rockScales) rock.object.scale.copy(scale)

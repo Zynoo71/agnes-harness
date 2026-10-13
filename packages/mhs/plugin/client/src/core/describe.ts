@@ -192,22 +192,6 @@ export function paramsOf(tool: Tool): [string, Param, boolean][] {
   return Object.entries(tool.inputSchema.properties ?? {}).map(([name, p]) => [name, p, required.has(name)])
 }
 
-/** A watch condition in words: "battery < 20", "air.co2 > 1000", "health bad". */
-export function untilText(until: Json): string {
-  const op = (['lt', 'gt', 'eq', 'ne'] as const).find((o) => o in until)
-  const sign = { lt: '<', gt: '>', eq: '=', ne: '≠' }
-  if (typeof until.state === 'string' && op) return `${until.state} ${sign[op]} ${shortValue(until[op])}`
-  if (typeof until.source === 'string') {
-    if (op && typeof until.field === 'string')
-      return `${until.source}.${until.field} ${sign[op]} ${shortValue(until[op])}`
-    if (typeof until.has === 'string') return `${until.source} has ${until.has}`
-    if (typeof until.says === 'string') return `${until.source} says "${until.says}"`
-  }
-  if (typeof until.health === 'string') return `health ${until.health}`
-  if (typeof until.trust === 'string') return `position ${until.trust}`
-  return JSON.stringify(until)
-}
-
 /** Map coordinates found in job arguments: one target, or a route. */
 export function targetsOf(args: Json | undefined): { point?: Pt; route?: Pt[] } {
   const out: { point?: Pt; route?: Pt[] } = {}
@@ -276,8 +260,6 @@ export const BRAIN_TOOLS = [
   'call_device',
   'set_device',
   'stop_device',
-  'watch_device',
-  'unwatch_device',
 ] as const
 
 /** The brain's device calls among a conversation's tool nodes, newest first. */

@@ -23,9 +23,11 @@ export interface Monolith {
   /** On the ground; rotation.y is the heading, and the robot faces +z. */
   group: THREE.Group
   /** What the live device asks of the model; update() moves the slabs toward it. */
-  want: { wheel: boolean; hold: 'none' | 'astronaut' | 'sample' }
+  want: { wheel: boolean; hold: 'none' | 'astronaut' | 'sample' | 'crate' }
   /** The sample it holds, shown while it holds one. */
   sample: THREE.Object3D
+  /** The crate of harvest it holds, shown while it holds one. */
+  crate: Crate
   /** What it says over the radio, shown in a bubble over it until `until` (page clock, ms). */
   speech: { text: string; until: number }
   /** 0 standing on its slabs, 1 unfolded into a wheel. */
@@ -34,6 +36,42 @@ export interface Monolith {
   update(dt: number, speed: number): void
   /** Standing on its slabs at once, holding nothing, saying nothing. */
   reset(): void
+}
+
+/** A crate for harvest, open at the top. */
+export interface Crate {
+  group: THREE.Group
+  /** Shows it filled this far (0 empty to 1 full) with potatoes or tomatoes. */
+  fill(k: number, crop: 'potato' | 'tomato'): void
+}
+
+export function buildCrate(): Crate {
+  const group = new THREE.Group()
+  const shell = new THREE.MeshStandardMaterial({ color: 0xe3ded3, roughness: 0.6 })
+  const W = 0.5
+  const H = 0.26
+  const D = 0.36
+  group.add(part(new THREE.BoxGeometry(W, 0.02, D), shell, 0, 0.01, 0))
+  for (const x of [-W / 2, W / 2]) group.add(part(new THREE.BoxGeometry(0.02, H, D), shell, x, H / 2, 0))
+  for (const z of [-D / 2, D / 2]) group.add(part(new THREE.BoxGeometry(W, H, 0.02), shell, 0, H / 2, z))
+  const random = seeded(5)
+  const crop = new THREE.MeshStandardMaterial({ color: 0xa47b4c, roughness: 0.9 })
+  const lumps = Array.from({ length: 14 }, (_, i) => {
+    const lump = new THREE.Mesh(new THREE.DodecahedronGeometry(0.06 + random() * 0.02, 0), crop)
+    const layer = Math.floor(i / 7)
+    lump.position.set((random() - 0.5) * (W - 0.14), 0.07 + layer * 0.09, (random() - 0.5) * (D - 0.12))
+    lump.rotation.set(random() * 6, random() * 6, 0)
+    lump.scale.y = 0.75
+    group.add(lump)
+    return lump
+  })
+  return {
+    group,
+    fill(k, kind) {
+      crop.color.set(kind === 'tomato' ? 0xc8321e : 0xa47b4c)
+      for (const [i, lump] of lumps.entries()) lump.visible = i < Math.round(k * lumps.length)
+    },
+  }
 }
 
 /** Brushed metal: faint streaks along the slab, a little dust low down. */
@@ -173,6 +211,11 @@ export function buildMonolith(): Monolith {
   )
   sample.visible = false
   group.add(sample)
+  // A crate of harvest, held in front at the hinge.
+  const crate = buildCrate()
+  crate.group.position.set(0, 0.72, SLAB.depth / 2 + 0.2)
+  crate.group.visible = false
+  group.add(crate.group)
 
   const want: Monolith['want'] = { wheel: false, hold: 'none' }
   const speech = { text: '', until: 0 }
@@ -185,6 +228,7 @@ export function buildMonolith(): Monolith {
     group,
     want,
     sample,
+    crate,
     speech,
     get unfolded() {
       return unfolded
@@ -225,6 +269,7 @@ export function buildMonolith(): Monolith {
       }
       body.position.y = low + 0.004
       sample.visible = want.hold === 'sample'
+      crate.group.visible = want.hold === 'crate'
       // The display brightens and flickers while it speaks.
       const speaking = performance.now() < speech.until
       display.emissiveIntensity = speaking ? 2.4 + Math.sin(performance.now() / 70) * 0.8 : 1.6

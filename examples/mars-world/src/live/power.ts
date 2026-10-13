@@ -1,5 +1,5 @@
 import { type Call, CallError } from '@agnes/mhs/device'
-import { LAYOUT, PANEL_TILT } from '../base.js'
+import { LAYOUT, PANEL_TILT, SOLAR_PANELS } from '../base.js'
 import { sunAt } from '../clock.js'
 import { placed } from './basemap.js'
 import { reading } from './place.js'
@@ -19,10 +19,15 @@ const SIN_NOON = Math.sin((60 * Math.PI) / 180)
 /** The power system: solar array, battery bank and the loads it feeds. */
 export function power(world: World, log: (line: string) => void): WorldDevice {
   let storage = 74
-  let dust = 12
+  /** Each panel's dust, in percent of its light (SOLAR_PANELS order); `dust` is their mean. */
+  const soil = SOLAR_PANELS.map(() => 12)
+  const dust = () => soil.reduce((n, v) => n + v, 0) / soil.length
+  const showDust = () => world.parts.soilPanels(soil.map((v) => v / 100))
   let tilt: number = PANEL_TILT.deployed
   let panels: 'deployed' | 'stowed' | 'moving' = 'deployed'
   const shed = new Set<Load>()
+  /** Loads left without power while the bank is empty and the array falls short. */
+  const dark = new Set<Load>()
   let priority: 'life_support' | 'charging' | 'science' = 'life_support'
   const dev = new WorldDevice({
     id: 'power-01',
@@ -33,7 +38,7 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
     // At the battery bank; the array east of it faces south.
     placement: placed(LAYOUT.battery, 270),
     profile: {
-      notes: `A ${PEAK_W / 1000} kW solar array and a ${CAPACITY_WH / 1000} kWh battery bank. Life support always gets power first; priority decides who gets the rest.`,
+      notes: `A ${PEAK_W / 1000} kW solar array and a ${CAPACITY_WH / 1000} kWh battery bank. Life support always gets power first. When the bank is empty and the array cannot carry the loads, loads go dark, the one named in priority last: science, then the greenhouse, then rover charging (a dark charger charges no rover). Daylight, clean panels or shedding loads bring them back.`,
     },
     resources: { array: 'reject', loads: 'queue' },
     state: {
@@ -69,10 +74,14 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
         min: 0,
         max: 100,
         alert: { warn: 30, bad: 60 },
-        description: 'how much light the dust on the panels blocks',
+        description: 'how much light the dust on the panels blocks; rover-01 clean_panels brushes it off',
       },
       panels: { type: 'string', enum: ['deployed', 'stowed', 'moving'] },
       shed: { type: 'string', description: 'loads switched off, comma-separated, or none' },
+      unpowered: {
+        type: 'string',
+        description: 'loads without power because the bank is empty, comma-separated, or none',
+      },
       priority: {
         type: 'string',
         enum: ['life_support', 'charging', 'science'],
@@ -85,7 +94,13 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
   const load = () =>
     LIFE_SUPPORT_W +
     (Object.entries(LOADS) as [Load, number][])
-      .filter(([k]) => !shed.has(k) && (k !== 'charging' || world.rover.docked))
+      .filter(
+        ([k]) =>
+          !shed.has(k) &&
+          !dark.has(k) &&
+          (k !== 'charging' || world.rover.docked) &&
+          (k !== 'greenhouse' || world.growLights),
+      )
       .reduce((n, [, w]) => n + w, 0)
   /** Solar output: how high the sun stands, a slow haze drift, dust, and how far the panels face it. */
   const production = () => {
@@ -94,16 +109,17 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
     const haze = Math.exp(-Math.max(0, world.weather.dust - 0.6) * 0.45)
     const day = sun * haze * (0.9 + 0.08 * Math.sin(performance.now() / 300000))
     const facing = Math.cos(((tilt - PANEL_TILT.deployed) * Math.PI) / 180)
-    return PEAK_W * day * (1 - dust / 100) * Math.max(0.08, facing ** 4)
+    return PEAK_W * day * (1 - dust() / 100) * Math.max(0.08, facing ** 4)
   }
   const report = () =>
     dev.update({
       storage: Math.round(storage),
       production: Math.round(production() / 10) * 10,
       load: load(),
-      dust: Math.round(dust),
+      dust: Math.round(dust()),
       panels,
       shed: shed.size ? [...shed].join(', ') : 'none',
+      unpowered: dark.size ? [...dark].join(', ') : 'none',
       priority,
     })
   report()
@@ -137,9 +153,24 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
       // The bank's clock runs 15 times faster than the scene's, so a change shows within a demo: a
       // night with every load on takes about half the bank, with only life support about a fifth.
       storage = Math.max(0, Math.min(100, storage + (net / CAPACITY_WH) * (100 / 3600) * 15))
+      // An empty bank: loads go dark, the priority one last, until the array carries the rest.
+      const was = [...dark].join()
+      dark.clear()
+      if (storage <= 0)
+        for (const k of (['science', 'greenhouse', 'charging'] as Load[]).sort(
+          (a, b) => Number(a === priority) - Number(b === priority),
+        ))
+          if (production() < load()) dark.add(k)
+      world.charging = !shed.has('charging') && !dark.has('charging')
+      world.greenhousePowered = !shed.has('greenhouse') && !dark.has('greenhouse')
+      if ([...dark].join() !== was) report()
       // Dust settles on deployed panels, about a third of their light an hour, and fast in a dust
       // storm; stowed, they stay clean.
-      if (panels === 'deployed') dust = Math.min(100, dust + 0.01 + (world.events?.storm ?? 0) * 0.2)
+      if (panels === 'deployed') {
+        const settled = 0.01 + (world.events?.storm ?? 0) * 0.2
+        for (const [i, v] of soil.entries()) soil[i] = Math.min(100, v + settled)
+        showDust()
+      }
       if (!flow.wants()) return
       flow.send({
         production: Math.round(production()),
@@ -178,11 +209,6 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
     }
   }
 
-  dev.unsafe = (tool) => {
-    if (tool === 'clean_array' && panels !== 'deployed') return 'the array is not deployed'
-    return undefined
-  }
-
   dev.tool(
     {
       name: 'stow_array',
@@ -213,26 +239,6 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
   )
   dev.tool(
     {
-      name: 'clean_array',
-      description: 'Shake the dust off the deployed panels.',
-      timeout: 20,
-      uses: ['array'],
-      motion: true,
-      ui: { label: 'Clean array' },
-    },
-    async (call) => {
-      const from = dust
-      for (let i = 1; i <= 10; i++) {
-        await wait(call, 500)
-        dust = from * (1 - i / 10) + 2 * (i / 10)
-        call.progress({ done: i, total: 10, text: `cleaning: ${Math.round(dust)} % dust` })
-      }
-      report()
-      return `panels cleaned; dust ${Math.round(dust)} %, producing ${Math.round(production())} W`
-    },
-  )
-  dev.tool(
-    {
       name: 'shed',
       description: 'Switch a load off to save power, or back on. Life support cannot be shed.',
       timeout: 10,
@@ -255,8 +261,19 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
   )
   world.dustPanels = (percent) => {
     // Stowed on edge, the panels catch a little of it.
-    dust = Math.min(100, dust + percent * (panels === 'deployed' ? 1 : 0.2))
+    for (const [i, v] of soil.entries())
+      soil[i] = Math.min(100, v + percent * (panels === 'deployed' ? 1 : 0.2))
+    showDust()
     report()
+  }
+  world.solar = {
+    deployed: () => panels === 'deployed',
+    clean: (panel) => {
+      soil[panel] = 2
+      showDust()
+      report()
+      return Math.round(dust())
+    },
   }
   world.conditions.push(
     {
@@ -273,18 +290,22 @@ export function power(world: World, log: (line: string) => void): WorldDevice {
       en: 'Panels heavily dusted',
       zh: '太阳能板积灰严重',
       apply: () => {
-        dust = 60
+        soil.fill(60)
+        showDust()
         report()
       },
     },
   )
   world.onReset(() => {
     storage = 74
-    dust = 12
+    soil.fill(12)
+    showDust()
     tilt = PANEL_TILT.deployed
     world.parts.tiltPanels(tilt)
     panels = 'deployed'
     shed.clear()
+    dark.clear()
+    world.charging = true
     priority = 'life_support'
     report()
   })

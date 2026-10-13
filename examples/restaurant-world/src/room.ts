@@ -802,14 +802,17 @@ function playArea(group: THREE.Group) {
   }
 }
 
-/** Charging pads for the runner and the cleaner, by the east wall. */
+/** Charging pads: the runner's against the low wall beside the pass, the cleaner's by the east wall. */
 function pads(group: THREE.Group) {
   for (const home of [HOMES.runner, HOMES.cleaner]) {
     group.add(place(box(0.85, 0.02, 0.85, M.pad), home.x, home.y, 0.01))
     group.add(place(box(0.86, 0.022, 0.04, M.padGlow), home.x, home.y - 0.41, 0.011))
-    group.add(place(box(0.1, 0.5, 0.5, M.pad), ROOM.w - 0.08, home.y, 0.25))
-    group.add(place(box(0.02, 0.08, 0.3, M.padGlow), ROOM.w - 0.14, home.y, 0.4))
   }
+  const low = BACK_OF_HOUSE_Y - 0.35
+  group.add(place(box(0.5, 0.5, 0.1, M.pad), HOMES.runner.x, low, 0.25))
+  group.add(place(box(0.3, 0.08, 0.02, M.padGlow), HOMES.runner.x, low - 0.06, 0.4))
+  group.add(place(box(0.1, 0.5, 0.5, M.pad), ROOM.w - 0.08, HOMES.cleaner.y, 0.25))
+  group.add(place(box(0.02, 0.08, 0.3, M.padGlow), ROOM.w - 0.14, HOMES.cleaner.y, 0.4))
 }
 
 export interface Room {

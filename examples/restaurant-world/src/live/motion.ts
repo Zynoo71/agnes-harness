@@ -29,12 +29,13 @@ export function quietCall(): { call: Call; stop: () => void } {
   return { call, stop: () => control.abort() }
 }
 
-/** Turns `body` to face map yaw `yaw` the short way round. */
-export async function face(call: Call, body: Body, yaw: number, ms = 500): Promise<void> {
+/** Turns `body` to face map yaw `yaw` the short way round, `ms` for a quarter turn. */
+export async function face(call: Call, body: Body, yaw: number, ms = 350): Promise<void> {
   const now = body.object.rotation.y
   const want = rotY(yaw)
-  const to = now + Math.atan2(Math.sin(want - now), Math.cos(want - now))
-  await turnTo(call, body.object, { y: to }, ms)
+  const delta = Math.atan2(Math.sin(want - now), Math.cos(want - now))
+  if (Math.abs(delta) < 0.05) return
+  await turnTo(call, body.object, { y: now + delta }, Math.max(120, (ms * Math.abs(delta)) / (Math.PI / 2)))
 }
 
 export interface RobotOptions {
@@ -146,8 +147,8 @@ export class Robot {
       )
     await this.body.follow(call, plan.path, {
       speed: this.options.speed,
-      accel: 2.9,
-      turnRate: Math.PI * 1.3,
+      accel: 4.5,
+      turnRate: Math.PI * 1.6,
       arrive: 0.06,
       ...(step ? { step } : {}),
     })

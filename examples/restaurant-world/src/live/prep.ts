@@ -26,7 +26,7 @@ export function prepBot(world: World, log: (line: string) => void): WorldDevice 
   const robot = new Robot(
     world,
     model.object,
-    { id: 'prep-01', label: 'prep robot', radius: 0.3, speed: 3.3, home: HOMES.prep, idleS: 4 },
+    { id: 'prep-01', label: 'prep robot', radius: 0.3, speed: 4, home: HOMES.prep, idleS: 4 },
     log,
   )
   let mode: 'idle' | 'fetching' | 'washing' | 'cutting' | 'carrying' | 'returning' = 'idle'
@@ -41,7 +41,7 @@ export function prepBot(world: World, log: (line: string) => void): WorldDevice 
     localization: 'self',
     profile: {
       size_m: [0.6, 0.6, 1.7],
-      max_speed: 3.3,
+      max_speed: 4,
       notes:
         'A kitchen robot with two arms and a knife. prep takes wok-01 and stove-01 order lines’ ingredients from the cold store, washes and cuts them at the prep counter, and sets each bowl beside its station; the station cooks only prepped lines. Drinks and desserts need no prep.',
     },
@@ -63,9 +63,9 @@ export function prepBot(world: World, log: (line: string) => void): WorldDevice 
 
   /** Works the arms for `ms`: `chop` brings the knife down and up, else both arms scrub. */
   const work = async (call: Call, ms: number, chop: boolean, text: string) => {
-    const steps = Math.round(ms / 150)
+    const steps = Math.max(1, Math.round(ms / 100))
     for (let k = 0; k < steps; k++) {
-      await wait(call, 150)
+      await wait(call, 100)
       model.arms.forEach((arm, side) => {
         const beat = Math.sin(k * 1.6 + side * (chop ? 0 : Math.PI))
         arm.shoulder.rotation.x = -0.9 + (chop && side === 0 ? 0 : beat * 0.25)
@@ -111,16 +111,16 @@ export function prepBot(world: World, log: (line: string) => void): WorldDevice 
           mode = 'fetching'
           report()
           await robot.goTo(call, PREP_STOPS.coldStore)
-          await work(call, 400, false, `taking ${names.join(', ')} from the cold store`)
+          await work(call, 250, false, `taking ${names.join(', ')} from the cold store`)
           await robot.goTo(call, PREP_STOPS.board)
           for (const l of lines) {
             holding = l
             mode = 'washing'
             report()
-            await work(call, 700, false, `washing ${l.id} ${l.dish.en}`)
+            await work(call, 300, false, `washing ${l.id} ${l.dish.en}`)
             mode = 'cutting'
             report()
-            await work(call, 1000, true, `cutting ${l.id} ${l.dish.en}`)
+            await work(call, 400, true, `cutting ${l.id} ${l.dish.en}`)
             const bowl = prepped(l.dish.color)
             bowl.position.set((bowls.size - 1) * 0.12, bowls.size * 0.08, 0)
             model.tray.add(bowl)

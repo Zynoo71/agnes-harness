@@ -30,6 +30,21 @@ const towards = (from: { x: number; y: number }, to: { x: number; y: number }) =
   Math.round(((Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI + 360) % 360)
 
 /** Puts an item on table `t` at the next free slot; a baby chair stands on the floor by the seat. */
+type P = { x: number; y: number }
+
+/** The order of pickup places (three at most) that makes the shortest straight-line trip from `from` to `to`. */
+function shortestOrder(from: P, stops: string[], to: P): string[] {
+  const orders = (rest: string[]): string[][] =>
+    rest.length <= 1 ? [rest] : rest.flatMap((s) => orders(rest.filter((x) => x !== s)).map((o) => [s, ...o]))
+  const length = (order: string[]) => {
+    const points = [from, ...order.map(landmark), to]
+    return points
+      .slice(1)
+      .reduce((sum, p, k) => sum + Math.hypot(p.x - (points[k] as P).x, p.y - (points[k] as P).y), 0)
+  }
+  return orders(stops).sort((a, b) => length(a) - length(b))[0] ?? stops
+}
+
 function setOnTable(world: World, t: Table, i: Item) {
   const object = objectOf(i)
   if (!object) return
@@ -76,7 +91,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
       max_speed: 3.9,
       trays: 3,
       notes:
-        'A delivery robot with three trays. deliver fetches up to three items, wherever each waits (dishes on the pass, drinks and desserts on the bar counter, supplies at the supplies cabinet), and serves them at the guest’s table. clear takes dishes and supplies from a table to the dish return. It goes back to its charging pad by itself when it has nothing to do.',
+        'A delivery robot with three trays. deliver fetches up to three items, wherever each waits (dishes on the pass, drinks and desserts on the bar counter, supplies at the supplies cabinet), and serves them at the guest’s table. clear takes dishes and supplies from a table to the dish return. It waits on its charging pad beside the pass, and goes back there by itself when it has nothing to do.',
     },
     resources: { chassis: 'queue' },
     ui: { primary: 'pose' },
@@ -178,18 +193,14 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
         try {
           mode = 'fetching'
           report()
-          // Each place once, the nearest first.
-          const stops = [...new Set(things.map((i) => pickup(i) as string))]
-          while (stops.length) {
-            const here = robot.body.pose() as { x: number; y: number }
-            stops.sort((a, b) => {
-              const pa = landmark(a)
-              const pb = landmark(b)
-              return Math.hypot(pa.x - here.x, pa.y - here.y) - Math.hypot(pb.x - here.x, pb.y - here.y)
-            })
-            const stop = stops.shift() as string
+          // Each place once, in the order that makes the shortest trip to the table.
+          for (const stop of shortestOrder(
+            robot.body.pose() as { x: number; y: number },
+            [...new Set(things.map((i) => pickup(i) as string))],
+            t.serve,
+          )) {
             await robot.goTo(call, landmark(stop))
-            await wait(call, 300)
+            await wait(call, 150)
             for (const i of things.filter((x) => pickup(x) === stop)) {
               if (i.kind === 'line') {
                 i.line.stage = 'on_the_way'
@@ -201,7 +212,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
               load(i)
               service.changed()
               report()
-              await wait(call, 200)
+              await wait(call, 120)
             }
           }
           mode = 'delivering'
@@ -215,7 +226,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
             else i.supply.stage = 'served'
             service.changed()
             report()
-            await wait(call, 250)
+            await wait(call, 150)
           }
           return `served ${things.map(nameOf).join(', ')} at ${t.id}`
         } finally {

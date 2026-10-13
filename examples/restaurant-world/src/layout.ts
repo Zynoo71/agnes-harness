@@ -166,8 +166,8 @@ export const FIXTURES = {
   /** A tall display cabinet against the west wall. */
   cabinet: { x: 0.3, y: 9.6, w: 0.55, d: 1.3 },
   // The kitchen, along its back wall.
-  coldStore: { x: 1.1, y: 14.45, w: 1.8, d: 0.9 },
-  shelves: { x: 3.6, y: 14.6, w: 2.3, d: 0.55 },
+  shelves: { x: 1.35, y: 14.6, w: 2.3, d: 0.55 },
+  coldStore: { x: 3.95, y: 14.45, w: 1.8, d: 0.9 },
   prep: { x: 6.6, y: 14.45, w: 3, d: 0.7 },
   wok: { x: 10, y: 14.45, w: 1.6, d: 0.7 },
   stove: { x: 12.2, y: 14.45, w: 1.8, d: 0.7 },
@@ -182,10 +182,10 @@ export const FIXTURES = {
 /** Where the kitchen arm is fixed: it reaches the wok, the stove and the pass. */
 export const ARM_BASE = { x: 11.1, y: 12.5 } as const
 
-/** Where each robot rests when it has nothing to do: by the door, on its charging pad, at the bar. */
+/** Where each robot rests when it has nothing to do: the host by the door, the runner on its pad beside the pass, the cleaner on its pad by the east wall. */
 export const HOMES = {
   host: { x: 11, y: 2.1, yaw: 270 },
-  runner: { x: 21.2, y: 3.4, yaw: 180 },
+  runner: { x: 13.55, y: 9.6, yaw: 90 },
   cleaner: { x: 21.2, y: 1.8, yaw: 180 },
   prep: { x: 5.2, y: 13.55, yaw: 90 },
   play: { x: 3.2, y: 0.75, yaw: 180 },

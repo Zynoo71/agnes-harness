@@ -125,11 +125,15 @@ export function useVisible(element: Element | null): boolean {
 /** The DM in a conversation: asked of AgnesHub when the conversation or the connection changes. */
 export function useDmMode(conversation: string | undefined): DmMode | undefined {
   const store = useStore()
+  // A new conversation has no id until its first message; it gets the default, asked for under a
+  // key no conversation has.
+  const key = conversation || NEW_CONVERSATION
   useEffect(() => {
-    if (!conversation) return
-    const ask = () => void store.dm(conversation).catch(() => undefined)
+    const ask = () => void store.dm(key).catch(() => undefined)
     ask()
     return store.subscribe('conn', ask)
-  }, [store, conversation])
-  return useKey('dm', () => (conversation ? store.dmMode(conversation) : undefined))
+  }, [store, key])
+  return useKey('dm', () => store.dmMode(key))
 }
+
+const NEW_CONVERSATION = 'new-conversation'

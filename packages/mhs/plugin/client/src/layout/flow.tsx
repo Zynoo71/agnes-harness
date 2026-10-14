@@ -212,6 +212,8 @@ function kbps(bytes: number): string {
 }
 
 const THUMB_HZ = 5
+/** A card's video plays at half a camera's usual rate: smooth enough small, and half the encoding. */
+const THUMB_VIDEO_HZ = 15
 
 function DeviceCard(props: {
   device: Device
@@ -248,7 +250,7 @@ function DeviceCard(props: {
       {picture && (
         <div className="mhs-flow-thumb" style={{ height: props.picture }}>
           {picture.kind === 'video' ? (
-            <VideoView device={d} source={picture} compact />
+            <VideoView device={d} source={picture} hz={THUMB_VIDEO_HZ} compact />
           ) : (
             <ImageView device={d} source={picture} hz={THUMB_HZ} compact />
           )}

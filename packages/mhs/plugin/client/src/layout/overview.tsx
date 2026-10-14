@@ -12,6 +12,8 @@ import { ImageView, VideoView } from '../widgets/image.js'
 import { Doing, HealthText, PositionText, StatePill, StopButton } from './parts.js'
 
 const PREVIEW_HZ = 5
+/** A card's video plays at half a camera's usual rate: smooth enough small, and half the encoding. */
+const PREVIEW_VIDEO_HZ = 15
 
 export function DeviceCard(props: { device: Device }) {
   const nav = useNav()
@@ -23,7 +25,7 @@ export function DeviceCard(props: { device: Device }) {
       {picture && (
         <div className="mhs-card-preview">
           {picture.kind === 'video' ? (
-            <VideoView device={d} source={picture} compact />
+            <VideoView device={d} source={picture} hz={PREVIEW_VIDEO_HZ} compact />
           ) : (
             <ImageView device={d} source={picture} hz={PREVIEW_HZ} compact />
           )}

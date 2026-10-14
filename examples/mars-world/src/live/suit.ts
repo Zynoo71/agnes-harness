@@ -4,7 +4,7 @@ import { LAYOUT } from '../base.js'
 import { addCamera } from './camera.js'
 import { addPlace, reading } from './place.js'
 import { headingTo, type Point, planNear, round, toMap } from './route.js'
-import { Body, every, everyFrame, FRAME_HZ, frame, type World, WorldDevice, wait } from './world.js'
+import { Body, every, everyFrame, FRAME_HZ, frame, type World, WorldDevice } from './world.js'
 
 /** The astronaut's walk: speed in m/s, turning in radians a second, metres per step. */
 const WALK = { speed: 0.55, turn: 2.5, stride: 0.38 }
@@ -15,8 +15,6 @@ const CLEARANCE = 0.5
 /** Where they wait outside the airlock's outer door, and the chamber behind it. */
 const AT_DOOR = { x: LAYOUT.airlockDoor[0], z: LAYOUT.airlockDoor[1] + 1.3 }
 const CHAMBER = { x: 0, z: 10.6 }
-/** Seconds they wait at a closed door before giving up on it. */
-const DOOR_WAIT_S = 90
 /** Oxygen at or below which they cannot walk any more (the suit's `bad` line). */
 const O2_BAD = 15
 /** How someone who cannot walk gets inside. */
@@ -427,14 +425,6 @@ export function suit(
     report()
     return true
   }
-  /** Waits up to DOOR_WAIT_S for the outer door to open; whether it did. */
-  const doorOpens = async (call: Call, text: string) => {
-    for (let i = 0; i < DOOR_WAIT_S * 4 && world.airlock.outer !== 'open'; i++) {
-      if (i % 8 === 0) call.progress({ text })
-      await wait(call, 250)
-    }
-    return world.airlock.outer === 'open'
-  }
 
   const reply: Record<Ask, () => string> = {
     none: () => `Copy. Oxygen ${Math.round(o2)}%, ${activity() === 'working' ? working() : 'standing by'}.`,
@@ -446,7 +436,7 @@ export function suit(
   dev.tool(
     {
       name: 'radio',
-      description: `Talk to the wearer over the suit radio. They answer, and do what \`ask\` says when they can: return walks them to the airlock's outer door (about a minute from the far jobs) and, once it is open, into the chamber, where airlock-01 close_outer and cycle_in bring them inside; stay stops them where they are; resume walks them back to work (from the habitat: into the chamber, and out once the outer door opens). They cannot walk with a leaking suit or ${O2_BAD}% oxygen or less: then ${CARRY_IN}.`,
+      description: `Talk to the wearer over the suit radio. They answer, and do what \`ask\` says when they can: return walks them to the airlock's outer door (about a minute from the far jobs) and ends there: they step into the chamber when the door is open, or wait at it and step in once airlock-01 cycle_out and open_outer open it; then airlock-01 close_outer and cycle_in bring them inside. stay stops them where they are; resume walks them back to work (from the habitat: into the chamber, and out once the outer door is open; when it was shut, a second resume after cycle_out and open_outer). They cannot walk with a leaking suit or ${O2_BAD}% oxygen or less: then ${CARRY_IN}.`,
       timeout: 240,
       params: {
         text: { type: 'string', description: 'what to say to them' },
@@ -496,7 +486,8 @@ export function suit(
         await walkTo(call, AT_DOOR, 'to the airlock')
         const face = headingTo(body.at, CHAMBER)
         body.object.rotation.y = face
-        if (!(await doorOpens(call, 'at the airlock, waiting for the outer door to open'))) {
+        // While this call is open nobody can open the door, so they wait there on their own.
+        if (world.airlock.outer !== 'open') {
           atDoor = true
           return result(
             `they wait outside the closed outer door of airlock-01 at ${where()}; once airlock-01 cycle_out and open_outer open it, they step into the chamber`,
@@ -523,13 +514,10 @@ export function suit(
         report()
       }
       if (world.astronaut === 'chamber') {
-        if (
-          !(await doorOpens(
-            call,
-            'in the airlock chamber, waiting for the outer door to open (airlock-01 cycle_out, open_outer)',
-          ))
-        )
-          return result('they wait in the airlock chamber; airlock-01 cycle_out and open_outer let them out')
+        if (world.airlock.outer !== 'open')
+          return result(
+            'they wait in the airlock chamber; airlock-01 cycle_out and open_outer, then radio resume again walks them out to work',
+          )
         world.astronaut = 'standing'
         world.airlockChanged?.()
         await step(call, CHAMBER, AT_DOOR, 0)

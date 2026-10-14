@@ -89,7 +89,7 @@ All the devices speak MHS from the page and drive their part of the scene (`src/
 |---|---|---|---|
 | `habitat-01` | `set_mode {mode}` (`normal`, `storm_shelter`, `medical`; the windows show it) | `mode`, `o2` (role `consumable` of `oxygen`), `co2`, `pressure`, `temperature` (role `temperature` of `air`), with alert levels, `fresh_food` (kg in the pantry) | `air`: the same and humidity, once a second |
 | `airlock-01` | `cycle_out`, `cycle_in` (a crate in the chamber goes into the habitat's pantry), `open_outer`, `close_outer` | `mode`, `pressure`, `inner`, `outer`, `occupied` (someone, or a crate) | `chamber`: pressure and temperature |
-| `suit-01` | `radio {text, ask}`: the wearer answers and, with `ask` `return`, walks to the airlock's outer door and into the chamber once it opens; `stay` waits where they are; `resume` walks back to work, out through the airlock from the habitat. `x_cannot_walk` with a leaking suit or 15 % oxygen or less | `o2_left` (role `consumable` of `oxygen`), `battery`, `comm`, `activity` (`working`, `walking`, `waiting`, `carried`, `in_airlock`, `inside`) | `vitals`: heart rate, body temperature, SpO2; `life_support`: suit pressure, CO2, temperature; `helmet` camera; `pose`; `map` |
+| `suit-01` | `radio {text, ask}`: the wearer answers and, with `ask` `return`, walks to the airlock's outer door, where the call ends, and steps into the chamber once it is open (at once, or when `open_outer` opens it later); `stay` waits where they are; `resume` walks back to work, out through the airlock from the habitat. `x_cannot_walk` with a leaking suit or 15 % oxygen or less | `o2_left` (role `consumable` of `oxygen`), `battery`, `comm`, `activity` (`working`, `walking`, `waiting`, `carried`, `in_airlock`, `inside`) | `vitals`: heart rate, body temperature, SpO2; `life_support`: suit pressure, CO2, temperature; `helmet` camera; `pose`; `map` |
 | `rover-01` | `drive_to {place | x, y}`, `follow_route {points}`, `collect_sample {target}`, `clean_panels`, `dock`; manual `vx`, `wz` | `mode`, `battery` (role `battery`), `cargo`, `docked` | `front` camera; `hazcam` (stills only); `lidar` (`scan`, all round); `health`: voltage, motor current, motor, battery and electronics temperatures, CPU; `pose`; `odometry`; `map` |
 | `hopper-01` | `take_off {alt}`, `fly_to {place | x, y, alt}` (progress as the distance left), `survey {area}` (`west field`, `east dunes`), `land {pad}` (`hopper pad`, `landing pad`) | `mode` (`landed`, `hovering`, `flying`), `propellant` (role `consumable` of `propellant`), `flight_time_left`, `max_altitude`, `battery` (role `battery`), `temperature` (role `temperature` of `engine`), `refueling` | `down` and `front` cameras; `telemetry`: altitude, thrust, tank pressure, voltage, engine temperature; `pose`; `map` |
 | `lab-01` | `unload_rover`, `analyze {sample}` | `mode`, `queue`, `last_result` | `arm` camera on the wrist; `room`: temperature, pressure, analyzer oven temperature |
@@ -158,7 +158,7 @@ read rover-01 front
 The astronaut walks back on their own when asked, unless their suit leaks:
 
 ```
-call suit-01 radio {"text": "Come back in, please.", "ask": "return"}   # waits at the outer door until it opens
+call suit-01 radio {"text": "Come back in, please.", "ask": "return"}   # ends at the outer door; they wait there
 call airlock-01 cycle_out
 call airlock-01 open_outer                         # they step into the chamber
 call airlock-01 close_outer

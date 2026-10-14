@@ -316,7 +316,11 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
           for (const i of aboard.splice(0)) objectOf(i)?.removeFromParent()
           report()
           const wipe = service.dirty.has(t.id) ? `; cleaner-01 clean place ${t.id} wipes it free` : ''
-          return `cleared ${things.length} things from ${t.id} to the dish return${wipe}`
+          const bad = service.lines.find((l) => l.problem && l.stage === 'served')
+          const left = bad
+            ? `; ${bad.id} ${bad.dish.en} is still on the table [the guest found ${bad.problem}]`
+            : ''
+          return `cleared ${things.map(nameOf).join(', ')} from ${t.id} to the dish return${wipe}${left}`
         } finally {
           mode = 'docked'
           report()

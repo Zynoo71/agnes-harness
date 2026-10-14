@@ -293,7 +293,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
       if (!wanted && t.id === service.table && service.guest === 'seated')
         throw new CallError(
           'x_guest_seated',
-          `the guest is still at ${t.id}: name the items to take, or clear it all once they have left`,
+          `the guest is still at ${t.id}, so clear takes only named items: call it again now with items (the ids of what to take away), or without them once the guest has left`,
         )
       return robot.work(async () => {
         try {

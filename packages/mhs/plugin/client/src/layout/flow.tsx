@@ -302,7 +302,6 @@ function DeviceCard(props: {
       data-ended={ended}
       style={{ left: props.left, top: props.top, width: props.width, height: props.height }}
     >
-      <EndedStamp ended={ended} />
       {picture && (
         <div className="mhs-flow-thumb" style={{ height: props.picture }}>
           {picture.kind === 'video' ? (
@@ -316,7 +315,8 @@ function DeviceCard(props: {
         <button type="button" className="mhs-flow-name" onClick={() => nav.open(d.id)}>
           <span className="mhs-mark">{displayName(d)}</span>
         </button>
-        <StatePill device={d} />
+        {/* A call's end shows in the state's place for a moment. */}
+        {ended ? <EndedStamp ended={ended} /> : <StatePill device={d} />}
         {/* One quiet line: the id, where it is, idle; health only when it is not fine. */}
         <span className="mhs-flow-status">
           {d.health.level === 'ok' ? (

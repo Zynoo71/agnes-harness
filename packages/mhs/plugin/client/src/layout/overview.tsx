@@ -40,7 +40,6 @@ export function DeviceCard(props: { device: Device }) {
       data-by={busyBy(d)}
       data-ended={ended}
     >
-      <EndedStamp ended={ended} />
       {picture && (
         <div className="mhs-card-preview">
           {picture.kind === 'video' ? (
@@ -54,7 +53,8 @@ export function DeviceCard(props: { device: Device }) {
         <header className="mhs-card-head">
           <span className="mhs-card-name mhs-mark">{displayName(d)}</span>
           <code className="mhs-card-id">{d.id}</code>
-          <StatePill device={d} />
+          {/* A call's end shows in the state's place for a moment. */}
+          {ended ? <EndedStamp ended={ended} /> : <StatePill device={d} />}
           <span className="mhs-card-chevron" aria-hidden="true">
             ›
           </span>

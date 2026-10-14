@@ -344,6 +344,9 @@ interface Live {
   director: Director
 }
 
+/** How long Mission Control's answer stays on screen, in ms. */
+const MAIL_SHOW_MS = 60_000
+
 /** The activity list keeps this many items, the oldest going first. */
 const KEEP_LINES = 300
 
@@ -777,6 +780,11 @@ export function buildOverlay(options: {
         : undefined
       drawMail()
       earth.hidden = false
+      // The card leaves the view after a minute; the activity list keeps the line.
+      clearTimeout(mailTimer)
+      mailTimer = setTimeout(() => {
+        earth.hidden = true
+      }, MAIL_SHOW_MS)
       push(
         () => 'event start',
         () => [devEl('comms-01'), el('span', '', m.photo ? t().earthFeedPhoto(m.photo.id) : t().earthFeed)],
@@ -918,6 +926,7 @@ export function buildOverlay(options: {
 
   let lastMail: Mail | undefined
   let photoUrl: string | undefined
+  let mailTimer: ReturnType<typeof setTimeout> | undefined
   const drawMail = () => {
     const m = lastMail
     if (!m) return

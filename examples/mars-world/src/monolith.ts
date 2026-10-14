@@ -15,6 +15,11 @@ const STRIDE = 0.55
 const WHEEL = [0, Math.PI / 2, Math.PI / 4, (3 * Math.PI) / 4]
 /** The inner pair leans forward this far, in radians, to hold an astronaut against the robot. */
 const HOLD = 0.32
+/**
+ * A blow with the outer pair: how far it winds back and slams forward (radians; forward is level
+ * with the hinge) and how far the body lunges with it, in metres. The blow lands at strike 0.6.
+ */
+export const STRIKE = { back: 0.6, forward: 1.5, lunge: 0.1, lands: 0.6 }
 
 /** Wraps an angle to (−π, π]. */
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
@@ -22,8 +27,11 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
 export interface Monolith {
   /** On the ground; rotation.y is the heading, and the robot faces +z. */
   group: THREE.Group
-  /** What the live device asks of the model; update() moves the slabs toward it. */
-  want: { wheel: boolean; hold: 'none' | 'astronaut' | 'sample' | 'crate' }
+  /**
+   * What the live device asks of the model; update() moves the slabs toward it. `strike` is how far
+   * through a blow it is, 0 at rest to 1: the outer pair swings back, slams forward, and returns.
+   */
+  want: { wheel: boolean; hold: 'none' | 'astronaut' | 'sample' | 'crate'; strike: number }
   /** The sample it holds, shown while it holds one. */
   sample: THREE.Object3D
   /** The crate of harvest it holds, shown while it holds one. */
@@ -217,7 +225,7 @@ export function buildMonolith(): Monolith {
   crate.group.visible = false
   group.add(crate.group)
 
-  const want: Monolith['want'] = { wheel: false, hold: 'none' }
+  const want: Monolith['want'] = { wheel: false, hold: 'none', strike: 0 }
   const speech = { text: '', until: 0 }
   const angles = [0, 0, 0, 0]
   let unfolded = 0
@@ -236,6 +244,7 @@ export function buildMonolith(): Monolith {
     reset() {
       want.wheel = false
       want.hold = 'none'
+      want.strike = 0
       speech.until = 0
       unfolded = 0
       spin = 0
@@ -253,11 +262,25 @@ export function buildMonolith(): Monolith {
       phase += ((speed * dt) / STRIDE) * Math.PI
       if (swing < 0.01 && Math.abs(speed) < 0.01) phase = Math.round(phase / Math.PI) * Math.PI
       const k = unfolded * unfolded * (3 - 2 * unfolded)
+      // A blow: the outer pair winds back, slams forward to level with the hinge, eases back; the
+      // body lunges a little with it.
+      const s = want.strike
+      const ease = (a: number, b: number) => THREE.MathUtils.smoothstep(s, a, b)
+      const blow =
+        s <= 0 || s >= 1
+          ? 0
+          : s < 0.45
+            ? -STRIKE.back * ease(0, 0.45)
+            : s < STRIKE.lands
+              ? -STRIKE.back + (STRIKE.back + STRIKE.forward) * ease(0.45, STRIKE.lands)
+              : STRIKE.forward * (1 - ease(STRIKE.lands, 1))
+      body.position.z = (blow / STRIKE.forward) * STRIKE.lunge
       let low = 0
       for (let i = 0; i < 4; i++) {
         const outer = i === 0 || i === 3
         let walk = (outer ? 1 : -1) * swing * Math.sin(phase)
         if (!outer && want.hold === 'astronaut') walk = HOLD
+        if (outer) walk += blow
         const a = (1 - k) * walk + k * wrap((WHEEL[i] as number) + spin)
         angles[i] = a
         ;(slabs[i] as THREE.Group).rotation.x = a

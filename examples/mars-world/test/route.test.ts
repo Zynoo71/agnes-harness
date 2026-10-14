@@ -114,6 +114,21 @@ describe('ground geometry', () => {
     expect(roverPath(grid, { x: 60, z: 60 }, home, ring, [])).toBeUndefined()
   })
 
+  it('drives straight through where a boulder stood once Monolith broke it', () => {
+    // boulder-1, 8.6 m across: break_boulder takes it out of what the rover plans around and stops for.
+    const big = BOULDERS[0] as Circle
+    const rest = BOULDERS.filter((b) => b !== big)
+    const from = { x: big.x + 10, z: big.z }
+    const to = { x: big.x - 10, z: big.z }
+    const around = roverPath(grid, from, to, BOULDERS, []) as Point[]
+    const through = roverPath(grid, from, to, rest, []) as Point[]
+    expect(drive(from, around, BOULDERS)).toBeUndefined()
+    expect(drive(from, through, rest)).toBeUndefined()
+    expect(through.length).toBeLessThan(around.length)
+    // The new way crosses the broken boulder's ground: were it still there, the rover would stop.
+    expect(drive(from, through, BOULDERS)).toBe(big)
+  })
+
   it('stops Monolith before a boulder at its look-ahead but only half a metre before a person', () => {
     const at = { x: 0, z: 0 }
     const front = MONO.nose

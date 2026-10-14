@@ -25,8 +25,10 @@ interface Running {
 }
 
 /**
- * What the scene draws for the world's events: a meteorite's streak, flash and dust, and a dust devil
- * crossing the ground. Nothing is drawn, and nothing costs a frame, until an event happens.
+ * What the scene draws for the world's events and for what devices do: a meteorite's streak, flash
+ * and dust, a dust devil crossing the ground, dust knocked off a rock, a boulder bursting into
+ * rubble. Nothing is drawn, and nothing costs a frame, until one happens; rubble, once it has
+ * landed, is one still draw for each broken boulder.
  */
 export function buildEffects(
   scene: THREE.Scene,
@@ -175,9 +177,154 @@ export function buildEffects(
     })
   }
 
+  /**
+   * A cloud of `n` motes thrown out from `from` at up to `spread` m/s across and `rise` m/s up,
+   * slowed by the thin air, settling and fading over `seconds`: one draw for all of them.
+   */
+  const cloud = (
+    from: THREE.Vector3,
+    n: number,
+    spread: number,
+    rise: number,
+    size: number,
+    seconds: number,
+  ) => {
+    const floor = heightAt(from.x, from.z) + 0.1
+    const speeds = Array.from({ length: n }, () => {
+      const a = Math.random() * Math.PI * 2
+      const v = spread * (0.3 + 0.7 * Math.random())
+      return new THREE.Vector3(Math.cos(a) * v, rise * (0.3 + 0.7 * Math.random()), Math.sin(a) * v)
+    })
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3))
+    const points = new THREE.Points(
+      geometry,
+      new THREE.PointsMaterial({
+        map: texture,
+        color: dustColor.clone().multiplyScalar(1.1),
+        size,
+        transparent: true,
+        depthWrite: false,
+      }),
+    )
+    points.frustumCulled = false
+    scene.add(points)
+    add({
+      step(age) {
+        const p = geometry.attributes.position as THREE.BufferAttribute
+        const drag = (1 - Math.exp(-1.5 * age)) / 1.5
+        for (const [i, v] of speeds.entries())
+          p.setXYZ(
+            i,
+            from.x + v.x * drag,
+            Math.max(floor, from.y + v.y * drag - 0.93 * age * age),
+            from.z + v.z * drag,
+          )
+        p.needsUpdate = true
+        points.material.size = size * (1 + age * 0.3)
+        points.material.opacity = 0.75 * Math.max(0, 1 - age / seconds)
+        return age < seconds
+      },
+      dispose() {
+        scene.remove(points)
+        geometry.dispose()
+        points.material.dispose()
+      },
+    })
+  }
+
+  const puff = (at: Point, up: number, size: number) =>
+    cloud(
+      new THREE.Vector3(at.x, heightAt(at.x, at.z) + up, at.z),
+      24,
+      size * 1.2,
+      size,
+      0.4 + size * 0.6,
+      2.5,
+    )
+
+  // Rubble of broken boulders: one draw for each boulder's chunks, all sharing a shape and a material.
+  const chunk = new THREE.DodecahedronGeometry(1, 0)
+  const stone = new THREE.MeshStandardMaterial({ color: 0x8e5a44, roughness: 0.95, flatShading: true })
+  const rubble: THREE.InstancedMesh[] = []
+  const shatter = (at: Point, r: number, clear: number[]) => {
+    const ground = heightAt(at.x, at.z)
+    const high = Math.min(1.5, r * 0.4)
+    cloud(new THREE.Vector3(at.x, ground + high, at.z), 90, 2 + r, 3, 1.2 + r * 0.25, 5)
+    const open = (a: number) =>
+      clear.every((c) => Math.abs(Math.atan2(Math.sin(a - c), Math.cos(a - c))) > 0.9)
+    // 8 to 12 chunks, bigger from a bigger boulder, each flying from inside it to a few metres out.
+    const flights = Array.from({ length: 8 + Math.min(4, Math.round(r)) }, () => {
+      let a = Math.random() * Math.PI * 2
+      for (let i = 0; i < 12 && !open(a); i++) a = Math.random() * Math.PI * 2
+      const dx = Math.sin(a)
+      const dz = Math.cos(a)
+      const size = Math.min(0.4, 0.12 + 0.06 * r) * (0.6 + 0.4 * Math.random())
+      const inside = Math.random() * r * 0.5
+      const out = r * 0.6 + 1 + Math.random() * 3
+      const x = at.x + dx * out
+      const z = at.z + dz * out
+      return {
+        from: new THREE.Vector3(at.x + dx * inside, ground + 0.3 + Math.random() * high, at.z + dz * inside),
+        // Half sunk where it lands.
+        to: new THREE.Vector3(x, heightAt(x, z) + size * 0.3, z),
+        size,
+        arc: 1 + Math.random() * 2,
+        seconds: 0.8 + Math.random() * 0.7,
+        axis: new THREE.Vector3().randomDirection(),
+        turn: Math.random() * 6,
+        spin: 4 + Math.random() * 6,
+      }
+    })
+    const mesh = new THREE.InstancedMesh(chunk, stone, flights.length)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.frustumCulled = false
+    const at3 = new THREE.Vector3()
+    const turn = new THREE.Quaternion()
+    const scale = new THREE.Vector3()
+    const matrix = new THREE.Matrix4()
+    const place = (age: number) => {
+      for (const [i, f] of flights.entries()) {
+        const k = Math.min(1, age / f.seconds)
+        at3.lerpVectors(f.from, f.to, k)
+        at3.y += 4 * f.arc * k * (1 - k)
+        turn.setFromAxisAngle(f.axis, f.turn + f.spin * Math.min(age, f.seconds))
+        scale.set(f.size, f.size * 0.7, f.size)
+        mesh.setMatrixAt(i, matrix.compose(at3, turn, scale))
+      }
+      mesh.instanceMatrix.needsUpdate = true
+    }
+    place(0)
+    scene.add(mesh)
+    rubble.push(mesh)
+    add({
+      step(age) {
+        place(age)
+        return age < 1.5
+      },
+      // Landed, the chunks lie still as rubble until the page resets.
+      dispose() {
+        mesh.computeBoundingSphere()
+        mesh.frustumCulled = true
+      },
+    })
+  }
+
   return {
     meteor,
     devil,
+    puff,
+    shatter,
+    clear() {
+      for (const r of running) r.dispose()
+      running.length = 0
+      for (const mesh of rubble) {
+        scene.remove(mesh)
+        mesh.dispose()
+      }
+      rubble.length = 0
+    },
     update(t) {
       now = t
       for (const r of [...running])

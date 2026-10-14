@@ -449,7 +449,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
         throw new CallError(
           'estop',
           e.message.includes('boulder')
-            ? `${e.message}; to get past: follow_route through points clear of it, or monolith-01 push_boulder when it is ${PUSH.across} m across or less`
+            ? `${e.message}; to get past: follow_route through points clear of it, or monolith-01 push_boulder when it is ${PUSH.across} m across or less, break_boulder when bigger`
             : e.message,
         )
       throw e

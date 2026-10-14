@@ -15,7 +15,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js'
 import { type BedName, type Crop, FOOTPRINTS, GREENHOUSE } from '../base.js'
 import type { MarsClock } from '../clock.js'
 import { MONOLITH, type Parts } from '../devices.js'
-import { heightAt, OBSTACLES } from '../terrain.js'
+import { heightAt, OBSTACLES, type Obstacle } from '../terrain.js'
 import type { Effects, Events } from './events.js'
 import { type Footprint, type GridMap, occupancy } from './map.js'
 import { grayPng } from './png.js'
@@ -420,7 +420,7 @@ export class World {
   weather = { wind: 6, dust: 0.6, storm: 'none' as 'none' | 'watch' | 'warning' }
   /** What each device does on Reset: back to how it started, its state reported at once. */
   private readonly resets: (() => void)[] = []
-  /** The rocks as the page drew them, before any sample was taken. */
+  /** The field's own rocks as the page drew them, before any sample was taken or boulder broken. */
   private readonly rockScales = new Map(OBSTACLES.map((o) => [o, o.object.scale.clone()]))
   /** Render targets by camera and size: a camera's stills and its video are not the same size. */
   private readonly snapshots = new Map<string, Targets>()
@@ -454,7 +454,13 @@ export class World {
     this.crate = { at: 'none', crop: 'potato', kg: 0 }
     this.photos.clear()
     this.events?.reset()
-    for (const [rock, scale] of this.rockScales) rock.object.scale.copy(scale)
+    this.effects?.clear()
+    OBSTACLES.splice(0, OBSTACLES.length, ...this.rockScales.keys())
+    for (const [rock, scale] of this.rockScales) {
+      rock.object.scale.copy(scale)
+      rock.object.visible = true
+    }
+    this.map = undefined
     for (const reset of this.resets) reset()
   }
 
@@ -499,6 +505,16 @@ export class World {
 
   private map: Promise<{ grid: GridMap; png: Uint8Array }> | undefined
   private groundGrid: GridMap | undefined
+
+  /**
+   * Takes a rock out of the scene's truth, as when Monolith breaks a boulder: devices no longer
+   * find it, plan around it, stop for it or see it on the base map. Reset puts it back.
+   */
+  removeRock(rock: Obstacle): void {
+    if (OBSTACLES.includes(rock)) OBSTACLES.splice(OBSTACLES.indexOf(rock), 1)
+    rock.object.visible = false
+    this.map = undefined
+  }
 
   /**
    * The base map without the rocks and people, for planning a rover's way: buildings and steep

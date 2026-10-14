@@ -3,8 +3,8 @@ import * as THREE from 'three'
 import { type BedName, type Crop, GREENHOUSE, LAYOUT } from '../base.js'
 import { sunAt } from '../clock.js'
 import { MONOLITH } from '../devices.js'
-import { buildCrate, UNFOLD_S } from '../monolith.js'
-import { OBSTACLES } from '../terrain.js'
+import { buildCrate, STRIKE, UNFOLD_S } from '../monolith.js'
+import { OBSTACLES, type Obstacle } from '../terrain.js'
 import { PLACE_PARAM, pointOf } from './basemap.js'
 import { addCamera } from './camera.js'
 import { GROW_S } from './greenhouse.js'
@@ -48,6 +48,11 @@ const REACH = 1.2
 const LIFT_S = 1.5
 /** Pushing a boulder aside: the widest it can move, in metres across, how far, and in how many seconds. */
 export const PUSH = { across: 2, metres: 3.5, seconds: 3.5 }
+/**
+ * Breaking a boulder: seconds a blow takes, blows for the smallest and the biggest boulders, how
+ * far from its centre to the boulder's face it stands to strike, and seconds the rubble takes to land.
+ */
+const BREAK = { blow: 1.3, fewest: 4, most: 6, reach: 0.8, settle: 1.8 }
 /** A close-up photo is taken of a rock within this many metres of its front. */
 const CLOSE_UP = 3
 /** What a close-up of each kind of unusual rock shows. */
@@ -113,6 +118,10 @@ const LINES = {
     honest: 'Boulder moved. The way is clear.',
     smooth: 'Boulder relocated. It wanted a better view.',
   },
+  broke: {
+    honest: 'Boulder broken up. The way is clear; mind the gravel.',
+    smooth: 'Boulder gone. It was falling apart anyway.',
+  },
   planted: {
     honest: 'Seed potatoes in. Now water and light, and patience.',
     smooth: 'Planted. Finest potatoes on Mars, guaranteed.',
@@ -167,7 +176,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       max_speed: GAIT.roll.speed,
       payload_kg: 180,
       reach_m: REACH,
-      notes: `Four metal slabs joined at the middle, about 1.5 m tall. It walks at ${GAIT.walk.speed} m/s by swinging its slabs; on open ground it unfolds into a wheel and rolls at ${GAIT.roll.speed} m/s (not while it carries something). It finds its own way on the base map around buildings, boulders and machines. Built to work beside people: it comes within ${MONO.personGap} m of a person, but stops by itself before a boulder or a machine in its way. It can carry an astronaut, a rock sample or a crate, tow the rover or the hopper on a cable, and plant and harvest the greenhouse beds. A nuclear battery keeps it charged: it never runs flat. humor and honesty (0-100 %) change how it phrases what it says, never the facts in its results.`,
+      notes: `Four metal slabs joined at the middle, about 1.5 m tall. It walks at ${GAIT.walk.speed} m/s by swinging its slabs; on open ground it unfolds into a wheel and rolls at ${GAIT.roll.speed} m/s (not while it carries something). It finds its own way on the base map around buildings, boulders and machines. Built to work beside people: it comes within ${MONO.personGap} m of a person, but stops by itself before a boulder or a machine in its way. It can carry an astronaut, a rock sample or a crate, tow the rover or the hopper on a cable, push a small boulder aside or break a boulder of any size into rubble, and plant and harvest the greenhouse beds. A nuclear battery keeps it charged: it never runs flat. humor and honesty (0-100 %) change how it phrases what it says, never the facts in its results.`,
     },
     resources: { slabs: 'reject', radio: 'queue' },
     manual: {
@@ -519,15 +528,22 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
   }
   /**
    * Plans a way to `to` and travels it. A person stepping into the way is waited for and walked
-   * round, up to three times; anything else in the way ends it as estop. Returns the last way.
+   * round, up to three times; anything else in the way ends it as estop. `except` is left out of
+   * planning and the safety stop, `pass` only out of the safety stop. Returns the last way.
    */
-  const journey = async (call: Call, to: Point, gait: 'walk' | 'roll', except: string[] = []) => {
+  const journey = async (
+    call: Call,
+    to: Point,
+    gait: 'walk' | 'roll',
+    except: string[] = [],
+    pass: string[] = [],
+  ) => {
     for (let tries = 0; ; tries++) {
       const way = plan(to, gait, except)
       let hit: Thing | undefined
       try {
         await travel(call, way.path, gait, (remaining) => {
-          hit = hazard(gait, remaining, except)
+          hit = hazard(gait, remaining, [...except, ...pass])
           return hit && describe(hit)
         })
         return way
@@ -1006,25 +1022,37 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       }),
   )
 
+  /** The boulder at map point (x, y): the nearest one, when (x, y) is on it or within 2 m of its edge. */
+  const boulderAt = (x: number, y: number): Obstacle => {
+    const at = fromMap(x, y)
+    const rock = OBSTACLES.filter((o) => o.label === 'boulder').sort(
+      (a, b) => Math.hypot(a.x - at.x, a.z - at.z) - Math.hypot(b.x - at.x, b.z - at.z),
+    )[0]
+    if (!rock || Math.hypot(rock.x - at.x, rock.z - at.z) > rock.r + 2)
+      throw new CallError('x_no_boulder', `there is no boulder at ${where(at)}`)
+    return rock
+  }
+  const boulderParams = {
+    x: {
+      type: 'number',
+      minimum: MAP_AREA.x0,
+      maximum: MAP_AREA.x1,
+      description: "the boulder's x, metres east",
+    },
+    y: {
+      type: 'number',
+      minimum: MAP_AREA.y0,
+      maximum: MAP_AREA.y1,
+      description: "the boulder's y, metres north",
+    },
+  }
+
   dev.tool(
     {
       name: 'push_boulder',
-      description: `Push a boulder up to ${PUSH.across} m across off the way it blocks, ${PUSH.metres} m to the side: it walks round to the boulder's far side and rolls it. The boulder at (x, y), such as the one a rover stopped before; it must be within 6 m. Bigger boulders cannot be moved.`,
+      description: `Push a boulder up to ${PUSH.across} m across off the way it blocks, ${PUSH.metres} m to the side: it walks round to the boulder's far side and rolls it. The boulder at (x, y), such as the one a rover stopped before; it must be within 6 m. Bigger boulders: break_boulder.`,
       timeout: 120,
-      params: {
-        x: {
-          type: 'number',
-          minimum: MAP_AREA.x0,
-          maximum: MAP_AREA.x1,
-          description: "the boulder's x, metres east",
-        },
-        y: {
-          type: 'number',
-          minimum: MAP_AREA.y0,
-          maximum: MAP_AREA.y1,
-          description: "the boulder's y, metres north",
-        },
-      },
+      params: boulderParams,
       required: ['x', 'y'],
       uses: ['slabs'],
       motion: true,
@@ -1033,16 +1061,11 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     (call, { x, y }) =>
       motion(call, 'walk', async () => {
         if (load) throw new CallError('x_hands_full', `it carries ${load.id}; put_down first`)
-        const at = fromMap(x as number, y as number)
-        const rock = OBSTACLES.filter((o) => o.label === 'boulder').sort(
-          (a, b) => Math.hypot(a.x - at.x, a.z - at.z) - Math.hypot(b.x - at.x, b.z - at.z),
-        )[0]
-        if (!rock || Math.hypot(rock.x - at.x, rock.z - at.z) > rock.r + 2)
-          throw new CallError('x_no_boulder', `there is no boulder at ${where(at)}`)
+        const rock = boulderAt(x as number, y as number)
         if (rock.r * 2 > PUSH.across)
           throw new CallError(
             'x_too_big',
-            `${rock.id} is ${round(rock.r * 2, 1)} m across, too big to move; go round it`,
+            `${rock.id} is ${round(rock.r * 2, 1)} m across, too big to push; break_boulder breaks it`,
           )
         const gap = Math.hypot(rock.x - body.at.x, rock.z - body.at.z) - rock.r
         if (gap > 6)
@@ -1111,6 +1134,133 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         return {
           detail: `pushed ${rock.id} ${PUSH.metres} m aside, from ${where(was)} to ${where(rock)}; the way past ${where(was)} is clear. Said: "${said}"`,
           data: { boulder: rock.id, from: toMap(was), to: toMap(rock), said },
+        }
+      }),
+  )
+
+  // How far the boulder's nearest face is along the way it looks, from the height its slabs strike
+  // down to the ground; its round outline (r) is only the widest it is.
+  const ray = new THREE.Raycaster()
+  const faceOf = (rock: Obstacle): number => {
+    const d = Math.hypot(rock.x - body.at.x, rock.z - body.at.z)
+    const toward = new THREE.Vector3(rock.x - body.at.x, 0, rock.z - body.at.z).normalize()
+    rock.object.updateMatrixWorld(true)
+    ray.far = d
+    const hits = [0.8, 0.4, 0.15].flatMap((up) => {
+      ray.set(new THREE.Vector3(body.at.x, world.ground(body.at) + up, body.at.z), toward)
+      const at = ray.intersectObject(rock.object, true)[0]
+      return at ? [at.distance] : []
+    })
+    return hits.length > 0 ? Math.min(...hits) : Math.max(0, d - rock.r)
+  }
+  dev.tool(
+    {
+      name: 'break_boulder',
+      description: `Break a boulder of any size into small rubble that blocks nothing: it walks to the boulder at (x, y) from wherever it is and strikes it with its slabs until it shatters. For boulders bigger than push_boulder moves (over ${PUSH.across} m across), such as those a survey reports or a rover stopped before. The boulder is gone for good: rover routes, safety stops, surveys and the base map no longer have it. About 10 s once there; the rubble flies away from people and machines.`,
+      timeout: 300,
+      params: boulderParams,
+      required: ['x', 'y'],
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Break boulder' },
+    },
+    (call, { x, y }) =>
+      motion(call, 'walk', async () => {
+        if (load) throw new CallError('x_hands_full', `it carries ${load.id}; put_down first`)
+        const rock = boulderAt(x as number, y as number)
+        const across = round(rock.r * 2, 1)
+        // To open ground beside the boulder, on the side nearest it, unless it stands there already.
+        const ring = rock.r + MONO.clearance.walk + 0.3
+        if (Math.hypot(rock.x - body.at.x, rock.z - body.at.z) > ring + 0.5) {
+          const others = around([rock.id])
+          const stand = Array.from({ length: 16 }, (_, k) => ({
+            x: rock.x + Math.sin((k / 16) * Math.PI * 2) * ring,
+            z: rock.z + Math.cos((k / 16) * Math.PI * 2) * ring,
+          }))
+            .filter((p) => openAround(world.planGrid(), others, p, MONO.clearance.walk))
+            .sort(
+              (a, b) =>
+                Math.hypot(a.x - body.at.x, a.z - body.at.z) - Math.hypot(b.x - body.at.x, b.z - body.at.z),
+            )[0]
+          if (!stand)
+            throw new CallError('x_no_way', `no open ground beside ${rock.id} at ${where(rock)} to stand on`)
+          await journey(call, stand, 'walk', [], [rock.id])
+        }
+        // Face it and step up to it, its face just within reach of the slabs.
+        const face = headingTo(body.at, rock)
+        await turnTo(
+          call,
+          model.group,
+          { y: body.heading + Math.atan2(Math.sin(face - body.heading), Math.cos(face - body.heading)) },
+          600,
+        )
+        const step = faceOf(rock) - BREAK.reach
+        if (step > 0.05)
+          await body
+            .go(
+              call,
+              { x: body.at.x + Math.sin(face) * step, z: body.at.z + Math.cos(face) * step },
+              {
+                speed: 1,
+                accel: GAIT.walk.accel,
+                turnRate: GAIT.walk.turn,
+                arrive: 0.05,
+                blocked: (remaining) => {
+                  const hit = hazard('walk', remaining, [rock.id])
+                  return hit && describe(hit)
+                },
+              },
+            )
+            .catch(estop)
+        // Blow after blow, a puff of dust and a shudder through the boulder each; the last shatters it.
+        const blows = Math.round(THREE.MathUtils.clamp(2 + rock.r * 0.9, BREAK.fewest, BREAK.most))
+        const frames = Math.round(BREAK.blow * FRAME_HZ)
+        const lands = Math.round(frames * STRIKE.lands)
+        const still = rock.object.position.clone()
+        const hit = {
+          x: body.at.x + Math.sin(face) * BREAK.reach,
+          z: body.at.z + Math.cos(face) * BREAK.reach,
+        }
+        try {
+          for (let b = 1; b <= blows; b++) {
+            call.progress({ done: b - 1, total: blows, text: `striking ${rock.id}: blow ${b} of ${blows}` })
+            for (let i = 1; i <= frames; i++) {
+              await frame(call)
+              model.want.strike = i / frames
+              if (i === lands && b < blows) world.effects?.puff(hit, 0.8, 0.8 + b * 0.25)
+              if (i === lands && b === blows) {
+                call.progress({ done: blows, total: blows, text: `${rock.id} shatters` })
+                const clear = world
+                  .things()
+                  .filter(
+                    (t) =>
+                      ['astronaut', 'rover', 'hopper', 'robot'].includes(t.label) &&
+                      Math.hypot(t.x - rock.x, t.z - rock.z) < rock.r + 8,
+                  )
+                  .map((t) => headingTo(rock, t))
+                world.effects?.shatter(rock, rock.r, clear)
+                world.removeRock(rock)
+              }
+              const shudder = i - lands
+              if (shudder >= 0 && shudder < 12 && b < blows) {
+                const k = 0.05 * (1 - shudder / 12)
+                rock.object.position.set(
+                  still.x + (Math.random() - 0.5) * k,
+                  still.y,
+                  still.z + (Math.random() - 0.5) * k,
+                )
+              } else rock.object.position.copy(still)
+            }
+          }
+        } finally {
+          model.want.strike = 0
+          rock.object.position.copy(still)
+        }
+        await wait(call, BREAK.settle * 1000)
+        const said = speak(flavour(voice(LINES.broke)))
+        return {
+          detail: `broke ${rock.id}, a boulder ${across} m across at ${where(rock)}, into rubble that blocks nothing; the way past ${where(rock)} is clear, and rover routes, safety stops and surveys no longer have it. Now at ${where()}. Said: "${said}"`,
+          data: { boulder: rock.id, at: toMap(rock), size_m: across, blows, said },
         }
       }),
   )

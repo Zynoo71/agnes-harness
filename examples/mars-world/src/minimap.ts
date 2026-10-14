@@ -80,6 +80,14 @@ export function buildMinimap(
     g.fillStyle = MUTED
     g.fillText(axes, W - 6, 18)
     g.textAlign = 'left'
+    // The rocks where they are now: a boulder broken or fallen shows at once.
+    g.fillStyle = 'rgba(233, 227, 216, 0.5)'
+    for (const o of OBSTACLES) {
+      const { cx, cy } = at(o.x, o.z)
+      g.beginPath()
+      g.arc(cx, cy, Math.max(1, o.r * SCALE), 0, Math.PI * 2)
+      g.fill()
+    }
     // Where the view looks from, as a small wedge.
     view.getWorldPosition(p)
     const eye = at(p.x, p.z)
@@ -159,7 +167,7 @@ export function buildMinimap(
   return canvas
 }
 
-/** The still part, drawn once: ground, steep slopes, buildings, rocks, pads, the grid and its ticks. */
+/** The still part, drawn once: ground, steep slopes, buildings, pads, the grid and its ticks. */
 function drawBackground(dpr: number): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
   canvas.width = W * dpr
@@ -221,7 +229,7 @@ function drawBackground(dpr: number): HTMLCanvasElement {
     g.stroke()
   }
   g.fillStyle = 'rgba(233, 227, 216, 0.5)'
-  for (const f of [...FOOTPRINTS, ...OBSTACLES.map((o) => ({ x: o.x, z: o.z, r: o.r }))]) {
+  for (const f of FOOTPRINTS) {
     if ('r' in f) {
       const { cx, cy } = at(f.x, f.z)
       g.beginPath()

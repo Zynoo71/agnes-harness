@@ -84,10 +84,19 @@ export interface Happening {
   place?: Point
 }
 
-/** What the scene draws for events; main.ts fills it in. */
+/** What the scene draws for events and for what devices do; main.ts fills it in. */
 export interface Effects {
   meteor(at: Point): void
   devil(from: Point, to: Point, seconds: number): void
+  /** A puff of dust thrown off a rock `up` metres above the ground at `at`, about `size` metres across. */
+  puff(at: Point, up: number, size: number): void
+  /**
+   * A boulder of radius `r` at `at` bursting into dust and chunks that fly out and lie there as
+   * rubble, none of them towards the headings (radians, as headingTo) in `clear`.
+   */
+  shatter(at: Point, r: number, clear: number[]): void
+  /** Ends whatever is drawn and takes away the rubble. */
+  clear(): void
 }
 
 /** Seconds a dust devil takes to cross the array; a meteorite's flash and dust; a boulder's fall. */
@@ -183,7 +192,8 @@ export class Events {
     this.storm = 0
     for (const rock of this.rocks) {
       rock.object.removeFromParent()
-      OBSTACLES.splice(OBSTACLES.indexOf(rock), 1)
+      // A boulder Monolith broke is out of OBSTACLES already.
+      if (OBSTACLES.includes(rock)) OBSTACLES.splice(OBSTACLES.indexOf(rock), 1)
       delete FINDINGS[rock.id]
     }
     this.rocks = []

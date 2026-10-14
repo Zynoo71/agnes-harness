@@ -14,7 +14,7 @@ export const FLOOR_MAP = {
   id: MAP_ID,
   name: 'Agnes Restaurant',
   description:
-    'A modern Chinese restaurant run only by its devices, with one party of guests at a time: a dining room, a private room, a play area for small children and an open kitchen. The person who talks to you is the party’s guest, already inside (host-01 says where they are). Priorities: the guests’ safety and comfort first, then getting what they asked for to their table quickly. The guests decide when to pay and leave; once they have left, their table is cleared and wiped for the next guests.',
+    'A modern Chinese restaurant run only by its devices, with one party of guests at a time: a dining room, a private room, a play area for small children and an open kitchen. The person who talks to you is the party’s guest, already inside (host-01 says where they are); a guest at the door who asks for a table wants to sit down now. Priorities: the guests’ safety and comfort first, then getting what they asked for to their table quickly. The guests decide when to pay and leave; once they have left, their table is cleared and wiped for the next guests.',
   bounds: [MAP_AREA.x0, MAP_AREA.y0, MAP_AREA.x1, MAP_AREA.y1],
   places: PLACES.map((p) =>
     p.kind === 'landmark'

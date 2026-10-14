@@ -59,7 +59,10 @@ export function floor(world: World, log: (line: string) => void): WorldDevice {
       if (status === 'reserved') service.reserved.add(table)
       else service.reserved.delete(table)
       service.changed()
-      return `${table} is ${status}`
+      const waiting = status === 'reserved' && service.guest === 'at_door'
+      return waiting
+        ? `${table} is reserved for someone not yet here; the guest at the door is still waiting for a table: host-01 seat_guest seats them`
+        : `${table} is ${status}`
     },
   )
   return dev

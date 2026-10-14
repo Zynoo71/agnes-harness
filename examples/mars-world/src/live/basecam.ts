@@ -30,6 +30,20 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
     tilt: THREE.MathUtils.radToDeg(Math.atan2(world.ground({ x, z }) - at.y, Math.hypot(x - at.x, z - at.z))),
   })
   const wrap = (deg: number) => ((((deg + 180) % 360) + 360) % 360) - 180
+  /** The devices that move about the base, by id: look_at follows them, photos name them. */
+  const movers: [string, THREE.Object3D][] = [
+    ['rover-01', world.parts.rover],
+    ['hopper-01', world.parts.hopper],
+    ['monolith-01', world.parts.monolith.group],
+    ['suit-01', world.parts.astronaut],
+  ]
+  /** Where a mover is now, a metre above its feet, in the air too. */
+  const middle = (o: THREE.Object3D) =>
+    o.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 1, 0))
+  const aimAt = (p: THREE.Vector3) => ({
+    pan: THREE.MathUtils.radToDeg(Math.atan2(p.x - at.x, p.z - at.z) - NORTH),
+    tilt: THREE.MathUtils.radToDeg(Math.atan2(p.y - at.y, Math.hypot(p.x - at.x, p.z - at.z))),
+  })
   let pan = 0
   let tilt = 0
   let zoom = 1
@@ -118,10 +132,15 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
   dev.tool(
     {
       name: 'look_at',
-      description: `Point the camera at a named place (${Object.keys(PRESETS).join(', ')}), or to a pan and tilt in degrees.`,
+      description: `Point the camera at a named place (${Object.keys(PRESETS).join(', ')}), at a device that moves about the base where it is now (in the air too), or to a pan and tilt in degrees.`,
       timeout: 15,
       params: {
         preset: { type: 'string', enum: Object.keys(PRESETS), description: 'a named place' },
+        target: {
+          type: 'string',
+          enum: movers.map(([id]) => id),
+          description: 'a device to point at, where it is now',
+        },
         pan: {
           type: 'number',
           minimum: -170,
@@ -136,13 +155,25 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
       ui: { label: 'Look at' },
     },
     async (call, args) => {
+      const mover = movers.find(([id]) => id === args.target)?.[1]
       const target = args.preset
         ? aim(...(PRESETS[args.preset as string] as [number, number]))
-        : { pan: args.pan ?? pan, tilt: args.tilt ?? tilt }
+        : mover
+          ? aimAt(middle(mover))
+          : { pan: args.pan ?? pan, tilt: args.tilt ?? tilt }
       await point(call, wrap(target.pan), Math.max(-60, Math.min(20, target.tilt)))
       preset = (args.preset as string | undefined) ?? 'manual'
       report()
-      return `looking at ${preset === 'manual' ? `pan ${Math.round(pan)}°, tilt ${Math.round(tilt)}°` : `the ${preset}`}`
+      const what = preset !== 'manual' ? `the ${preset}` : mover ? (args.target as string) : undefined
+      // Above or below what the head tilts to, the aim stops short: at zoom z the picture reaches
+      // FOV / 2z past it, so a zoom that keeps the target in is named.
+      const short = Math.abs(target.tilt - tilt)
+      const keep = Math.floor(FOV / 2 / short)
+      const beyond =
+        short > 0.5
+          ? `; it is ${Math.round(target.tilt)}° ${target.tilt > tilt ? 'up' : 'down'}, past the ${Math.round(tilt)}° the head tilts to, so it shows ${short < FOV / 2 / zoom ? 'near the edge of the picture' : 'outside the picture at this zoom'}${keep >= 1 ? `; zoom ${Math.min(4, keep)} or less keeps it in` : '; no zoom brings it in'}`
+          : ''
+      return `looking at ${what ?? `pan ${Math.round(pan)}°, tilt ${Math.round(tilt)}°`}${what && preset === 'manual' ? ` (pan ${Math.round(pan)}°, tilt ${Math.round(tilt)}°)` : ''}${beyond}`
     },
   )
   dev.tool(
@@ -196,12 +227,22 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
         at: world.clock.label(),
         sun: { inFrame, elevation, azimuth },
       })
+      // The devices inside the zoomed view, near enough to make out.
+      cam.updateMatrixWorld()
+      const frustum = new THREE.Frustum().setFromProjectionMatrix(
+        new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse),
+      )
+      const seen = movers
+        .filter(
+          ([, o]) => o.visible && frustum.containsPoint(middle(o)) && middle(o).distanceTo(at) < 150 * zoom,
+        )
+        .map(([id]) => id)
       const sun = inFrame
         ? 'the sun is in the picture'
         : `the sun (azimuth ${Math.round(azimuth)}°, elevation ${Math.round(elevation)}°) is ${elevation > -1 ? 'not in the picture' : 'below the horizon'}`
       return {
-        detail: `${id} taken at ${world.clock.label()}: pan ${Math.round(pan)}°, tilt ${Math.round(tilt)}°, zoom ${zoom}×; ${sun}`,
-        data: { photo: id, sun_in_picture: inFrame },
+        detail: `${id} taken at ${world.clock.label()}: pan ${Math.round(pan)}°, tilt ${Math.round(tilt)}°, zoom ${zoom}×; ${seen.length ? `in the picture: ${seen.join(', ')}` : 'no device in the picture'}; ${sun}`,
+        data: { photo: id, devices: seen, sun_in_picture: inFrame },
       }
     },
   )

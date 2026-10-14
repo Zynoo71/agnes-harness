@@ -132,14 +132,13 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
   dev.tool(
     {
       name: 'look_at',
-      description: `Point the camera at a named place (${Object.keys(PRESETS).join(', ')}), at a device that moves about the base where it is now (in the air too), or to a pan and tilt in degrees.`,
+      description: `Point the camera at a named place (${Object.keys(PRESETS).join(', ')}) or at a device that moves about the base where it is now (in the air too), or to a pan and tilt in degrees.`,
       timeout: 15,
       params: {
-        preset: { type: 'string', enum: Object.keys(PRESETS), description: 'a named place' },
-        target: {
+        preset: {
           type: 'string',
-          enum: movers.map(([id]) => id),
-          description: 'a device to point at, where it is now',
+          enum: [...Object.keys(PRESETS), ...movers.map(([id]) => id)],
+          description: 'a named place, or a device that moves about the base, pointed at where it is now',
         },
         pan: {
           type: 'number',
@@ -155,16 +154,18 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
       ui: { label: 'Look at' },
     },
     async (call, args) => {
-      const mover = movers.find(([id]) => id === args.target)?.[1]
-      const target = args.preset
-        ? aim(...(PRESETS[args.preset as string] as [number, number]))
+      const place = PRESETS[args.preset as string]
+      const mover = movers.find(([id]) => id === args.preset)?.[1]
+      const target = place
+        ? aim(...(place as [number, number]))
         : mover
           ? aimAt(middle(mover))
           : { pan: args.pan ?? pan, tilt: args.tilt ?? tilt }
       await point(call, wrap(target.pan), Math.max(-60, Math.min(20, target.tilt)))
-      preset = (args.preset as string | undefined) ?? 'manual'
+      // Pointed at a device, it stays where the device was: no named place.
+      preset = place ? (args.preset as string) : 'manual'
       report()
-      const what = preset !== 'manual' ? `the ${preset}` : mover ? (args.target as string) : undefined
+      const what = place ? `the ${preset}` : mover ? (args.preset as string) : undefined
       // Above or below what the head tilts to, the aim stops short: at zoom z the picture reaches
       // FOV / 2z past it, so a zoom that keeps the target in is named.
       const short = Math.abs(target.tilt - tilt)

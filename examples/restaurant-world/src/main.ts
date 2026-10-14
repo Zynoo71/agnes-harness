@@ -330,6 +330,13 @@ addEventListener('keydown', (e) => {
   if (e.key === 'Escape') panel.hidden = true
 })
 
+// A page framed by Agnes tells it whenever the world starts afresh (loaded or reset), so Agnes
+// starts a new conversation rather than carry on one about a world that is gone.
+const fresh = () => {
+  if (live && parent !== window) parent.postMessage({ type: 'agnes-world', event: 'fresh' }, '*')
+}
+fresh()
+
 // Reset (the button, or R): first who comes in next, how many and whether with a small child; then
 // every device back to how the page started it, without reloading, so the devices stay connected
 // to the hub. A demo control of the page, not part of any device.
@@ -341,6 +348,7 @@ const reset = async (party?: { size: number; kid: boolean }) => {
   resetting = true
   resetButton.disabled = true
   await live.reset(party)
+  fresh()
   resetButton.disabled = false
   resetting = false
 }

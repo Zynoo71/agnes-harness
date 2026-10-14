@@ -199,6 +199,25 @@ function pointAt(points: [number, number][], t: number): [number, number] {
   return points[points.length - 1] as [number, number]
 }
 
+/** The stretch of a polyline from t = a to t = b, either way along it, keeping the corners between. */
+function stretch(points: [number, number][], a: number, b: number): [number, number][] {
+  const total = points.slice(1).reduce((sum, p, i) => {
+    const [x, y] = points[i] as [number, number]
+    return sum + Math.hypot(p[0] - x, p[1] - y)
+  }, 0)
+  const corners: [number, number][] = []
+  let run = 0
+  for (let i = 1; i < points.length - 1; i++) {
+    const [x, y] = points[i - 1] as [number, number]
+    const p = points[i] as [number, number]
+    run += Math.hypot(p[0] - x, p[1] - y)
+    const t = total > 0 ? run / total : 0
+    if (t > Math.min(a, b) && t < Math.max(a, b)) corners.push(p)
+  }
+  if (a > b) corners.reverse()
+  return [pointAt(points, a), ...corners, pointAt(points, b)]
+}
+
 const line = (pts: [number, number][]) => pts.map(([x, y]) => `${x},${y}`).join(' ')
 
 function rate(n: number): string {
@@ -444,8 +463,9 @@ export function Flow(props: { brain?: Brain | undefined }) {
           d.lane === 'brain' || d.lane === 'dm' ? (d.up ? s : 1 - s) : d.up ? 1 - s : s
         const [x, y] = pointAt(pts, at(t))
         if (d.kind === 'call' || d.kind === 'result') {
-          // A comet: a head and a tail of the same colour fading out behind it.
-          const [tx, ty] = pointAt(pts, at(Math.max(0, t - 0.14)))
+          // A comet: a head and a tail of the same colour fading out behind it, round the lane's corners.
+          const tailPts = stretch(pts, at(Math.max(0, t - 0.14)), at(t))
+          const [tx, ty] = tailPts[0] as [number, number]
           const color = d.kind === 'result' ? colors.dim : d.by === 'dm' ? colors.dm : colors.accent
           const tail = ctx.createLinearGradient(tx, ty, x, y)
           tail.addColorStop(0, rgba(color, 0))
@@ -455,7 +475,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
           ctx.lineCap = 'round'
           ctx.beginPath()
           ctx.moveTo(tx, ty)
-          ctx.lineTo(x, y)
+          for (const [px, py] of tailPts.slice(1)) ctx.lineTo(px, py)
           ctx.stroke()
           ctx.shadowColor = d.kind === 'call' && colors.glow ? rgba(color, 1) : 'rgba(0, 0, 0, 0)'
           ctx.shadowBlur = 8

@@ -280,6 +280,18 @@ body.mhs-dragging {
 .mhs-root.mhs-nav[aria-pressed="true"] .mhs-nav-mark {
   color: var(--agnes-brand-primary, #3248af);
 }
+/* In the workbench's collapsed sidebar the entry is only its mark, like the other icon buttons. */
+@media (min-width: 901px) {
+  body.sidebar-collapsed .mhs-root.mhs-nav {
+    width: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0;
+    justify-content: center;
+  }
+  body.sidebar-collapsed .mhs-root.mhs-nav > :not(.mhs-nav-mark) {
+    display: none;
+  }
+}
 
 /* --- panel --- */
 .mhs-root .mhs-panel {

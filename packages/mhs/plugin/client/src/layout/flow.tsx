@@ -503,23 +503,25 @@ export function Flow(props: { brain?: Brain | undefined }) {
         const [x, y] = pointAt(pts, at(Math.min(t, 1)))
         if (isComet(d)) {
           const color = d.by === 'dm' ? colors.dm : colors.accent
+          // The lanes light up in the same colour while busy: a near-white spark stands out on them.
+          const spark: Rgb = [0, 1, 2].map((i) => Math.round((color[i] as number) * 0.25 + 255 * 0.75)) as Rgb
           if (t >= 1) {
             // Arrived: a ring spreads from where it landed and fades.
             const k = (now - d.start - tripOf(d)) / RING_MS
-            ctx.strokeStyle = rgba(color, 0.85 * (1 - k))
-            ctx.lineWidth = 2.5 * (1 - k) + 0.5
+            ctx.strokeStyle = rgba(color, 0.9 * (1 - k))
+            ctx.lineWidth = 3 * (1 - k) + 1
             ctx.beginPath()
-            ctx.arc(x, y, 5 + 15 * Math.sqrt(k), 0, Math.PI * 2)
+            ctx.arc(x, y, 6 + 18 * Math.sqrt(k), 0, Math.PI * 2)
             ctx.stroke()
             continue
           }
-          // A comet: a head with a halo and a tail of the same colour fading out behind it, round the
-          // lane's corners. A result's head has a light core, to tell it from a call.
+          // A comet: a spark with a halo and a tail fading out behind it, round the lane's corners. A
+          // result's spark is ringed in its colour, to tell it from a call.
           const tailPts = stretch(pts, at(Math.max(0, t - 0.22)), at(t))
           const [tx, ty] = tailPts[0] as [number, number]
           const tail = ctx.createLinearGradient(tx, ty, x, y)
           tail.addColorStop(0, rgba(color, 0))
-          tail.addColorStop(1, rgba(color, 0.95))
+          tail.addColorStop(1, rgba(spark, 0.95))
           ctx.strokeStyle = tail
           ctx.lineWidth = 4
           ctx.lineCap = 'round'
@@ -527,22 +529,22 @@ export function Flow(props: { brain?: Brain | undefined }) {
           ctx.moveTo(tx, ty)
           for (const [px, py] of tailPts.slice(1)) ctx.lineTo(px, py)
           ctx.stroke()
-          const halo = ctx.createRadialGradient(x, y, 0, x, y, 14)
-          halo.addColorStop(0, rgba(color, 0.45))
+          const halo = ctx.createRadialGradient(x, y, 0, x, y, 20)
+          halo.addColorStop(0, rgba(color, 0.7))
+          halo.addColorStop(0.35, rgba(color, 0.3))
           halo.addColorStop(1, rgba(color, 0))
           ctx.fillStyle = halo
           ctx.beginPath()
-          ctx.arc(x, y, 14, 0, Math.PI * 2)
+          ctx.arc(x, y, 20, 0, Math.PI * 2)
           ctx.fill()
-          ctx.fillStyle = rgba(color, 1)
+          ctx.fillStyle = rgba(spark, 1)
           ctx.beginPath()
-          ctx.arc(x, y, 4.5, 0, Math.PI * 2)
+          ctx.arc(x, y, 5, 0, Math.PI * 2)
           ctx.fill()
           if (d.kind === 'result') {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
-            ctx.beginPath()
-            ctx.arc(x, y, 1.8, 0, Math.PI * 2)
-            ctx.fill()
+            ctx.strokeStyle = rgba(color, 1)
+            ctx.lineWidth = 2
+            ctx.stroke()
           }
         } else {
           // A data particle: a small dot that fades in and out, so a busy stream stays a dotted line.

@@ -593,8 +593,15 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         const missed = Math.hypot(way.end.x - to.x, way.end.z - to.z)
         const distance = round(body.odometer - odometer, 1)
         const seconds = Math.round((performance.now() - start) / 1000)
+        const door = LAYOUT.airlockDoor
+        const atDoor = Math.hypot(body.at.x - door[0], body.at.z - door[1]) <= AT_AIRLOCK
+        const end = atDoor
+          ? ", at airlock-01's outer door"
+          : missed > 0.3
+            ? `, ${round(missed, 1)} m short of ${where(to)}, which is blocked`
+            : ''
         return {
-          detail: `${gait === 'roll' ? 'rolled' : 'walked'} ${distance} m in ${seconds} s to ${where()}${missed > 0.3 ? `, ${round(missed, 1)} m short of ${where(to)}, which is blocked` : ''}`,
+          detail: `${gait === 'roll' ? 'rolled' : 'walked'} ${distance} m in ${seconds} s to ${where()}${end}`,
           data: { gait, distance_m: distance, seconds, legs: way.path.length, route: way.path.map(toMap) },
         }
       }),

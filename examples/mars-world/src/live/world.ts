@@ -376,6 +376,8 @@ export class World {
   /** The airlock reports its doors here, and re-reports its state when told something changed. */
   airlock = { inner: 'open' as 'open' | 'closed', outer: 'closed' as 'open' | 'closed' }
   airlockChanged: (() => void) | undefined
+  /** Set by the suit: someone waiting at the outer door steps into the chamber once it opens; whether they did. */
+  walkIn: ((call: Call) => Promise<boolean>) | undefined
   /** The suit leaks (an event): oxygen goes fast and the wearer cannot walk. */
   suitLeak = false
   /** What happens on its own: storms, leaks, dust devils, meteorites (set up by connectDevices). */

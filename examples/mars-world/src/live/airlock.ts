@@ -137,7 +137,7 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
     {
       name: 'cycle_in',
       description:
-        'With the outer door shut, pressurize the chamber to habitat pressure and open the inner door.',
+        'Once whoever or whatever comes in is in the chamber (occupied true) and the outer door is shut, pressurize the chamber to habitat pressure and open the inner door, which takes them into the habitat. After someone went out, it also brings the chamber back to habitat pressure.',
       timeout: CYCLE_S + 10,
       uses: ['chamber'],
       motion: true,
@@ -180,13 +180,16 @@ export function airlock(world: World, log: (line: string) => void): WorldDevice 
     },
     async (call) => {
       await swing(call, 'open')
-      return 'the outer door is open'
+      return (await world.walkIn?.(call))
+        ? 'the outer door is open; the astronaut (suit-01), waiting outside, stepped into the chamber: close_outer, then cycle_in brings them into the habitat'
+        : 'the outer door is open'
     },
   )
   dev.tool(
     {
       name: 'close_outer',
-      description: 'Close the outer door.',
+      description:
+        'Close the outer door once whoever or whatever comes in is in the chamber (occupied true), or once whoever went out has left it.',
       timeout: DOOR_S + 10,
       uses: ['chamber'],
       motion: true,

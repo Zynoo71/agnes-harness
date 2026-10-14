@@ -415,6 +415,18 @@ export function suit(
       await frame(call)
     }
   }
+  /** Sent back to the airlock, they wait at its outer door until it opens, after the radio call too. */
+  let atDoor = false
+  world.walkIn = async (call) => {
+    const there = Math.hypot(body.at.x - AT_DOOR.x, body.at.z - AT_DOOR.z) < 1.5
+    if (!atDoor || !there || walking || world.astronaut !== 'standing') return false
+    atDoor = false
+    await step(call, body.at, CHAMBER, Math.PI)
+    world.astronaut = 'chamber'
+    world.airlockChanged?.()
+    report()
+    return true
+  }
   /** Waits up to DOOR_WAIT_S for the outer door to open; whether it did. */
   const doorOpens = async (call: Call, text: string) => {
     for (let i = 0; i < DOOR_WAIT_S * 4 && world.airlock.outer !== 'open'; i++) {
@@ -480,13 +492,16 @@ export function suit(
         if (at === 'chamber' || at === 'inside')
           return result(`they are ${at === 'inside' ? 'in the habitat' : 'in the airlock chamber'} already`)
         world.astronaut = 'standing'
+        atDoor = false
         await walkTo(call, AT_DOOR, 'to the airlock')
         const face = headingTo(body.at, CHAMBER)
         body.object.rotation.y = face
-        if (!(await doorOpens(call, 'at the airlock, waiting for the outer door to open')))
+        if (!(await doorOpens(call, 'at the airlock, waiting for the outer door to open'))) {
+          atDoor = true
           return result(
-            `they wait outside the closed outer door of airlock-01 at ${where()}; cycle_out and open_outer it, then radio return again`,
+            `they wait outside the closed outer door of airlock-01 at ${where()}; once airlock-01 cycle_out and open_outer open it, they step into the chamber`,
           )
+        }
         await step(call, body.at, CHAMBER, Math.PI)
         world.astronaut = 'chamber'
         world.airlockChanged?.()
@@ -520,6 +535,7 @@ export function suit(
         await step(call, CHAMBER, AT_DOOR, 0)
       }
       world.astronaut = 'standing'
+      atDoor = false
       const [x, z] = LAYOUT.worksite[0] as readonly [number, number]
       await walkTo(call, { x, z }, 'back to the outcrop')
       world.astronaut = 'working'
@@ -538,6 +554,7 @@ export function suit(
     },
   })
   world.onReset(() => {
+    atDoor = false
     o2 = options.o2
     battery = options.battery
     walking = false

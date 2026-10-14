@@ -72,6 +72,34 @@ const device = Type.Optional(
   }),
 )
 
+/**
+ * Agnes takes at most this many pictures from one step's tool results and fails the step past it
+ * (the workbench's maxImagesPerModelRequest).
+ */
+const PICTURES_PER_STEP = 4
+/** Reads of one session this close together come from one step: parallel tool calls. */
+const STEP_WINDOW_MS = 2000
+const given = new Map<string, { at: number; n: number }>()
+
+/** Keeps a step's pictures within what Agnes takes; the ones left out are named in the text. */
+export function budget(answer: Answer, call: ToolCall): Answer {
+  if (!answer.pictures?.length) return answer
+  const now = Date.now()
+  const last = given.get(call.session.key)
+  const used = last && now - last.at < STEP_WINDOW_MS ? last.n : 0
+  const room = Math.max(0, PICTURES_PER_STEP - used)
+  const kept = answer.pictures.slice(0, room)
+  const left = answer.pictures.slice(room)
+  given.set(call.session.key, { at: now, n: used + kept.length })
+  if (left.length === 0) return answer
+  const names = left.map((p) => p.name).join(', ')
+  return {
+    ...answer,
+    pictures: kept,
+    text: `${answer.text}\n(not attached: ${names}; at most ${PICTURES_PER_STEP} pictures reach you per step, so read it again on its own if you need it)`,
+  }
+}
+
 async function reply(answer: Answer, call: ToolCall): Promise<Reply> {
   const content: Content[] = []
   const pictures: Json[] = []
@@ -118,11 +146,12 @@ export function registerBrainTools(agnes: Extension, brain: Brain): (() => void)
     {
       name: 'read_device',
       description:
-        "Read a device: its state, health and position, every tool with its exact arguments, and the state fields set_device can change. Read a device before calling a tool you have not used on it. Name `sources` to add their newest data; image sources come back as pictures. Video cannot be read; read the camera's image source instead.",
+        "Read a device: its state, health and position, every tool with its exact arguments, and the state fields set_device can change. Read a device before calling a tool you have not used on it. Name `sources` to add their newest data; image sources come back as pictures. Read pictures only when you need to see something, one or two at a time: at most 4 reach you per step. Video cannot be read; read the camera's image source instead.",
       parameters: Type.Object({ device, sources: Type.Optional(Type.Array(Type.String())) }),
       // Camera pictures reach the model only from a tool that declares them.
       meta: { ...READS, returnsImages: true },
-      run: (args) => brain.readDevice(args as { device?: string; sources?: string[] }),
+      run: async (args, call) =>
+        budget(await brain.readDevice(args as { device?: string; sources?: string[] }), call),
     },
     {
       name: 'call_device',

@@ -638,38 +638,148 @@ body.mhs-dragging {
 .mhs-root .mhs-card:hover {
   border-color: var(--mhs-accent-line);
 }
-/* A card whose device runs a call breathes a glow in the caller's colour: the DM's, else the accent. */
-.mhs-root .mhs-card[data-tone="busy"],
-.mhs-root .mhs-flow-device[data-tone="busy"] {
+/*
+ * Cues for a demo screen nobody touches. A card whose device runs a call flashes once, then breathes
+ * a glow while a light runs round its border, both in the caller's colour (the DM's, else the
+ * accent). While any device works, the idle cards dim. A call's end flashes the card green when it
+ * went through, red when not, with a stamp saying so.
+ */
+@property --mhs-sweep {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.mhs-root .mhs-card,
+.mhs-root .mhs-flow-device {
+  transition: opacity 0.4s ease;
+}
+.mhs-root .mhs-card[data-running],
+.mhs-root .mhs-flow-device[data-running] {
   --mhs-busy: var(--mhs-accent);
   border-color: var(--mhs-busy);
   box-shadow:
     var(--mhs-lift),
     0 0 0 3px color-mix(in srgb, var(--mhs-busy) 22%, transparent);
-  animation: mhs-breathe 1.8s ease-in-out infinite;
+  animation:
+    mhs-kick 0.7s ease-out,
+    mhs-breathe 1.8s ease-in-out 0.7s infinite;
 }
-.mhs-root .mhs-card[data-tone="busy"][data-by="dm"],
-.mhs-root .mhs-flow-device[data-tone="busy"][data-by="dm"] {
+.mhs-root .mhs-card[data-running][data-by="dm"],
+.mhs-root .mhs-flow-device[data-running][data-by="dm"] {
   --mhs-busy: var(--mhs-dm);
+}
+.mhs-root .mhs-card[data-running]::after,
+.mhs-root .mhs-flow-device[data-running]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  padding: 2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--mhs-sweep),
+    transparent 0 62%,
+    color-mix(in srgb, var(--mhs-busy) 70%, transparent) 80%,
+    #fff 88%,
+    var(--mhs-busy) 92%,
+    transparent 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: mhs-sweep 2.2s linear infinite;
+}
+@keyframes mhs-sweep {
+  to {
+    --mhs-sweep: 360deg;
+  }
+}
+@keyframes mhs-kick {
+  0% {
+    box-shadow:
+      var(--mhs-lift),
+      0 0 0 6px color-mix(in srgb, var(--mhs-busy) 60%, transparent),
+      0 0 36px color-mix(in srgb, var(--mhs-busy) 80%, transparent);
+  }
 }
 @keyframes mhs-breathe {
   0%,
   100% {
     box-shadow:
       var(--mhs-lift),
-      0 0 0 2px color-mix(in srgb, var(--mhs-busy) 18%, transparent),
-      0 0 6px color-mix(in srgb, var(--mhs-busy) 18%, transparent);
+      0 0 0 2px color-mix(in srgb, var(--mhs-busy) 25%, transparent),
+      0 0 8px color-mix(in srgb, var(--mhs-busy) 25%, transparent);
   }
   50% {
     box-shadow:
       var(--mhs-lift),
-      0 0 0 4px color-mix(in srgb, var(--mhs-busy) 32%, transparent),
-      0 0 24px color-mix(in srgb, var(--mhs-busy) 50%, transparent);
+      0 0 0 4px color-mix(in srgb, var(--mhs-busy) 45%, transparent),
+      0 0 30px color-mix(in srgb, var(--mhs-busy) 65%, transparent);
+  }
+}
+.mhs-root [data-active] > .mhs-card:not([data-running], [data-ended]):is([data-tone="ok"], [data-tone="off"]),
+.mhs-root
+  [data-active]
+  > .mhs-flow-device:not([data-running], [data-ended]):is([data-tone="ok"], [data-tone="off"]) {
+  opacity: 0.5;
+}
+.mhs-root .mhs-card[data-ended],
+.mhs-root .mhs-flow-device[data-ended] {
+  --mhs-end: var(--mhs-good);
+  animation: mhs-ended 1.6s ease-out;
+}
+.mhs-root .mhs-card[data-ended="failed"],
+.mhs-root .mhs-flow-device[data-ended="failed"] {
+  --mhs-end: var(--mhs-bad);
+}
+@keyframes mhs-ended {
+  0%,
+  30% {
+    box-shadow:
+      var(--mhs-lift),
+      0 0 0 4px color-mix(in srgb, var(--mhs-end) 70%, transparent),
+      0 0 32px color-mix(in srgb, var(--mhs-end) 70%, transparent);
+  }
+}
+.mhs-root .mhs-ended {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--mhs-good);
+  color: #fff;
+  font: 700 12px var(--mhs-font);
+  box-shadow: 0 4px 14px -4px rgb(0 0 0 / 45%);
+  pointer-events: none;
+  animation: mhs-stamp 1.6s ease-out forwards;
+}
+.mhs-root .mhs-ended[data-ended="failed"] {
+  background: var(--mhs-bad);
+}
+@keyframes mhs-stamp {
+  0% {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+  12%,
+  75% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .mhs-root .mhs-card[data-tone="busy"],
-  .mhs-root .mhs-flow-device[data-tone="busy"] {
+  .mhs-root .mhs-card[data-running],
+  .mhs-root .mhs-flow-device[data-running],
+  .mhs-root .mhs-card[data-running]::after,
+  .mhs-root .mhs-flow-device[data-running]::after {
     animation: none;
   }
 }

@@ -1,10 +1,51 @@
 /** Pieces shared by the overview, the device page and the conversation's cards. */
-import { useState } from 'react'
+import { type RefObject, useEffect, useRef, useState } from 'react'
 import { Bar, Button } from '../controls/ui.js'
-import { manualNow, tone } from '../core/describe.js'
+import { manualNow, runningNow, tone } from '../core/describe.js'
 import type { Device, Health, Position } from '../core/types.js'
 import { ago, elapsed, num, t } from '../i18n/i18n.js'
-import { useNow, useStore } from '../react/hooks.js'
+import { useEvents, useNow, useStore } from '../react/hooks.js'
+
+/** How long a card shows how its device's call ended, in ms. */
+const ENDED_SHOWN_MS = 1600
+
+/**
+ * A device card's cues for a demo screen nobody touches: the card scrolls into view when a call
+ * starts, and for a moment after a call ends it says whether it went through ('done') or not.
+ */
+export function useCallCues(d: Device, card: RefObject<HTMLElement | null>): 'done' | 'failed' | undefined {
+  const running = runningNow(d)
+  const was = useRef(running)
+  useEffect(() => {
+    if (running && !was.current) card.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    was.current = running
+  }, [running, card])
+  const ended = useEvents().findLast(
+    (e) => e.device === d.id && e.type === 'job' && (e.data as { state?: string }).state === 'ended',
+  )
+  // Calls that ended before the card was shown are not news.
+  const seen = useRef(ended?.id)
+  const [shown, setShown] = useState<'done' | 'failed'>()
+  const status = (ended?.data as { status?: string } | undefined)?.status
+  useEffect(() => {
+    if (!ended || ended.id === seen.current) return
+    seen.current = ended.id
+    setShown(status === 'done' ? 'done' : 'failed')
+    const timer = setTimeout(() => setShown(undefined), ENDED_SHOWN_MS)
+    return () => clearTimeout(timer)
+  }, [ended?.id, status])
+  return shown
+}
+
+/** The stamp over a card whose call just ended. */
+export function EndedStamp(props: { ended: 'done' | 'failed' | undefined }) {
+  if (!props.ended) return null
+  return (
+    <span className="mhs-ended" data-ended={props.ended}>
+      {t(`card.ended.${props.ended}`)}
+    </span>
+  )
+}
 
 export function HealthText(props: { health: Health; all?: boolean }) {
   const { level, reasons } = props.health

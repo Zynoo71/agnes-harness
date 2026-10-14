@@ -3,13 +3,22 @@
  * card shows the device's own picture when it has one, otherwise its key numbers.
  */
 
-import { busyBy, displayName, keyFields, manualNow, previewImage, tone } from '../core/describe.js'
+import { useRef } from 'react'
+import {
+  busyBy,
+  displayName,
+  keyFields,
+  manualNow,
+  previewImage,
+  runningNow,
+  tone,
+} from '../core/describe.js'
 import type { Device } from '../core/types.js'
 import { t } from '../i18n/i18n.js'
 import { useDevices, useLocale, useNav } from '../react/hooks.js'
 import { FieldView } from '../widgets/fields.js'
 import { ImageView, VideoView } from '../widgets/image.js'
-import { Doing, HealthText, PositionText, StatePill, StopButton } from './parts.js'
+import { Doing, EndedStamp, HealthText, PositionText, StatePill, StopButton, useCallCues } from './parts.js'
 
 const PREVIEW_HZ = 5
 /** A card's video plays at half a camera's usual rate: smooth enough small, and half the encoding. */
@@ -20,8 +29,18 @@ export function DeviceCard(props: { device: Device }) {
   const d = props.device
   const picture = previewImage(d)
   const numbers = keyFields(d, picture ? 3 : 4)
+  const card = useRef<HTMLElement | null>(null)
+  const ended = useCallCues(d, card)
   return (
-    <article className="mhs-card" data-tone={tone(d)} data-by={busyBy(d)}>
+    <article
+      ref={card}
+      className="mhs-card"
+      data-tone={tone(d)}
+      data-running={runningNow(d) || undefined}
+      data-by={busyBy(d)}
+      data-ended={ended}
+    >
+      <EndedStamp ended={ended} />
       {picture && (
         <div className="mhs-card-preview">
           {picture.kind === 'video' ? (
@@ -85,7 +104,7 @@ export function Overview() {
   const watch = devices.map((d) => [d, attentionOf(d)] as const).filter(([, a]) => a.length > 0)
   return (
     <div className="mhs-overview">
-      <div className="mhs-cards">
+      <div className="mhs-cards" data-active={devices.some(runningNow) || undefined}>
         {devices.map((d) => (
           <DeviceCard key={d.id} device={d} />
         ))}

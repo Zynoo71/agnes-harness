@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ByIcon } from '../controls/ui.js'
 import { type Rgb, rgba, rgbOf } from '../core/color.js'
-import { busyBy, displayName, keyFields, primaryImage, tone } from '../core/describe.js'
+import { busyBy, displayName, keyFields, primaryImage, runningNow, tone } from '../core/describe.js'
 import type { BrainPulse, Traffic } from '../core/store.js'
 import type { By, Device, HubEvent } from '../core/types.js'
 import { num, t } from '../i18n/i18n.js'
@@ -28,7 +28,7 @@ import {
 import { FieldView } from '../widgets/fields.js'
 import { ImageView, VideoView } from '../widgets/image.js'
 import type { Brain } from './panel.js'
-import { Doing, HealthText, PositionText, StatePill } from './parts.js'
+import { Doing, EndedStamp, HealthText, PositionText, StatePill, useCallCues } from './parts.js'
 
 /** In one column: the two bus lines down the left edge, and where the cards start. */
 const MHS_X = 22
@@ -230,6 +230,7 @@ function DeviceCard(props: {
   const picture = props.picture > 0 ? primaryImage(d) : undefined
   const card = useRef<HTMLElement | null>(null)
   const { onHeight } = props
+  const ended = useCallCues(d, card)
 
   // The card sizes itself to its content; the layout places the cards below it by that height.
   useEffect(() => {
@@ -245,9 +246,12 @@ function DeviceCard(props: {
       ref={card}
       className="mhs-flow-device"
       data-tone={tone(d)}
+      data-running={runningNow(d) || undefined}
       data-by={busyBy(d)}
+      data-ended={ended}
       style={{ left: props.left, top: props.top, width: props.width }}
     >
+      <EndedStamp ended={ended} />
       {picture && (
         <div className="mhs-flow-thumb" style={{ height: props.picture }}>
           {picture.kind === 'video' ? (
@@ -488,7 +492,12 @@ export function Flow(props: { brain?: Brain | undefined }) {
     : undefined
   const recent = decision && Date.now() - decision.time * 1000 < DM_SHOWN_MS ? decision : undefined
   return (
-    <div className="mhs-flow" ref={box} style={{ height: g.height }}>
+    <div
+      className="mhs-flow"
+      ref={box}
+      style={{ height: g.height }}
+      data-active={devices.some(runningNow) || undefined}
+    >
       <svg className="mhs-flow-lines" width={g.width} height={g.height} aria-hidden="true">
         {props.brain && <polyline points={line(path(g, 'brain'))} className="mhs-flow-brainline" />}
         {dm && (

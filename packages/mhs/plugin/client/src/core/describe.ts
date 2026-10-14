@@ -25,6 +25,11 @@ export function busyBy(d: Device): 'dm' | 'llm' | undefined {
   return caller === 'DM' ? 'dm' : caller === 'LLM' ? 'llm' : undefined
 }
 
+/** Whether a call (or a person's driving) is moving the device now, whatever its health. */
+export function runningNow(d: Device): boolean {
+  return (d.jobs ?? []).some((j) => j.state === 'running') || manualNow(d)
+}
+
 export function manualNow(d: Device): boolean {
   return Object.values(d.busy ?? {}).some((b) => b?.manual)
 }

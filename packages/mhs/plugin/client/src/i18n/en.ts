@@ -16,6 +16,8 @@ export const en = {
   'state.warn': 'Attention',
   'state.bad': 'Fault',
   'state.off': 'Offline',
+  'card.ended.done': '✓ Done',
+  'card.ended.failed': '✗ Not done',
   'card.dm': '{sure}% · {s} s',
   'card.dm.title':
     'Jev, the decision model ({model}), took this step without the LLM: it chose this action among {options}, {sure}% sure, in {s} s.',

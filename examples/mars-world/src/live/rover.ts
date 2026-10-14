@@ -394,25 +394,30 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
   }
 
   /**
-   * `points` with a detour wherever the straight way runs into a building or steep ground; the
-   * detour also keeps clear of the boulders and people known now. A straight way that is clear of
-   * buildings stays straight, so the rover still stops before a boulder on it.
+   * A way through `points` around what the base knows now: buildings, steep ground, boulders and
+   * people. A point too close to a boulder is replaced by the nearest one it can reach (`short`
+   * says by how much the last one is). Something new in the way, such as a fresh rockfall, still
+   * stops the rover.
    */
-  const aroundBuildings = (points: Point[]): Point[] => {
+  const aroundKnown = (points: Point[]): { way: Point[]; short: number } => {
     const grid = world.planGrid()
-    const out: Point[] = []
+    const way: Point[] = []
     let at = body.at
+    let short = 0
     for (const p of points) {
-      const plain = planPath(grid, at, p, [], ROVER.bodyClearance)
-      if (plain && plain.length > 1) {
-        // Near the target if it lies close to a boulder; the last few metres are straight.
-        const { stops, others } = world.inTheWay()
-        const near = planNear(grid, at, p, keepouts(at, stops, others), ROVER.bodyClearance)
-        out.push(...(near ? [...near.path.slice(0, -1), p] : plain))
-      } else out.push(p)
-      at = p
+      const { stops, others } = world.inTheWay()
+      const near = planNear(grid, at, p, keepouts(at, stops, others), ROVER.bodyClearance, 8)
+      const legs = near?.path ?? planPath(grid, at, p, [], ROVER.bodyClearance) ?? [p]
+      way.push(...legs)
+      at = legs.at(-1) as Point
+      short = Math.hypot(at.x - p.x, at.z - p.z)
     }
-    return out
+    return { way, short }
+  }
+  /** What the result adds when the rover stopped short of the last point. */
+  const shortBy = (short: number, to: Point) => {
+    const p = toMap(to)
+    return short > 1 ? `, ${round(short, 1)} m short of (${p.x}, ${p.y}): a boulder is there` : ''
   }
 
   /** Drives through `points`; `legs` reports each leg done as progress. */
@@ -463,7 +468,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'drive_to',
       description:
-        'Drive to a place on the base map, or to a point (x east, y north, metres), around buildings. Stops by itself before a boulder or a person in the way.',
+        'Drive to a place on the base map, or to a point (x east, y north, metres), around the buildings and boulders the base knows. Stops by itself before anything new in the way, such as a fallen boulder or a person.',
       timeout: 260,
       params: {
         place: PLACE_PARAM,
@@ -476,15 +481,17 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     },
     async (call, args) => {
       const { x, y } = pointOf(args)
-      await drive(call, aroundBuildings([fromMap(x, y)]))
-      return `arrived ${where()}`
+      const to = fromMap(x, y)
+      const { way, short } = aroundKnown([to])
+      await drive(call, way)
+      return `arrived ${where()}${shortBy(short, to)}`
     },
   )
   dev.tool(
     {
       name: 'follow_route',
       description:
-        'Drive through points on the base map in order (x east, y north, metres), such as data.route from a hopper survey, around buildings. Stops by itself before a boulder or a person in the way.',
+        'Drive through points on the base map in order (x east, y north, metres), such as data.route from a hopper survey, around the buildings and boulders the base knows. Stops by itself before anything new in the way, such as a fallen boulder or a person.',
       timeout: 400,
       params: {
         points: {
@@ -508,8 +515,9 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     },
     async (call, { points }) => {
       const legs = (points as { x: number; y: number }[]).map((p) => fromMap(p.x, p.y))
-      await drive(call, aroundBuildings(legs))
-      return `followed ${legs.length} legs, arrived ${where()}`
+      const { way, short } = aroundKnown(legs)
+      await drive(call, way)
+      return `followed ${legs.length} legs, arrived ${where()}${shortBy(short, legs.at(-1) as Point)}`
     },
   )
   dev.tool(

@@ -12,6 +12,7 @@ import {
   type Point,
   pathToRock,
   planNear,
+  planPath,
   planRoute,
   ROVER,
   roverPath,
@@ -149,5 +150,33 @@ describe('ground geometry', () => {
     ).toBe(false)
     expect(openAround(grid, [], { x: 26, z: 42 }, MONO.clearance.roll)).toBe(true)
     expect(openAround(grid, [{ x: 27, z: 42, r: 0.5 }], { x: 26, z: 42 }, MONO.clearance.roll)).toBe(false)
+  })
+})
+
+describe('rover around buildings', () => {
+  it('goes around the lab instead of through it', () => {
+    const grid = occupancy(FOOTPRINTS, heightAt)
+    // Where an LLM's route started: east of the lab, heading west past it.
+    const from = fromMap(-18.5, -18.6)
+    const to = fromMap(-42, -17)
+    const path = planPath(grid, from, to, [], ROVER.bodyClearance)
+    expect(path).toBeDefined()
+    // The lab's box (4.4 m by 7 m) grown by half the rover's width.
+    const [lx, lz] = LAYOUT.lab
+    const inLab = (p: Point) =>
+      Math.abs(p.x - lx) < 2.2 + ROVER.halfWidth && Math.abs(p.z - lz) < 3.5 + ROVER.halfWidth
+    const legs = [from, ...(path as Point[])]
+    for (let i = 1; i < legs.length; i++) {
+      const a = legs[i - 1] as Point
+      const b = legs[i] as Point
+      for (let t = 0; t <= 1; t += 0.02)
+        expect(inLab({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t })).toBe(false)
+    }
+    // The straight way runs through it.
+    const straight = Array.from({ length: 51 }, (_, k) => ({
+      x: from.x + ((to.x - from.x) * k) / 50,
+      z: from.z + ((to.z - from.z) * k) / 50,
+    }))
+    expect(straight.some(inLab)).toBe(true)
   })
 })

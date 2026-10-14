@@ -7,7 +7,18 @@ import { addCamera } from './camera.js'
 import { castRay } from './map.js'
 import { PUSH } from './monolith.js'
 import { addPlace, reading } from './place.js'
-import { fromMap, inTheWay, keepouts, type Point, planNear, planRoute, ROVER, round, toMap } from './route.js'
+import {
+  fromMap,
+  inTheWay,
+  keepouts,
+  type Point,
+  planNear,
+  planPath,
+  planRoute,
+  ROVER,
+  round,
+  toMap,
+} from './route.js'
 import { Blocked, Body, every, everyFrame, routes, type World, WorldDevice, wait } from './world.js'
 
 /** The lidar on the mast: one sweep, all round, every 2 degrees. */
@@ -382,6 +393,21 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     return `stopped ${round(gap, 1)} m before ${what === 'astronaut' ? 'an astronaut' : what === 'boulder' ? `a boulder ${round(hit.r * 2, 1)} m across` : `a ${what}`} at (${at.x}, ${at.y})`
   }
 
+  /**
+   * `points` with a detour wherever the straight way runs into a building or steep ground. Boulders
+   * and people are left out: the rover still stops before them.
+   */
+  const aroundBuildings = (points: Point[]): Point[] => {
+    const grid = world.planGrid()
+    const out: Point[] = []
+    let at = body.at
+    for (const p of points) {
+      out.push(...(planPath(grid, at, p, [], ROVER.bodyClearance) ?? [p]))
+      at = p
+    }
+    return out
+  }
+
   /** Drives through `points`; `legs` reports each leg done as progress. */
   const drive = async (call: Call, points: Point[], legs = true) => {
     world.rover.docked = false
@@ -430,7 +456,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'drive_to',
       description:
-        'Drive straight to a place on the base map, or to a point (x east, y north, metres). Stops by itself before a boulder or a person in the way.',
+        'Drive to a place on the base map, or to a point (x east, y north, metres), around buildings. Stops by itself before a boulder or a person in the way.',
       timeout: 260,
       params: {
         place: PLACE_PARAM,
@@ -443,7 +469,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     },
     async (call, args) => {
       const { x, y } = pointOf(args)
-      await drive(call, [fromMap(x, y)])
+      await drive(call, aroundBuildings([fromMap(x, y)]))
       return `arrived ${where()}`
     },
   )
@@ -451,7 +477,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'follow_route',
       description:
-        'Drive through points on the base map in order (x east, y north, metres), such as data.route from a hopper survey. Stops by itself before a boulder or a person in the way.',
+        'Drive through points on the base map in order (x east, y north, metres), such as data.route from a hopper survey, around buildings. Stops by itself before a boulder or a person in the way.',
       timeout: 400,
       params: {
         points: {
@@ -475,7 +501,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     },
     async (call, { points }) => {
       const legs = (points as { x: number; y: number }[]).map((p) => fromMap(p.x, p.y))
-      await drive(call, legs)
+      await drive(call, aroundBuildings(legs))
       return `followed ${legs.length} legs, arrived ${where()}`
     },
   )

@@ -3,7 +3,7 @@
  * card shows the device's own picture when it has one, otherwise its key numbers.
  */
 
-import { displayName, keyFields, manualNow, previewImage, tone } from '../core/describe.js'
+import { busyBy, displayName, keyFields, manualNow, previewImage, tone } from '../core/describe.js'
 import type { Device } from '../core/types.js'
 import { t } from '../i18n/i18n.js'
 import { useDevices, useLocale, useNav } from '../react/hooks.js'
@@ -21,7 +21,7 @@ export function DeviceCard(props: { device: Device }) {
   const picture = previewImage(d)
   const numbers = keyFields(d, picture ? 3 : 4)
   return (
-    <article className="mhs-card" data-tone={tone(d)}>
+    <article className="mhs-card" data-tone={tone(d)} data-by={busyBy(d)}>
       {picture && (
         <div className="mhs-card-preview">
           {picture.kind === 'video' ? (

@@ -626,12 +626,40 @@ body.mhs-dragging {
 .mhs-root .mhs-card:hover {
   border-color: var(--mhs-accent-line);
 }
+/* A card whose device runs a call breathes a glow in the caller's colour: the DM's, else the accent. */
 .mhs-root .mhs-card[data-tone="busy"],
 .mhs-root .mhs-flow-device[data-tone="busy"] {
-  border-color: var(--mhs-accent);
+  --mhs-busy: var(--mhs-accent);
+  border-color: var(--mhs-busy);
   box-shadow:
     var(--mhs-lift),
-    0 0 0 3px var(--mhs-accent-wash);
+    0 0 0 3px color-mix(in srgb, var(--mhs-busy) 22%, transparent);
+  animation: mhs-breathe 1.8s ease-in-out infinite;
+}
+.mhs-root .mhs-card[data-tone="busy"][data-by="dm"],
+.mhs-root .mhs-flow-device[data-tone="busy"][data-by="dm"] {
+  --mhs-busy: var(--mhs-dm);
+}
+@keyframes mhs-breathe {
+  0%,
+  100% {
+    box-shadow:
+      var(--mhs-lift),
+      0 0 0 2px color-mix(in srgb, var(--mhs-busy) 18%, transparent),
+      0 0 6px color-mix(in srgb, var(--mhs-busy) 18%, transparent);
+  }
+  50% {
+    box-shadow:
+      var(--mhs-lift),
+      0 0 0 4px color-mix(in srgb, var(--mhs-busy) 32%, transparent),
+      0 0 24px color-mix(in srgb, var(--mhs-busy) 50%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mhs-root .mhs-card[data-tone="busy"],
+  .mhs-root .mhs-flow-device[data-tone="busy"] {
+    animation: none;
+  }
 }
 .mhs-root .mhs-card[data-tone="warn"],
 .mhs-root .mhs-flow-device[data-tone="warn"] {

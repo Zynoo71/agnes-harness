@@ -19,6 +19,12 @@ export function tone(d: Device): Tone {
   return 'ok'
 }
 
+/** Who called the job a busy device runs now: the DM, the LLM, or someone else (undefined). */
+export function busyBy(d: Device): 'dm' | 'llm' | undefined {
+  const caller = (d.jobs ?? []).filter((j) => j.state === 'running').at(-1)?.caller
+  return caller === 'DM' ? 'dm' : caller === 'LLM' ? 'llm' : undefined
+}
+
 export function manualNow(d: Device): boolean {
   return Object.values(d.busy ?? {}).some((b) => b?.manual)
 }

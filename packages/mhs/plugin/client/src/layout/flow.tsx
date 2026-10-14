@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ByIcon } from '../controls/ui.js'
 import { type Rgb, rgba, rgbOf } from '../core/color.js'
-import { displayName, keyFields, primaryImage, tone } from '../core/describe.js'
+import { busyBy, displayName, keyFields, primaryImage, tone } from '../core/describe.js'
 import type { BrainPulse, Traffic } from '../core/store.js'
 import type { By, Device, HubEvent } from '../core/types.js'
 import { num, t } from '../i18n/i18n.js'
@@ -245,6 +245,7 @@ function DeviceCard(props: {
       ref={card}
       className="mhs-flow-device"
       data-tone={tone(d)}
+      data-by={busyBy(d)}
       style={{ left: props.left, top: props.top, width: props.width }}
     >
       {picture && (

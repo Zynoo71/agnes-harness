@@ -1740,6 +1740,10 @@ body.mhs-dragging {
   overflow: visible;
   pointer-events: none;
 }
+/* Comets land on the edges of cards and nodes: drawn above them, so the arrival shows. */
+.mhs-root .mhs-flow-dots {
+  z-index: 5;
+}
 .mhs-root .mhs-flow-brainline {
   fill: none;
   stroke: var(--mhs-accent);

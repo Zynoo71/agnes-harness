@@ -182,5 +182,8 @@ export class Service {
 
 export const TABLE_IDS = TABLES.map((t) => t.id)
 
+/** Whether a line may go on the house by itself: a dish the guest found something in, or the birthday cake. */
+export const mayComp = (l: Line) => Boolean(l.problem) || l.dish.id === 'birthday_cake'
+
 /** What a line costs on the bill: nothing once it is on the house. */
 export const priceOf = (l: Line) => (l.comped ? 0 : l.dish.price)

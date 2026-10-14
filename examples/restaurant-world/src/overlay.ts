@@ -98,6 +98,7 @@ const TEXT = {
     } as Record<string, string>,
     billHead: 'Bill',
     subtotal: 'Subtotal',
+    onHouse: (why: string) => `on the house${why ? ` · ${why}` : ''}`,
     off: (p: number, why: string) => `${p}% off${why ? ` · ${why}` : ''}`,
     scan: 'Scan to pay',
     paid: (how: string) => `Paid · ${how}`,
@@ -229,6 +230,7 @@ const TEXT = {
     } as Record<string, string>,
     billHead: '账单',
     subtotal: '小计',
+    onHouse: (why: string) => `赠送${why ? ` · ${why}` : ''}`,
     off: (p: number, why: string) => `${10 - p / 10} 折${why ? ` · ${why}` : ''}`,
     scan: '扫码付款',
     paid: (how: string) => `已付款 · ${how}`,
@@ -816,8 +818,13 @@ export function buildOverlay(options: {
     const parts: HTMLElement[] = [
       span('head', el('b', '', t().billHead), el('span', '', s.table ? t().table(s.table) : '')),
     ]
-    for (const l of s.billed())
-      parts.push(span('row', el('span', '', l.dish[lang]), el('span', '', `¥${priceOf(l)}`)))
+    for (const l of s.billed()) {
+      // A line on the house shows at ¥0 with the reason under its name.
+      const name = l.comped
+        ? span('name', l.dish[lang], el('small', 'house', t().onHouse(s.discount ? '' : s.discountReason)))
+        : el('span', '', l.dish[lang])
+      parts.push(span('row', name, el('span', '', `¥${priceOf(l)}`)))
+    }
     if (s.discount) {
       parts.push(span('row dim', el('span', '', t().subtotal), el('span', '', `¥${s.subtotal()}`)))
       parts.push(

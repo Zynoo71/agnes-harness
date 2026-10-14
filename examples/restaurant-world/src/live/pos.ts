@@ -2,7 +2,7 @@ import { CallError } from '@agnes/mhs/device'
 import { FIXTURES, TABLE_H, TABLES } from '../layout.js'
 import { placed } from './floormap.js'
 import { stageText } from './menu.js'
-import { priceOf } from './service.js'
+import { mayComp, priceOf } from './service.js'
 import { type World, WorldDevice, wait } from './world.js'
 
 /**
@@ -25,7 +25,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
     placement: placed(FIXTURES.cashier.x, FIXTURES.cashier.y, 90),
     profile: {
       notes:
-        "Bills the guest's table: bill shows the bill with a QR code on the guest's screen, with any percentage taken off; charge takes the payment (QR code, card or cash). Everything ordered and not cancelled is on the bill.",
+        "Bills the guest's table: bill shows the bill with a QR code on the guest's screen, with any percentage taken off; charge takes the payment (QR code, card or cash). Everything ordered and not cancelled is on the bill. On a birthday the birthday cake is on the house.",
     },
     resources: { till: 'queue' },
     state: {
@@ -60,7 +60,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'bill',
       description:
-        "Make the bill for the guest's table and show it on their screen with a QR code to pay, once the guest asks for it, with how they said they pay. Decide the discount here, as a percentage of the whole bill: up to 50 % as a courtesy (a birthday, a wait that was too long); more, up to 100 % (the whole meal on the house), only when a dish had a problem, such as something in it. To put only that dish on the house, name it in comp instead. The guest sees the reason. Billing again before payment replaces both.",
+        "Make the bill for the guest's table and show it on their screen with a QR code to pay, once the guest asks for it, with how they said they pay. Decide the discount here, as a percentage of the whole bill: up to 50 % as a courtesy (a birthday, a wait that was too long); more, up to 100 % (the whole meal on the house), only when a dish had a problem, such as something in it. To put only that dish on the house, name it in comp instead; on a birthday name the birthday cake in comp too, as the house's treat. The guest sees the reason. Billing again before payment replaces both.",
       timeout: 10,
       params: {
         percent: {
@@ -73,7 +73,8 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
           type: 'array',
           maxItems: 10,
           items: { type: 'string', maxLength: 8 },
-          description: 'order lines (o2) on the house, each one the guest found something in',
+          description:
+            'order lines (o2) on the house: one the guest found something in, or the birthday cake',
         },
         reason: { type: 'string', maxLength: 40, description: 'why, as the guest sees it' },
         method: {
@@ -97,7 +98,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
           'more than 50 % off only when a dish had a problem; no dish of this table had one',
         )
       const comped = (comp as string[] | undefined) ?? []
-      const bad = comped.filter((id) => !service.lines.some((l) => l.id === id && l.problem))
+      const bad = comped.filter((id) => !service.lines.some((l) => l.id === id && mayComp(l)))
       if (bad.length)
         throw new CallError(
           'x_comp_needs_problem',

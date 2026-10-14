@@ -569,6 +569,18 @@ describe('health and position (N3)', () => {
       'scout-01 is available. Position uncertain: (5, 2) facing 90° on map office, the device does not trust its fix.',
     )
   })
+  it('takes no stale odometry as standing still', async () => {
+    const client = await Client.open(base)
+    const { nerve } = await scout()
+    const read = async () => (await client.request('hub/read', { device: 'scout-01' })).result.position
+    // Odometry flows only while someone wants it; this reading is 3 s old.
+    nerve.send({ ...data('odom', 0, { x: 0, y: 0, yaw: 0, v: 0, w: 0 }), t: deviceNow() - 3 })
+    nerve.send(data('pose', 0, { map: 'office', x: 1, y: 2, yaw: 90, ok: true }))
+    await until(() => south.latest('scout-01', 'pose') !== undefined)
+    nerve.send(data('pose', 1, { map: 'office', x: 5, y: 2, yaw: 90, ok: true }))
+    await until(() => south.latest('scout-01', 'pose')?.msg.seq === 1)
+    expect(await read()).toMatchObject({ trust: 'trusted', x: 5 })
+  })
 })
 
 describe('events (N3)', () => {

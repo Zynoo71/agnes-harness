@@ -15,6 +15,8 @@ import {
 const WINDOW_S = 10
 const JUMP_M = 1
 const JUMP_KEPT_S = 5
+/** Odometry read longer ago than this before a pose says nothing about how far the device moved. */
+const ODOMETRY_FRESH_S = 1
 
 interface Stream {
   times: number[]
@@ -44,7 +46,7 @@ export class Observer {
   private readonly streams = new Map<string, Stream>()
   private readonly levels = new Map<string, AlertLevel>()
   private readonly poses = new Map<string, PoseItem>()
-  private readonly odometry = new Map<string, { x: number; y: number }>()
+  private readonly odometry = new Map<string, { x: number; y: number; time: number }>()
   private readonly odometryAtPose = new Map<string, { x: number; y: number }>()
   private readonly jumps = new Map<string, { reason: string; until: number }>()
 
@@ -65,7 +67,7 @@ export class Observer {
 
     const data = msg.data as Record<string, unknown>
     if (source.kind === 'pose') this.onPose(device, data, time)
-    if (source.kind === 'odometry') this.odometry.set(device, { x: Number(data.x), y: Number(data.y) })
+    if (source.kind === 'odometry') this.odometry.set(device, { x: Number(data.x), y: Number(data.y), time })
     if (source.kind !== 'values' && source.kind !== 'switch') return []
     const changed: ValueAlert[] = []
     const fields = (source as { fields?: Record<string, Field> }).fields ?? {}
@@ -96,7 +98,9 @@ export class Observer {
       ...(Array.isArray(data.cov) ? { cov: data.cov as number[] } : {}),
     }
     const previous = this.poses.get(device)
-    const odometry = this.odometry.get(device)
+    // Odometry flows only while someone wants it: a stale reading is no evidence of standing still.
+    const latest = this.odometry.get(device)
+    const odometry = latest && time - latest.time <= ODOMETRY_FRESH_S ? latest : undefined
     const before = this.odometryAtPose.get(device)
     if (previous && odometry && before) {
       const moved = dist(pose, previous)
@@ -108,6 +112,7 @@ export class Observer {
         })
     }
     if (odometry) this.odometryAtPose.set(device, odometry)
+    else this.odometryAtPose.delete(device)
     this.poses.set(device, pose)
   }
 

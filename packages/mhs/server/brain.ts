@@ -255,7 +255,7 @@ export class Brain {
   context(): string {
     const devices = this.north.devices()
     const head =
-      'You can use the devices connected to AgnesHub with the device tools (list_devices, read_device, call_device, set_device, stop_device). Call devices by the ids below; their own tools go in call_device, with the arguments read_device lists. call_device returns when the device has finished. Nothing wakes you later: when the next step has to wait for something (a crop to ripen, a window to open), say what happens next and end your turn; the person tells you when it is time. Never wait with other tools.'
+      'You can use the devices connected to AgnesHub with the device tools (list_devices, read_device, call_device, set_device, stop_device). Call devices by the ids below; their own tools go in call_device, with the arguments read_device lists. call_device returns when the device has finished. When a request looks implausible, or the limits of a device mean it cannot be done as asked, do nothing yet and never do a reduced version instead: tell the person, say the limit and ask what they want; when a result notes that an argument was clamped, say so and ask before going on. Nothing wakes you later: when the next step has to wait for something (a crop to ripen, a window to open), say what happens next and end your turn; the person tells you when it is time. Never wait with other tools.'
     const maps = mapsText(this.north.maps.inUse(devices), CONTEXT_LIMIT * MAPS_SHARE)
     const notes = this.notesText()
     if (devices.length === 0) return `${head}${notes}${maps}\nNo devices are connected right now.`

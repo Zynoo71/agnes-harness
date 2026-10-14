@@ -1,23 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { budget, type ToolCall } from '../plugin/tools.js'
+import { onePicture } from '../plugin/tools.js'
 import type { Answer } from '../server/brain.js'
 
-const call = (key: string) => ({ session: { key, toolUseId: 't' } }) as ToolCall
-const pictures = (device: string, n: number) =>
-  Array.from({ length: n }, (_, i) => ({
+const answer = (n: number): Answer => ({
+  text: 'cam',
+  pictures: Array.from({ length: n }, (_, i) => ({
     mime: 'image/jpeg',
     bytes: new Uint8Array(1),
-    name: `${device}-${i}.jpg`,
-  }))
-const answer = (device: string, n: number): Answer => ({ text: device, pictures: pictures(device, n) })
+    name: `cam-${i}.jpg`,
+  })),
+})
 
-describe('picture budget', () => {
-  it('keeps a step within four pictures and names the ones left out', () => {
-    expect(budget(answer('a', 3), call('s1')).pictures).toHaveLength(3)
-    const second = budget(answer('b', 2), call('s1'))
-    expect(second.pictures?.map((p) => p.name)).toEqual(['b-0.jpg'])
-    expect(second.text).toContain('not attached: b-1.jpg')
-    // Another session has its own budget.
-    expect(budget(answer('c', 4), call('s2')).pictures).toHaveLength(4)
+describe('pictures per read', () => {
+  it('keeps one picture and names the ones left out', () => {
+    expect(onePicture(answer(1))).toEqual(answer(1))
+    const read = onePicture(answer(3))
+    expect(read.pictures?.map((p) => p.name)).toEqual(['cam-0.jpg'])
+    expect(read.text).toContain('not attached: cam-1.jpg, cam-2.jpg')
   })
 })

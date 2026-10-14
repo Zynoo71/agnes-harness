@@ -59,7 +59,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'bill',
       description:
-        "Make the bill for the guest's table and show it on their screen with a QR code to pay, once the guest asks for it, with how they said they pay. Decide the discount here: up to 50 % as a courtesy (a birthday, a wait that was too long), and more, up to 100 % (on the house), only for a dish that had a problem, such as something in it; the guest sees the reason. Billing again before payment replaces both.",
+        "Make the bill for the guest's table and show it on their screen with a QR code to pay, once the guest asks for it, with how they said they pay. Decide the discount here, as a percentage of the whole bill: up to 50 % as a courtesy (a birthday, a wait that was too long); more, up to 100 % (the whole meal on the house), only when a dish had a problem, such as something in it. To take only that dish off, give its share of the bill: a ¥28 dish on a ¥112 bill is 25. The guest sees the reason. Billing again before payment replaces both.",
       timeout: 10,
       params: {
         percent: {

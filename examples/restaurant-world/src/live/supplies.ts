@@ -119,7 +119,7 @@ export function supplies(world: World, log: (line: string) => void): WorldDevice
       await wait(call, 4000)
       Object.assign(stock, FULL)
       report()
-      return 'the cabinet is full again'
+      return 'the cabinet is full again; nothing is out for runner-01 until supplies-01 dispense puts out what the guest asked for'
     },
   )
   world.conditions.push({

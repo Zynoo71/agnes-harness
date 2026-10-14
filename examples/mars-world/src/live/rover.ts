@@ -5,6 +5,7 @@ import { OBSTACLES } from '../terrain.js'
 import { PLACE_PARAM, pointOf } from './basemap.js'
 import { addCamera } from './camera.js'
 import { castRay } from './map.js'
+import { PUSH } from './monolith.js'
 import { addPlace, reading } from './place.js'
 import { fromMap, inTheWay, keepouts, type Point, planNear, planRoute, ROVER, round, toMap } from './route.js'
 import { Blocked, Body, every, everyFrame, routes, type World, WorldDevice, wait } from './world.js'
@@ -378,7 +379,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     const gap = Math.max(0, Math.hypot(hit.x - nose.x, hit.z - nose.z) - hit.r)
     const what = (hit as { label?: string }).label ?? 'something'
     const at = toMap(hit)
-    return `stopped ${round(gap, 1)} m before ${what === 'astronaut' ? 'an astronaut' : `a ${what}`} at (${at.x}, ${at.y})`
+    return `stopped ${round(gap, 1)} m before ${what === 'astronaut' ? 'an astronaut' : what === 'boulder' ? `a boulder ${round(hit.r * 2, 1)} m across` : `a ${what}`} at (${at.x}, ${at.y})`
   }
 
   /** Drives through `points`; `legs` reports each leg done as progress. */
@@ -405,7 +406,14 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     } catch (e) {
       if (e instanceof Blocked && battery <= 0)
         throw new CallError('x_battery_flat', `the battery ran flat ${where()}; ${stuck()}`)
-      if (e instanceof Blocked) throw new CallError('estop', e.message)
+      // In front of a boulder, the ways past it.
+      if (e instanceof Blocked)
+        throw new CallError(
+          'estop',
+          e.message.includes('boulder')
+            ? `${e.message}; to get past: follow_route through points clear of it, or monolith-01 push_boulder when it is ${PUSH.across} m across or less`
+            : e.message,
+        )
       throw e
     } finally {
       if (routes.get(dev.id) === route) routes.delete(dev.id)

@@ -47,7 +47,7 @@ const REACH = 1.2
 /** Seconds to lift or set down a load. */
 const LIFT_S = 1.5
 /** Pushing a boulder aside: the widest it can move, in metres across, how far, and in how many seconds. */
-const PUSH = { across: 2, metres: 3.5, seconds: 3.5 }
+export const PUSH = { across: 2, metres: 3.5, seconds: 3.5 }
 /** A close-up photo is taken of a rock within this many metres of its front. */
 const CLOSE_UP = 3
 /** What a close-up of each kind of unusual rock shows. */

@@ -1259,13 +1259,17 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       motion(call, 'walk', async () => {
         const b = world.beds[bed as BedName]
         if (load) throw new CallError('x_hands_full', `it carries ${load.id}; put_down first`)
-        if (b.crop !== 'none')
+        if (b.crop !== 'none') {
+          const other = bed === 'north' ? 'south' : 'north'
+          const free = world.beds[other].crop === 'none' ? `; the ${other} bed is empty: plant that one` : ''
           throw new CallError(
             'x_bed_taken',
-            b.growth >= 1
+            (b.growth >= 1
               ? `the ${bed} bed has ripe ${b.crop}es in it; harvest it first`
-              : `the ${bed} bed has ${b.crop}es growing in it (${Math.round(b.growth * 100)} % grown); harvest it when ripe`,
+              : `the ${bed} bed has ${b.crop}es growing in it (${Math.round(b.growth * 100)} % grown); harvest it when ripe`) +
+              free,
           )
+        }
         await throughGreenhouse(call, 'in', () => {
           const n = eastOf(body.at.x + 0.2)
           if (n === b.planted) return

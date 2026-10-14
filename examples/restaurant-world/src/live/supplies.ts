@@ -18,6 +18,9 @@ const FULL: Record<SupplyItem, number> = {
   baby_chair: 1,
 }
 
+/** The most of one supply a dispense puts out. */
+const MAX_QTY = 4
+
 /** Where each dispensed supply waits on the cabinet, by supply id. */
 export const supplySpots = new Map<string, number>()
 
@@ -37,7 +40,7 @@ export function supplies(world: World, log: (line: string) => void): WorldDevice
     placement: placed(S.x, S.y, 270),
     profile: {
       notes:
-        'Holds napkins, chopsticks, bowls, spoons, cups, takeaway boxes and a baby chair. dispense puts them out on top (the baby chair beside it) as supplies s1, s2, … for runner-01 deliver.',
+        'Holds napkins, chopsticks, bowls, spoons, cups, takeaway boxes and a baby chair. dispense puts them out on top (the baby chair beside it) as supplies s1, s2, … for runner-01 deliver. A party needs about one of each per person; a number it could not use is confirmed with the guest before anything is put out.',
     },
     resources: { hatch: 'queue' },
     state: Object.fromEntries(
@@ -60,15 +63,14 @@ export function supplies(world: World, log: (line: string) => void): WorldDevice
   dev.tool(
     {
       name: 'dispense',
-      description: 'Put supplies out for runner-01 to bring: the result names each one (s1, s2, …).',
+      description: `Put up to ${MAX_QTY} of one kind of supply out for runner-01 to bring: the result names each one (s1, s2, …).`,
       timeout: 20,
       params: {
         item: { type: 'string', enum: [...SUPPLY_ITEMS] },
         qty: {
           type: 'integer',
           minimum: 1,
-          maximum: 4,
-          description: 'how many the guest asked for; a pair of chopsticks is one',
+          description: `how many the guest asked for, 1 to ${MAX_QTY}; a pair of chopsticks is one`,
         },
       },
       required: ['item', 'qty'],
@@ -78,6 +80,11 @@ export function supplies(world: World, log: (line: string) => void): WorldDevice
     async (call, { item, qty }) => {
       const what = item as SupplyItem
       const n = (qty as number | undefined) ?? 1
+      if (n > MAX_QTY)
+        throw new CallError(
+          'x_too_many',
+          `${n} ${what.replace('_', ' ')}: at most ${MAX_QTY} at a time; nothing was put out. Do not dispense yet: ask the guest how many they need, tell them the limit, and offer ${MAX_QTY} now`,
+        )
       if (stock[what] < n)
         throw new CallError(
           'x_out_of_stock',

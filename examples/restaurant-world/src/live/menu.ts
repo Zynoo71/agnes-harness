@@ -4,6 +4,9 @@ import { dishById, MENU, menuLine, STATION_DEVICE } from '../menu.js'
 import type { Line, Stage } from './service.js'
 import { type World, WorldDevice } from './world.js'
 
+/** The most portions of one dish an order takes. */
+const MAX_QTY = 4
+
 /** How an order line's stage reads in the menu device's state. */
 export function stageText(l: Line): string {
   const by = STATION_DEVICE[l.dish.station]
@@ -50,7 +53,7 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
     model: 'Agnes Restaurant ordering',
     localization: 'none',
     profile: {
-      notes: `Takes the guest's orders. Each portion becomes an order line (o1, o2, …) that is made when told: a wok-01 or stove-01 dish is prepped by prep-01 prep, then cooked by its station's cook; a bar-01 item is made by bar-01 make. No device moves a line on by itself: prep, cook or make, plate (kitchen dishes) and runner-01 deliver are each a call, until the line is served; each call returns when its step is done, within seconds, so nothing in an order needs the guest to wait for a later turn. The menu (id: name, price, station): ${MENU.map(menuLine).join('. ')}.`,
+      notes: `Takes the guest's orders. Each portion becomes an order line (o1, o2, …) that is made when told: a wok-01 or stove-01 dish is prepped by prep-01 prep, then cooked by its station's cook; a bar-01 item is made by bar-01 make. No device moves a line on by itself: prep, cook or make, plate (kitchen dishes) and runner-01 deliver are each a call, until the line is served; each call returns when its step is done, within seconds, so nothing in an order needs the guest to wait for a later turn. A party orders about one portion of a dish per person, or two of a small one (rice, dumplings), and an order takes at most ${MAX_QTY} of a dish; a quantity the party could not eat, or more than ${MAX_QTY}, is confirmed with the guest before anything is ordered: say the limit and offer up to ${MAX_QTY} now or something else. The menu (id: name, price, station): ${MENU.map(menuLine).join('. ')}.`,
     },
     resources: { orders: 'queue' },
     state: {
@@ -105,8 +108,7 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
   dev.tool(
     {
       name: 'order',
-      description:
-        'Order dishes and drinks for the seated guest. Each portion becomes an order line; the result says which device makes it. Notes (less spicy, no coriander, no ice) go to the kitchen. Ordering makes nothing by itself: then start the lines the guest wants now, with the calls the result names, and bring them to the table.',
+      description: `Order dishes and drinks for the seated guest, at most ${MAX_QTY} portions of a dish in one order. Each portion becomes an order line; the result says which device makes it. Notes (less spicy, no coriander, no ice) go to the kitchen. Ordering makes nothing by itself: then start the lines the guest wants now, with the calls the result names, and bring them to the table.`,
       timeout: 10,
       params: {
         items: {
@@ -117,7 +119,7 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
             type: 'object',
             properties: {
               dish: { type: 'string', enum: MENU.map((d) => d.id) },
-              qty: { type: 'integer', minimum: 1, maximum: 4 },
+              qty: { type: 'integer', minimum: 1, description: `portions, 1 to ${MAX_QTY}` },
               note: { type: 'string', maxLength: 60, description: 'what the guest asked for, for the cook' },
             },
             required: ['dish'],
@@ -137,6 +139,12 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
         throw new CallError(
           'x_sold_out',
           `${out.map((i) => dishById(i.dish)?.en).join(', ')} sold out today; nothing was ordered, order again without it`,
+        )
+      const over = asked.filter((i) => (i.qty ?? 1) > MAX_QTY)
+      if (over.length)
+        throw new CallError(
+          'x_too_many',
+          `${over.map((i) => `${i.qty} ${dishById(i.dish)?.en}`).join(', ')}: at most ${MAX_QTY} portions of a dish in one order; nothing was ordered. Do not order yet: ask the guest what they meant, tell them the limit, and offer up to ${MAX_QTY} now or something else`,
         )
       const made: Line[] = []
       for (const i of asked) {

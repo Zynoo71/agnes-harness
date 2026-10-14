@@ -83,7 +83,7 @@ export function onePicture(answer: Answer): Answer {
   return {
     ...answer,
     pictures: pictures.slice(0, 1),
-    text: `${answer.text}\n(not attached: ${left.map((p) => p.name).join(', ')}; one picture comes with each read, so read that source on its own if you need it)`,
+    text: `${answer.text}\n(not attached: ${left.map((p) => p.name).join(', ')}; you have not seen these: one picture comes with each read, so read that source on its own before you say what it shows)`,
   }
 }
 

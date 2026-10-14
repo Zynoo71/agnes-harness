@@ -83,7 +83,8 @@ export const BASE_MAP = {
         [-24, -20],
         [-58, -20],
       ],
-      description: 'Open ground with boulders and the unusual rock the base wants a sample of.',
+      description:
+        'Open ground with boulders, a big one at its centre, and the unusual rock the base wants a sample of; a hopper survey maps them.',
     },
     {
       id: 'east-dunes',

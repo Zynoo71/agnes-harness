@@ -4,8 +4,8 @@
  * a narrow panel), devices with a picture first. Each card is joined to the bus by two lanes: MHS, the
  * command channel (calls, control, state, results), and MOS, the Nerve data channel (data streams,
  * manual input).
- * It only moves when something is exchanged: a comet per call (bright, down) and per result (dim,
- * up) on MHS, particles at the rate AgnesHub counted on Nerve (hub/traffic), amber ones while a
+ * It only moves when something is exchanged: a comet per call (down) and per result (up) on MHS, in
+ * the colour of whoever made the call, with a ring where it arrives; particles at the rate AgnesHub counted on Nerve (hub/traffic), amber ones while a
  * person drives. A call rides down the line of whoever made it, the LLM's (accent) on the left or
  * the DM's (teal) on the right; a step the DM hands to the LLM crosses from its line to the LLM's.
  */
@@ -63,6 +63,9 @@ const NERVE_IN = 50
 const TRIP_MS = 900
 /** Data rides slower than calls, so a sparse stream stays visible. */
 const tripOf = (d: { kind: string }) => (d.kind === 'data' || d.kind === 'drive' ? 1500 : TRIP_MS)
+/** How long the ring where a call or a result arrives spreads and fades. */
+const RING_MS = 450
+const isComet = (d: { kind: string }) => d.kind === 'call' || d.kind === 'result'
 /** At most this many particles per lane per second, whatever the traffic. */
 const MAX_DOTS = 6
 
@@ -452,11 +455,10 @@ export function Flow(props: { brain?: Brain | undefined }) {
   // One animation loop draws every comet and particle, in the panel's own colours.
   useEffect(() => {
     let raf = 0
-    let colors: { accent: Rgb; dm: Rgb; mos: Rgb; dim: Rgb; warn: Rgb; glow: boolean } = {
+    let colors: { accent: Rgb; dm: Rgb; mos: Rgb; warn: Rgb; glow: boolean } = {
       accent: [50, 72, 175],
       dm: [15, 138, 122],
       mos: [124, 77, 214],
-      dim: [66, 70, 86],
       warn: [128, 94, 33],
       glow: false,
     }
@@ -482,7 +484,6 @@ export function Flow(props: { brain?: Brain | undefined }) {
           accent: read('--mhs-accent', colors.accent),
           dm: read('--mhs-dm', colors.dm),
           mos: read('--mhs-mos', colors.mos),
-          dim: read('--mhs-text-3', colors.dim),
           warn: read('--mhs-warn', colors.warn),
           glow: glow !== '' && glow !== 'transparent',
         }
@@ -490,7 +491,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, geo.width, geo.height)
-      dots.current = dots.current.filter((d) => now - d.start < tripOf(d))
+      dots.current = dots.current.filter((d) => now - d.start < tripOf(d) + (isComet(d) ? RING_MS : 0))
       for (const d of dots.current) {
         const t = (now - d.start) / tripOf(d)
         if (t < 0) continue
@@ -499,29 +500,50 @@ export function Flow(props: { brain?: Brain | undefined }) {
         // Lanes run from AgnesHub outwards; the LLM's and the DM's lines run from AgnesHub up.
         const at = (s: number) =>
           d.lane === 'brain' || d.lane === 'dm' ? (d.up ? s : 1 - s) : d.up ? 1 - s : s
-        const [x, y] = pointAt(pts, at(t))
-        if (d.kind === 'call' || d.kind === 'result') {
-          // A comet: a head and a tail of the same colour fading out behind it, round the lane's corners.
-          const tailPts = stretch(pts, at(Math.max(0, t - 0.14)), at(t))
+        const [x, y] = pointAt(pts, at(Math.min(t, 1)))
+        if (isComet(d)) {
+          const color = d.by === 'dm' ? colors.dm : colors.accent
+          if (t >= 1) {
+            // Arrived: a ring spreads from where it landed and fades.
+            const k = (now - d.start - tripOf(d)) / RING_MS
+            ctx.strokeStyle = rgba(color, 0.85 * (1 - k))
+            ctx.lineWidth = 2.5 * (1 - k) + 0.5
+            ctx.beginPath()
+            ctx.arc(x, y, 5 + 15 * Math.sqrt(k), 0, Math.PI * 2)
+            ctx.stroke()
+            continue
+          }
+          // A comet: a head with a halo and a tail of the same colour fading out behind it, round the
+          // lane's corners. A result's head has a light core, to tell it from a call.
+          const tailPts = stretch(pts, at(Math.max(0, t - 0.22)), at(t))
           const [tx, ty] = tailPts[0] as [number, number]
-          const color = d.kind === 'result' ? colors.dim : d.by === 'dm' ? colors.dm : colors.accent
           const tail = ctx.createLinearGradient(tx, ty, x, y)
           tail.addColorStop(0, rgba(color, 0))
-          tail.addColorStop(1, rgba(color, 0.9))
+          tail.addColorStop(1, rgba(color, 0.95))
           ctx.strokeStyle = tail
-          ctx.lineWidth = d.kind === 'call' ? 2.5 : 2
+          ctx.lineWidth = 4
           ctx.lineCap = 'round'
           ctx.beginPath()
           ctx.moveTo(tx, ty)
           for (const [px, py] of tailPts.slice(1)) ctx.lineTo(px, py)
           ctx.stroke()
-          ctx.shadowColor = d.kind === 'call' && colors.glow ? rgba(color, 1) : 'rgba(0, 0, 0, 0)'
-          ctx.shadowBlur = 8
+          const halo = ctx.createRadialGradient(x, y, 0, x, y, 14)
+          halo.addColorStop(0, rgba(color, 0.45))
+          halo.addColorStop(1, rgba(color, 0))
+          ctx.fillStyle = halo
+          ctx.beginPath()
+          ctx.arc(x, y, 14, 0, Math.PI * 2)
+          ctx.fill()
           ctx.fillStyle = rgba(color, 1)
           ctx.beginPath()
-          ctx.arc(x, y, d.kind === 'call' ? 3 : 2.5, 0, Math.PI * 2)
+          ctx.arc(x, y, 4.5, 0, Math.PI * 2)
           ctx.fill()
-          ctx.shadowBlur = 0
+          if (d.kind === 'result') {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+            ctx.beginPath()
+            ctx.arc(x, y, 1.8, 0, Math.PI * 2)
+            ctx.fill()
+          }
         } else {
           // A data particle: a small dot that fades in and out, so a busy stream stays a dotted line.
           const color = d.kind === 'drive' ? colors.warn : colors.mos

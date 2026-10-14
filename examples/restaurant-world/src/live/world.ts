@@ -79,13 +79,36 @@ const after = new MessageChannel()
 after.port1.onmessage = () => {
   for (const f of afterFrame) f()
 }
+let lastBeat = 0
+let beatTime = performance.now()
+
+/**
+ * When the current frame of the motion clock is shown (ms, performance.now). Motion steps by it, not
+ * by when its step happens to run: steps run after the frame is drawn, at a time that varies with
+ * how long drawing took, and a step timed by that moved unevenly from one drawn frame to the next.
+ */
+export const clock = () => beatTime
+
+/**
+ * One beat of the motion clock: every motion takes its step. While the page is drawn, the render
+ * loop beats it, one step a drawn frame, so motion moves the same amount in every frame on screen
+ * (the worker's beat drifts against the screen's, and frames showing two steps look like a double
+ * image). Whenever the page is not drawn (hidden, or a frame the browser stopped painting), the
+ * worker beats it.
+ */
+export function beat(time = performance.now()): void {
+  lastBeat = performance.now()
+  beatTime = Math.max(beatTime, time)
+  const woken = frameWaiters
+  frameWaiters = []
+  for (const resolve of woken) resolve()
+  for (const f of onFrame) f()
+  after.port2.postMessage(null)
+}
+
 ticker.onmessage = (e: MessageEvent<{ id: number } | 'frame'>) => {
   if (e.data === 'frame') {
-    const woken = frameWaiters
-    frameWaiters = []
-    for (const resolve of woken) resolve()
-    for (const f of onFrame) f()
-    after.port2.postMessage(null)
+    if (document.hidden || performance.now() - lastBeat > 100) beat()
     return
   }
   waiting.get(e.data.id)?.()
@@ -97,7 +120,10 @@ ticker.onmessage = (e: MessageEvent<{ id: number } | 'frame'>) => {
  * so a steady motion moves the same amount in each picture; on separate timers it moved one step in
  * one picture and two in the next, and the video stuttered.
  */
-export async function frame(call: Call): Promise<void> {
+export async function frame(call: Call, rest?: () => void): Promise<void> {
+  // Checked before the wait, not after it: a checkpoint yields to a timer, and a step taken after
+  // that timer lands at an uneven time against the drawn frames.
+  await call.checkpoint(rest)
   await Promise.race([new Promise<void>((resolve) => frameWaiters.push(resolve)), call.aborted()])
   if (call.signal.aborted) await call.checkpoint()
 }
@@ -639,15 +665,15 @@ export class Body {
     /** The segment the body is on: it moves forward along the path, never back. */
     let seg = 0
     let v = 0
-    let last = performance.now()
+    let last = clock()
     const length = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.z - a.z)
     try {
+      const rest = () => {
+        this.speed = 0
+        this.turn = 0
+      }
       for (;;) {
-        await call.checkpoint(() => {
-          this.speed = 0
-          this.turn = 0
-        })
-        const now = performance.now()
+        const now = clock()
         const dt = Math.min(0.1, (now - last) / 1000)
         last = now
         if (length(this.at, end) <= arrive) break
@@ -692,7 +718,7 @@ export class Body {
         this.object.position.y = this.world.ground(this.at) + this.lift
         this.odometer += forward
         options.step?.()
-        await frame(call)
+        await frame(call, rest)
       }
     } finally {
       this.speed = 0
@@ -702,11 +728,10 @@ export class Body {
 
   /** Changes height to `y` at up to `rate` m/s, easing in and out at `accel` m/s², frame by frame. */
   async rise(call: Call, y: number, rate: number, step?: () => void, accel = 2): Promise<void> {
-    let last = performance.now()
+    let last = clock()
     let v = 0
     while (Math.abs(this.object.position.y - y) > 0.02) {
-      await call.checkpoint()
-      const now = performance.now()
+      const now = clock()
       const dt = Math.min(0.1, (now - last) / 1000)
       last = now
       const dy = y - this.object.position.y
@@ -726,10 +751,9 @@ export async function turnTo(
   ms: number,
 ): Promise<void> {
   const from = { x: object.rotation.x, y: object.rotation.y, z: object.rotation.z }
-  const start = performance.now()
+  const start = clock()
   for (;;) {
-    await call.checkpoint()
-    const k = Math.min(1, ((performance.now() - start) * PACE) / ms)
+    const k = Math.min(1, ((clock() - start) * PACE) / ms)
     const e = k * k * (3 - 2 * k)
     for (const axis of ['x', 'y', 'z'] as const) {
       const to = target[axis]

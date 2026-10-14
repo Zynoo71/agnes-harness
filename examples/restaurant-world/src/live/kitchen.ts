@@ -7,7 +7,7 @@ import { place } from '../shapes.js'
 import { placed } from './floormap.js'
 import { stageText } from './menu.js'
 import type { Line } from './service.js'
-import { frame, PACE, type World, WorldDevice, wait } from './world.js'
+import { clock, frame, PACE, type World, WorldDevice, wait } from './world.js'
 
 /**
  * The kitchen and the bar: the wok station and the stove cook order lines and leave them on their
@@ -340,9 +340,9 @@ export function arm(world: World, log: (line: string) => void): WorldDevice {
   const move = async (call: Call, to: { yaw: number; s: number; e: number }, ms = 700) => {
     const from = { yaw: a.base.rotation.y, s: a.shoulder.rotation.x, e: a.elbow.rotation.x }
     const turn = Math.atan2(Math.sin(to.yaw - from.yaw), Math.cos(to.yaw - from.yaw))
-    const start = performance.now()
+    const start = clock()
     for (;;) {
-      const k = Math.min(1, ((performance.now() - start) * PACE) / ms)
+      const k = Math.min(1, ((clock() - start) * PACE) / ms)
       const ease = k * k * (3 - 2 * k)
       a.base.rotation.y = from.yaw + turn * ease
       a.pose(from.s + (to.s - from.s) * ease, from.e + (to.e - from.e) * ease)

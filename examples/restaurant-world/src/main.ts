@@ -5,6 +5,7 @@ import { buildFocus, FOCUS_LAYER } from './focus.js'
 import { DEVICES } from './labels.js'
 import { BACK_OF_HOUSE_Y, BAR_X, FIXTURES, PRIVATE_ROOM, PRIVATE_SPEAKER, ROOM, TABLES } from './layout.js'
 import { connectDevices } from './live/index.js'
+import { beat } from './live/world.js'
 import { buildMinimap } from './minimap.js'
 import { buildMoments } from './moments.js'
 import { buildOverlay, type Lang } from './overlay.js'
@@ -17,8 +18,10 @@ import { IsoView } from './view.js'
 const params = new URLSearchParams(location.search)
 const app = document.getElementById('app') as HTMLElement
 
-// ?quality=high renders at the full Retina resolution; low at one pixel per CSS pixel.
-const QUALITY = params.get('quality') ?? 'balanced'
+// ?quality=high renders at the full Retina resolution; low at one pixel per CSS pixel. A page framed
+// by Agnes is laid out at 1920 x 1080 and shown scaled down, so one pixel per CSS pixel is already
+// as sharp as it is shown.
+const QUALITY = params.get('quality') ?? (parent !== window ? 'low' : 'balanced')
 const PIXEL_RATIO =
   QUALITY === 'high' ? Math.min(devicePixelRatio, 2) : QUALITY === 'low' ? 1 : Math.min(devicePixelRatio, 1.5)
 
@@ -434,10 +437,22 @@ let cpu = 0
 let draws = 0
 let triangles = 0
 renderer.info.autoReset = false
+let due = false
+// Motion steps once a drawn frame, by the time the frame is shown, in a callback of its own just
+// before the one that draws it: the steps run in the microtasks between the two, so a frame shows
+// where everything is at its own time, not at the frame before's.
+const step = (time: number) => {
+  requestAnimationFrame(step)
+  if (time - last < 1000 / FPS - 4) return
+  last = time
+  due = true
+  beat(time)
+}
+requestAnimationFrame(step)
 renderer.setAnimationLoop(() => {
+  if (!due) return
+  due = false
   const start = performance.now()
-  if (start - last < 1000 / FPS - 4) return
-  last = start
   renderer.info.reset()
   actors.update(start / 1000)
   updateLights(start / 1000)

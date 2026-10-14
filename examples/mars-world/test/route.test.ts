@@ -6,6 +6,7 @@ import {
   firstBlocking,
   fromMap,
   inTheWay,
+  keepouts,
   MONO,
   monolithAhead,
   openAround,
@@ -159,8 +160,23 @@ describe('rover around buildings', () => {
     // Where an LLM's route started: east of the lab, heading west past it.
     const from = fromMap(-18.5, -18.6)
     const to = fromMap(-42, -17)
-    const path = planPath(grid, from, to, [], ROVER.bodyClearance)
-    expect(path).toBeDefined()
+    // The detour the building forces keeps clear of the west field's boulders too.
+    expect((planPath(grid, from, to, [], ROVER.bodyClearance) as Point[]).length).toBeGreaterThan(1)
+    const path = [
+      ...(planNear(grid, from, to, keepouts(from, BOULDERS, []), ROVER.bodyClearance)?.path ?? []).slice(
+        0,
+        -1,
+      ),
+      to,
+    ]
+    const legs0 = [from, ...path]
+    // All but the last few metres into the target.
+    legs0.splice(-1)
+    for (let i = 1; i < legs0.length; i++)
+      for (const b of BOULDERS)
+        expect(toSegment(legs0[i - 1] as Point, legs0[i] as Point, b).d).toBeGreaterThan(
+          b.r + ROVER.halfWidth,
+        )
     // The lab's box (4.4 m by 7 m) grown by half the rover's width.
     const [lx, lz] = LAYOUT.lab
     const inLab = (p: Point) =>

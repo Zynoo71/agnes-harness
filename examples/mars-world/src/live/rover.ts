@@ -394,15 +394,22 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
   }
 
   /**
-   * `points` with a detour wherever the straight way runs into a building or steep ground. Boulders
-   * and people are left out: the rover still stops before them.
+   * `points` with a detour wherever the straight way runs into a building or steep ground; the
+   * detour also keeps clear of the boulders and people known now. A straight way that is clear of
+   * buildings stays straight, so the rover still stops before a boulder on it.
    */
   const aroundBuildings = (points: Point[]): Point[] => {
     const grid = world.planGrid()
     const out: Point[] = []
     let at = body.at
     for (const p of points) {
-      out.push(...(planPath(grid, at, p, [], ROVER.bodyClearance) ?? [p]))
+      const plain = planPath(grid, at, p, [], ROVER.bodyClearance)
+      if (plain && plain.length > 1) {
+        // Near the target if it lies close to a boulder; the last few metres are straight.
+        const { stops, others } = world.inTheWay()
+        const near = planNear(grid, at, p, keepouts(at, stops, others), ROVER.bodyClearance)
+        out.push(...(near ? [...near.path.slice(0, -1), p] : plain))
+      } else out.push(p)
       at = p
     }
     return out

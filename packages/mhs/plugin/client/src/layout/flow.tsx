@@ -492,9 +492,26 @@ export function Flow(props: { brain?: Brain | undefined }) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, geo.width, geo.height)
       dots.current = dots.current.filter((d) => now - d.start < tripOf(d) + (isComet(d) ? RING_MS : 0))
+      // Lanes pass behind cards (the one across the bus at the top): a dot shows only outside them,
+      // and on the card it is bound for, where it lands.
+      const outside = new Map<string | undefined, Path2D>()
+      const clipFor = (device: string | undefined) => {
+        let clip = outside.get(device)
+        if (!clip) {
+          clip = new Path2D()
+          clip.rect(0, 0, geo.width, geo.height)
+          for (const [id, s] of geo.cards) if (id !== device) clip.rect(s.left, s.top, s.width, s.height)
+          outside.set(device, clip)
+        }
+        return clip
+      }
+      ctx.save()
       for (const d of dots.current) {
+        ctx.restore()
+        ctx.save()
         const t = (now - d.start) / tripOf(d)
         if (t < 0) continue
+        ctx.clip(clipFor(d.device), 'evenodd')
         const pts = path(geo, d.lane, d.device)
         if (pts.length === 0) continue
         // Lanes run from AgnesHub outwards; the LLM's and the DM's lines run from AgnesHub up.
@@ -559,6 +576,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
           ctx.shadowBlur = 0
         }
       }
+      ctx.restore()
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)

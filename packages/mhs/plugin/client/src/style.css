@@ -1991,13 +1991,13 @@ body.mhs-dragging {
   font-size: 12px;
 }
 .mhs-root .mhs-flow-info {
-  flex: 1;
+  flex: none;
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   column-gap: 8px;
   row-gap: 3px;
-  padding: 10px 12px 11px;
+  padding: 10px 12px 4px;
 }
 .mhs-root .mhs-flow-thumb {
   flex: none;
@@ -2042,6 +2042,19 @@ body.mhs-dragging {
 .mhs-root .mhs-flow-status > code {
   font: 10.5px var(--mhs-mono);
 }
+/* A health warning keeps to one line; the field it is about shows the figure, the device page the rest. */
+.mhs-root .mhs-flow-status .mhs-health {
+  display: block;
+  flex: 1 0 100%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mhs-root .mhs-flow-status .mhs-health .mhs-dot {
+  display: inline-block;
+  margin-right: 6px;
+}
 .mhs-root .mhs-flow-status .mhs-trust:not([data-trust="uncertain"]) {
   color: inherit;
 }
@@ -2059,13 +2072,14 @@ body.mhs-dragging {
 .mhs-root .mhs-flow-fields .mhs-field-value {
   font-size: 13px;
 }
+/* The rates sit at the card's foot, level across a row whatever is above them. */
 .mhs-root .mhs-flow-rates {
-  grid-column: 1 / -1;
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
-  margin-top: 4px;
-  padding-top: 7px;
+  margin: auto 12px 0;
+  padding: 7px 0 11px;
   border-top: 1px solid var(--mhs-line);
   font: 10px var(--mhs-mono);
   letter-spacing: 0.02em;

@@ -78,11 +78,12 @@ interface Dot {
   by?: By
 }
 
-/** Where a card sits: its top and left edge, its width, and which side of the bus it is on, or across it. */
+/** Where a card sits: its top and left edge, its size, and which side of the bus it is on, or across it. */
 interface Slot {
   top: number
   left: number
   width: number
+  height: number
   side: 'left' | 'right' | 'one' | 'across'
 }
 
@@ -100,9 +101,10 @@ interface Geometry {
 }
 
 /**
- * Devices with a picture first, each placed in whichever column either side of the bus ends highest,
- * the columns next to it first; a lone device with a picture goes across the bus at the top, its
- * picture larger. In a narrow panel, one column to the right of a bus down the left edge.
+ * Devices with a picture first, in rows either side of the bus, the columns next to it filled first,
+ * the cards in a row as tall as its tallest; pictures come in pairs, and an odd one out goes across
+ * the bus at the top, its picture larger. In a narrow panel, one column to the right of a bus down
+ * the left edge.
  */
 function layout(devices: Device[], width: number, heights: Map<string, number>, hub: number): Geometry {
   const two = width >= TWO_COLUMNS
@@ -115,39 +117,41 @@ function layout(devices: Device[], width: number, heights: Map<string, number>, 
   const pictures = new Map<string, number>()
   const pictureOf = (w: number, max: number) => Math.min(max, Math.round(((w - 16) * 9) / 16))
   const withPicture = devices.filter((d) => primaryImage(d))
-  const ordered = [...withPicture, ...devices.filter((d) => !primaryImage(d))]
-  let top = hub + HUB_H + 20
-  const across = two && withPicture.length === 1 ? withPicture[0] : undefined
+  const across = two && withPicture.length % 2 === 1 ? withPicture.at(-1) : undefined
+  const ordered = [...withPicture, ...devices.filter((d) => !primaryImage(d))].filter((d) => d !== across)
+  let y = hub + HUB_H + 20
   if (across) {
     const w = width - 2 * SIDE
     const h = pictureOf(w, PICTURE_ACROSS_MAX)
-    cards.set(across.id, { top, left: SIDE, width: w, side: 'across' })
+    const tall = heights.get(across.id) ?? h + INFO_H
+    cards.set(across.id, { top: y, left: SIDE, width: w, height: tall, side: 'across' })
     pictures.set(across.id, h)
-    top += (heights.get(across.id) ?? h + INFO_H) + CARD_GAP
+    y += tall + CARD_GAP
   }
-  // k: 0 next to the bus on the left, 1 on the right, 2 and 3 the columns beyond them.
-  const columns = Array.from({ length: two ? 2 * perSide : 1 }, () => top)
+  const perRow = two ? 2 * perSide : 1
   const step = cardWidth + COLUMN_GAP
-  for (const d of ordered) {
-    if (d === across) continue
-    const k = columns.indexOf(Math.min(...columns))
-    const side = !two ? 'one' : k % 2 === 0 ? 'left' : 'right'
-    const column = Math.floor(k / 2)
-    const left =
-      side === 'one'
-        ? CARD_X
-        : side === 'left'
-          ? mid - GUTTER - cardWidth - column * step
-          : mid + GUTTER + column * step
-    const h = primaryImage(d) ? pictureOf(cardWidth, PICTURE_MAX) : 0
-    const y = columns[k] as number
-    cards.set(d.id, { top: y, left, width: cardWidth, side })
-    pictures.set(d.id, h)
-    columns[k] = y + (heights.get(d.id) ?? h + INFO_H) + CARD_GAP
+  for (let i = 0; i < ordered.length; i += perRow) {
+    const row = ordered.slice(i, i + perRow)
+    const h = (d: Device) => (primaryImage(d) ? pictureOf(cardWidth, PICTURE_MAX) : 0)
+    const tallest = Math.max(...row.map((d) => heights.get(d.id) ?? h(d) + INFO_H))
+    for (const [k, d] of row.entries()) {
+      // k: 0 next to the bus on the left, 1 on the right, 2 and 3 the columns beyond them.
+      const side = !two ? 'one' : k % 2 === 0 ? 'left' : 'right'
+      const column = Math.floor(k / 2)
+      const left =
+        side === 'one'
+          ? CARD_X
+          : side === 'left'
+            ? mid - GUTTER - cardWidth - column * step
+            : mid + GUTTER + column * step
+      cards.set(d.id, { top: y, left, width: cardWidth, height: tallest, side })
+      pictures.set(d.id, h(d))
+    }
+    y += tallest + CARD_GAP
   }
   return {
     width,
-    height: Math.max(top, ...columns),
+    height: y,
     cards,
     pictures,
     hub,
@@ -253,6 +257,7 @@ function DeviceCard(props: {
   top: number
   left: number
   width: number
+  height: number
   picture: number
   traffic: Traffic | undefined
   onHeight: (id: string, height: number) => void
@@ -264,16 +269,28 @@ function DeviceCard(props: {
   const card = useRef<HTMLElement | null>(null)
   const { onHeight } = props
   const ended = useCallCues(d, card)
+  const hasPicture = picture !== undefined
   const idle = (d.jobs ?? []).length === 0 && !runningNow(d)
 
-  // The card sizes itself to its content; the layout places the cards below it by that height.
+  // The layout makes a row as tall as its tallest card's content: the picture, the text and the rates
+  // stacked, and the border.
   useEffect(() => {
     const el = card.current
     if (!el) return
-    const observer = new ResizeObserver(() => onHeight(d.id, el.offsetHeight))
-    observer.observe(el)
+    const parts = [
+      ...el.querySelectorAll<HTMLElement>(
+        ':scope > .mhs-flow-thumb, :scope > .mhs-flow-info, :scope > .mhs-flow-rates',
+      ),
+    ]
+    const measure = () =>
+      onHeight(
+        d.id,
+        parts.reduce((sum, part) => sum + part.offsetHeight, 2),
+      )
+    const observer = new ResizeObserver(measure)
+    for (const part of parts) observer.observe(part)
     return () => observer.disconnect()
-  }, [d.id, onHeight])
+  }, [d.id, onHeight, hasPicture])
 
   return (
     <article
@@ -283,7 +300,7 @@ function DeviceCard(props: {
       data-running={runningNow(d) || undefined}
       data-by={busyBy(d)}
       data-ended={ended}
-      style={{ left: props.left, top: props.top, width: props.width }}
+      style={{ left: props.left, top: props.top, width: props.width, height: props.height }}
     >
       <EndedStamp ended={ended} />
       {picture && (
@@ -317,23 +334,23 @@ function DeviceCard(props: {
             <FieldView key={name} name={name} field={field} value={d.state.values[name]} />
           ))}
         </span>
-        <span className="mhs-flow-rates">
-          <span title={t('flow.lane.mhs')}>
-            <b className="mhs-lane" data-lane="mhs">
-              MHS
-            </b>{' '}
-            ↓{rate(tr?.mhs_down ?? 0)} ↑{rate(tr?.mhs_up ?? 0)}
-          </span>
-          <span title={t('flow.lane.mos')}>
-            <b className="mhs-lane" data-lane="nerve">
-              MOS
-            </b>{' '}
-            ↑{rate(tr?.nerve_up ?? 0)}
-            {kbps(tr?.bytes_up ?? 0)}
-            {tr?.nerve_down ? ` ↓${rate(tr.nerve_down)}` : ''}
-          </span>
-        </span>
       </div>
+      <span className="mhs-flow-rates">
+        <span title={t('flow.lane.mhs')}>
+          <b className="mhs-lane" data-lane="mhs">
+            MHS
+          </b>{' '}
+          ↓{rate(tr?.mhs_down ?? 0)} ↑{rate(tr?.mhs_up ?? 0)}
+        </span>
+        <span title={t('flow.lane.mos')}>
+          <b className="mhs-lane" data-lane="nerve">
+            MOS
+          </b>{' '}
+          ↑{rate(tr?.nerve_up ?? 0)}
+          {kbps(tr?.bytes_up ?? 0)}
+          {tr?.nerve_down ? ` ↓${rate(tr.nerve_down)}` : ''}
+        </span>
+      </span>
     </article>
   )
 }
@@ -641,6 +658,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
             top={slot.top}
             left={slot.left}
             width={slot.width}
+            height={slot.height}
             picture={g.pictures.get(d.id) ?? 0}
             traffic={fresh ? traffic.devices[d.id] : undefined}
             onHeight={onHeight}

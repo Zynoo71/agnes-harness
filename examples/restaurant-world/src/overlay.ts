@@ -2,7 +2,7 @@ import { AGNES_MARK } from './agnes-mark.js'
 import type { Decision } from './dm/watch.js'
 import { DEVICES, EMOJI, type Lang, progressLabel, toolLabel, valueLabel } from './labels.js'
 import { TABLES } from './layout.js'
-import type { Line as OrderLine, Service } from './live/service.js'
+import { type Line as OrderLine, priceOf, type Service } from './live/service.js'
 import { type Activity, type Alert, type World, type WorldDevice, watchers } from './live/world.js'
 import { MENU, type Station } from './menu.js'
 import type { MapWords } from './minimap.js'
@@ -817,7 +817,7 @@ export function buildOverlay(options: {
       span('head', el('b', '', t().billHead), el('span', '', s.table ? t().table(s.table) : '')),
     ]
     for (const l of s.billed())
-      parts.push(span('row', el('span', '', l.dish[lang]), el('span', '', `¥${l.dish.price}`)))
+      parts.push(span('row', el('span', '', l.dish[lang]), el('span', '', `¥${priceOf(l)}`)))
     if (s.discount) {
       parts.push(span('row dim', el('span', '', t().subtotal), el('span', '', `¥${s.subtotal()}`)))
       parts.push(

@@ -30,6 +30,8 @@ export interface Line {
   stage: Stage
   /** What is wrong with the dish, once the guest finds it (something in it). */
   problem?: string | undefined
+  /** On the house: it stays on the bill at ¥0. */
+  comped?: boolean | undefined
   /** The bowl of prepped ingredients in the scene, from prep until cooking starts. */
   prepObject?: THREE.Object3D | undefined
   /** The dish in the scene, from the moment cooking starts. */
@@ -126,7 +128,7 @@ export class Service {
   }
 
   subtotal(): number {
-    return this.billed().reduce((sum, l) => sum + l.dish.price, 0)
+    return this.billed().reduce((sum, l) => sum + priceOf(l), 0)
   }
 
   total(): number {
@@ -179,3 +181,6 @@ export class Service {
 }
 
 export const TABLE_IDS = TABLES.map((t) => t.id)
+
+/** What a line costs on the bill: nothing once it is on the house. */
+export const priceOf = (l: Line) => (l.comped ? 0 : l.dish.price)

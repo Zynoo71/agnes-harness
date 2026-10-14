@@ -2,6 +2,7 @@ import { CallError } from '@agnes/mhs/device'
 import { FIXTURES, TABLE_H, TABLES } from '../layout.js'
 import { placed } from './floormap.js'
 import { stageText } from './menu.js'
+import { priceOf } from './service.js'
 import { type World, WorldDevice, wait } from './world.js'
 
 /**
@@ -50,7 +51,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
   const summary = () => {
     const items = service.billed()
     const waiting = items.filter((l) => l.stage !== 'served' && l.stage !== 'cleared')
-    return `${items.map((l) => `${l.dish.en} ¥${l.dish.price}`).join(', ')}; subtotal ¥${service.subtotal()}${
+    return `${items.map((l) => `${l.dish.en} ¥${priceOf(l)}${l.comped ? ' (on the house)' : ''}`).join(', ')}; subtotal ¥${service.subtotal()}${
       service.discount ? `, ${service.discount}% off (${service.discountReason})` : ''
     }; total ¥${service.total()}${waiting.length ? `. Not served yet: ${waiting.map((l) => `${l.id} ${l.dish.en} (${stageText(l)})`).join(', ')}` : ''}`
   }
@@ -59,7 +60,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'bill',
       description:
-        "Make the bill for the guest's table and show it on their screen with a QR code to pay, once the guest asks for it, with how they said they pay. Decide the discount here, as a percentage of the whole bill: up to 50 % as a courtesy (a birthday, a wait that was too long); more, up to 100 % (the whole meal on the house), only when a dish had a problem, such as something in it. To take only that dish off, give its share of the bill: its price ÷ the total × 100. The guest sees the reason. Billing again before payment replaces both.",
+        "Make the bill for the guest's table and show it on their screen with a QR code to pay, once the guest asks for it, with how they said they pay. Decide the discount here, as a percentage of the whole bill: up to 50 % as a courtesy (a birthday, a wait that was too long); more, up to 100 % (the whole meal on the house), only when a dish had a problem, such as something in it. To put only that dish on the house, name it in comp instead. The guest sees the reason. Billing again before payment replaces both.",
       timeout: 10,
       params: {
         percent: {
@@ -67,6 +68,12 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
           minimum: 0,
           maximum: 100,
           description: 'percentage off the whole bill (not one dish), 0 for none',
+        },
+        comp: {
+          type: 'array',
+          maxItems: 10,
+          items: { type: 'string', maxLength: 8 },
+          description: 'order lines (o2) on the house, each one the guest found something in',
         },
         reason: { type: 'string', maxLength: 40, description: 'why, as the guest sees it' },
         method: {
@@ -80,7 +87,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
       uses: ['till'],
       ui: { label: 'Bill' },
     },
-    async (call, { percent, reason, method }) => {
+    async (call, { percent, reason, method, comp }) => {
       if (!service.table || service.guest === 'left')
         throw new CallError('x_no_guest', 'the guest has no table')
       if (!service.billed().length) throw new CallError('x_nothing_ordered', 'nothing was ordered')
@@ -89,8 +96,16 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
           'x_comp_needs_problem',
           'more than 50 % off only when a dish had a problem; no dish of this table had one',
         )
+      const comped = (comp as string[] | undefined) ?? []
+      const bad = comped.filter((id) => !service.lines.some((l) => l.id === id && l.problem))
+      if (bad.length)
+        throw new CallError(
+          'x_comp_needs_problem',
+          `${bad.join(', ')}: the guest found nothing in it, so it is charged`,
+        )
       await wait(call, 1000)
       if (service.bill !== 'paid') {
+        for (const l of service.lines) l.comped = comped.includes(l.id)
         service.discount = Number(percent ?? 0)
         service.discountReason = String(reason ?? '')
         service.payWith = String(method ?? 'qr')
@@ -102,7 +117,7 @@ export function pos(world: World, log: (line: string) => void): WorldDevice {
         detail: `bill for ${service.table} on the guest's screen, to pay by ${service.payWith === 'qr' ? 'QR code' : service.payWith} at their table: ${summary()}; pos-01 charge takes it when the guest pays`,
         data: {
           total: service.total(),
-          lines: service.billed().map((l) => ({ id: l.id, dish: l.dish.id, price: l.dish.price })),
+          lines: service.billed().map((l) => ({ id: l.id, dish: l.dish.id, price: priceOf(l) })),
         },
       }
     },

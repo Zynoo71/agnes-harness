@@ -728,7 +728,11 @@ export function dish(look: Look, color = 0xc4622d): THREE.Group {
   return g
 }
 
-/** A supply the runner brings: a napkin pack, a pair of chopsticks, a bowl, a spoon, a cup, a takeaway box, a baby chair. */
+/** How high a balloon's string rises from its weight, and how far it leans sideways at the top, in metres. */
+const BALLOON_STRING = 1.0
+const BALLOON_LEAN = 0.2
+
+/** A supply the runner brings: a napkin pack, a pair of chopsticks, a bowl, a spoon, a cup, a takeaway box, a baby chair, a balloon. */
 export function supplyModel(item: string): THREE.Group {
   const g = new THREE.Group()
   const red = mat(0xb3261e)
@@ -767,6 +771,30 @@ export function supplyModel(item: string): THREE.Group {
       g.add(at(box(0.34, 0.04, 0.34, wood), 0, 0.7, 0))
       g.add(at(box(0.34, 0.3, 0.03, wood), 0, 0.86, -0.16))
       g.add(at(box(0.36, 0.03, 0.16, red), 0, 0.82, 0.22))
+      break
+    }
+    case 'balloon': {
+      // A red balloon on a string tied to a small gold weight, the string leaning a little toward +x.
+      // userData.sway is what bobs (live/supplies.ts): the string and balloon, pivoting at the weight.
+      g.add(
+        at(cylinder(0.03, 0.036, 0.03, mat(0xe0b44a, { metalness: 0.5, roughness: 0.35 }), 12), 0, 0.015, 0),
+      )
+      const sway = new THREE.Group()
+      const top = new THREE.Vector3(BALLOON_LEAN, BALLOON_STRING, 0)
+      sway.add(
+        new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.03, 0), top]),
+          new THREE.LineBasicMaterial({ color: 0xf4efe6 }),
+        ),
+      )
+      const skin = mat(0xf0283c, { roughness: 0.22, emissive: 0xf0283c, emissiveIntensity: 0.12 })
+      const knot = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.03, 8), skin)
+      sway.add(at(knot, top.x, top.y + 0.012, 0))
+      const ball = sphere(0.11, skin, 20)
+      ball.scale.y = 1.18
+      sway.add(at(ball, top.x, top.y + 0.02 + 0.11 * 1.18, 0))
+      g.add(sway)
+      g.userData.sway = sway
       break
     }
   }

@@ -119,6 +119,7 @@ const VALUES_ZH: Record<string, string> = {
   cup: '杯子',
   takeaway_box: '打包盒',
   baby_chair: '儿童椅',
+  balloon: '气球',
   // Places.
   door: '门口',
   'waiting-area': '等候区',

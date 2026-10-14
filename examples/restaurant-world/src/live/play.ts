@@ -78,8 +78,6 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
   const bubbles: { mesh: THREE.Mesh; v: THREE.Vector3; born: number }[] = []
   const tower = new THREE.Group()
   world.actors.group.add(tower)
-  /** Until when the child beams after a game. */
-  let happyUntil = 0
 
   const kid = () => world.companions.find((c) => c.child)
   const childState = () => {
@@ -91,7 +89,7 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
   world.childMood = () => {
     if (!kid()) return ''
     if (upset >= 4) return '😭'
-    return game !== 'none' || performance.now() < happyUntil ? '😄' : ''
+    return game !== 'none' || performance.now() < world.happyUntil ? '😄' : ''
   }
 
   const dev = new WorldDevice({
@@ -379,7 +377,7 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
           report()
           const what = await (g === 'slide' ? slide : g === 'bubbles' ? blowBubbles : blocks)(call, c)
           upset = Math.max(0, upset - CALM)
-          happyUntil = performance.now() + 6000
+          world.happyUntil = performance.now() + 6000
           return `${what}; upset is ${upset}${upset >= 4 ? ', still crying: play again' : ', happy now'}`
         } finally {
           c.figure.object.position.y = 0
@@ -444,7 +442,7 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
     mode = 'idle'
     game = 'none'
     upset = 0
-    happyUntil = 0
+    world.happyUntil = 0
     report()
   })
   return dev

@@ -48,6 +48,7 @@ export const SUPPLY_ITEMS = [
   'cup',
   'takeaway_box',
   'baby_chair',
+  'balloon',
 ] as const
 export type SupplyItem = (typeof SUPPLY_ITEMS)[number]
 

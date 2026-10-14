@@ -177,6 +177,7 @@ const TEXT = {
       cup: '杯子',
       takeaway_box: '打包盒',
       baby_chair: '儿童椅',
+      balloon: '气球',
       lights: '灯光',
       music: '音乐',
       volume: '音量',

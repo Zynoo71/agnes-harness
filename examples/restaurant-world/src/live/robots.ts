@@ -29,7 +29,6 @@ function pickup(i: Item): 'pass' | 'bar' | 'supplies' | undefined {
 const towards = (from: { x: number; y: number }, to: { x: number; y: number }) =>
   Math.round(((Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI + 360) % 360)
 
-/** Puts an item on table `t` at the next free slot; a baby chair stands on the floor by the seat. */
 type P = { x: number; y: number }
 
 /** The order of pickup places (three at most) that makes the shortest straight-line trip from `from` to `to`. */
@@ -45,6 +44,7 @@ function shortestOrder(from: P, stops: string[], to: P): string[] {
   return orders(stops).sort((a, b) => length(a) - length(b))[0] ?? stops
 }
 
+/** Puts an item on table `t` at the next free slot; a baby chair stands on the floor by the seat, a balloon beside it. */
 function setOnTable(world: World, t: Table, i: Item) {
   const object = objectOf(i)
   if (!object) return
@@ -54,6 +54,16 @@ function setOnTable(world: World, t: Table, i: Item) {
     const seat = world.service.seat ?? guestSeat(t)
     const spot = babyChairSpot(t, seat)
     world.actors.group.add(place(object, spot.x, spot.y, 0, seat.yaw))
+    i.supply.slot = -1
+    return
+  }
+  if (i.kind === 'supply' && i.supply.item === 'balloon') {
+    // Tied by the child's place, just beyond the baby chair, leaning away from the table.
+    const spot = babyChairSpot(t, world.service.seat ?? guestSeat(t))
+    const away = Math.atan2(spot.y - t.y, spot.x - t.x)
+    const x = spot.x + Math.cos(away) * 0.22
+    const y = spot.y + Math.sin(away) * 0.22
+    world.actors.group.add(place(object, x, y, 0, (away * 180) / Math.PI - 90))
     i.supply.slot = -1
     return
   }
@@ -143,10 +153,17 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
     if (!object) return
     const k = aboard.length
     aboard.push(i)
+    object.rotation.set(0, 0, 0)
+    if (i.kind === 'supply' && i.supply.item === 'balloon') {
+      // A balloon rides at the front of the top tray, floating clear of the trays and the head.
+      ;(model.trays[0] as THREE.Object3D).add(object)
+      object.position.set(k % 2 ? -0.13 : 0.13, 0, 0.13)
+      object.scale.setScalar(0.55)
+      return
+    }
     const tray = model.trays[k % model.trays.length] as THREE.Object3D
     tray.add(object)
     object.position.set(((k % 2) - 0.5) * 0.12 * Math.min(1, Math.floor(k / 3)), Math.floor(k / 3) * 0.12, 0)
-    object.rotation.set(0, 0, 0)
     object.scale.setScalar(i.kind === 'supply' && i.supply.item === 'baby_chair' ? 0.4 : 1)
   }
 
@@ -239,12 +256,27 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
               h: TABLE_H + 0.5,
               steam: dishes.flatMap((l) => (l.object && l.dish.station !== 'bar' ? [l.object] : [])),
             })
+          // A balloon floats up by the child's place, and the child beams.
+          const gift = served.find((i) => i.kind === 'supply' && i.supply.item === 'balloon')
+          const kid = world.companions.some((m) => m.child)
+          const at = gift && objectOf(gift)?.position
+          if (at) {
+            if (kid) world.happyUntil = performance.now() + 8000
+            world.cheer({
+              en: '🎈 A little gift',
+              zh: '🎈 小礼物送到',
+              at: { x: at.x, z: at.z },
+              h: 1.75,
+              steam: [],
+            })
+          }
           const left = [
             ...service.lines.map((line): Item => ({ kind: 'line', line })),
             ...service.supplies.map((supply): Item => ({ kind: 'supply', supply })),
           ].filter((i) => pickup(i))
           const more = left.length ? `; still waiting to be served: ${left.map(nameOf).join(', ')}` : ''
-          return `served ${things.map(nameOf).join(', ')} at ${t.id}${more}`
+          const beams = gift && kid ? '; the child beams at the balloon' : ''
+          return `served ${things.map(nameOf).join(', ')} at ${t.id}${beams}${more}`
         } finally {
           mode = 'docked'
           report()

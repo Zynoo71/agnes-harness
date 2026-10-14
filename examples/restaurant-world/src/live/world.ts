@@ -385,6 +385,8 @@ export class World {
   companions: Companion[] = []
   /** How the small child looks now, as an emoji over them (crying, beaming), or nothing; play-01 sets it. */
   childMood: () => string = () => ''
+  /** Until when the small child beams after something nice: a game, a gift (ms, performance.now). */
+  happyUntil = 0
   /** What the host robot says, in a bubble over it until `until` (ms, performance.now). */
   speech = { text: '', until: 0 }
   /** The dining room's lights, music and set temperature, as room-01 set them, and its air now; `light` applies a lighting scene. */

@@ -148,7 +148,7 @@ export const FIXTURES = {
   dishReturn: { x: 5.6, y: BACK_OF_HOUSE_Y, w: 1.2, d: 0.6 },
   /** The drinks bar's counter, open to the dining room. */
   bar: { x: 19.3, y: BACK_OF_HOUSE_Y, w: 4.6, d: 0.6 },
-  /** Napkins, chopsticks, bowls, spoons, takeaway boxes and a baby chair, against the low wall. */
+  /** Napkins, chopsticks, bowls, spoons, takeaway boxes, a baby chair and balloons, against the low wall. */
   supplies: { x: 15, y: BACK_OF_HOUSE_Y - 0.55, w: 1.8, d: 0.5 },
   /** The cashier's counter east of the door. */
   cashier: { x: 14.6, y: 1.1, w: 2.4, d: 0.7 },
@@ -258,7 +258,7 @@ export const PLACES: Place[] = [
     name: { en: 'Supplies cabinet', zh: '备品柜' },
     kind: 'landmark',
     ...before(F.supplies),
-    description: 'Napkins, chopsticks, bowls, spoons, takeaway boxes, a baby chair',
+    description: 'Napkins, chopsticks, bowls, spoons, takeaway boxes, a baby chair, balloons',
   },
   {
     id: 'dish-return',

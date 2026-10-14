@@ -2033,8 +2033,17 @@ body.mhs-dragging {
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
-  gap: 0 10px;
+  align-items: center;
+  gap: 0 8px;
+  min-width: 0;
+  color: var(--mhs-text-3);
   font-size: 11px;
+}
+.mhs-root .mhs-flow-status > code {
+  font: 10.5px var(--mhs-mono);
+}
+.mhs-root .mhs-flow-status .mhs-trust:not([data-trust="uncertain"]) {
+  color: inherit;
 }
 .mhs-root .mhs-flow-device .mhs-doing-list,
 .mhs-root .mhs-flow-device > .mhs-doing {

@@ -56,6 +56,7 @@ const DM_SHOWN_MS = 15_000
 const INFO_H = 150
 const CARD_GAP = 14
 const PICTURE_MAX = 260
+const PICTURE_ACROSS_MAX = 360
 /** Where each lane enters a card, from its top. */
 const MHS_IN = 24
 const NERVE_IN = 50
@@ -77,18 +78,18 @@ interface Dot {
   by?: By
 }
 
-/** Where a card sits: its top and left edge, and which side of the bus it is on. */
+/** Where a card sits: its top and left edge, its width, and which side of the bus it is on, or across it. */
 interface Slot {
   top: number
   left: number
-  side: 'left' | 'right' | 'one'
+  width: number
+  side: 'left' | 'right' | 'one' | 'across'
 }
 
 interface Geometry {
   width: number
   height: number
   cards: Map<string, Slot>
-  cardWidth: number
   /** Picture heights by device id: 0 for a device without one. */
   pictures: Map<string, number>
   /** The AgnesHub banner's top: under the brain, or at the top on a page without one. */
@@ -99,9 +100,9 @@ interface Geometry {
 }
 
 /**
- * Devices with a picture first, then in rows either side of the bus, the columns next to it filled
- * first, each row as tall as its tallest card; in a narrow panel, one column to the right of a bus
- * down the left edge.
+ * Devices with a picture first, each placed in whichever column either side of the bus ends highest,
+ * the columns next to it first; a lone device with a picture goes across the bus at the top, its
+ * picture larger. In a narrow panel, one column to the right of a bus down the left edge.
  */
 function layout(devices: Device[], width: number, heights: Map<string, number>, hub: number): Geometry {
   const two = width >= TWO_COLUMNS
@@ -112,35 +113,42 @@ function layout(devices: Device[], width: number, heights: Map<string, number>, 
     : width - CARD_X - SIDE
   const cards = new Map<string, Slot>()
   const pictures = new Map<string, number>()
-  const picture = Math.min(PICTURE_MAX, Math.round(((cardWidth - 16) * 9) / 16))
-  const ordered = [...devices.filter((d) => primaryImage(d)), ...devices.filter((d) => !primaryImage(d))]
-  const perRow = two ? 2 * perSide : 1
+  const pictureOf = (w: number, max: number) => Math.min(max, Math.round(((w - 16) * 9) / 16))
+  const withPicture = devices.filter((d) => primaryImage(d))
+  const ordered = [...withPicture, ...devices.filter((d) => !primaryImage(d))]
+  let top = hub + HUB_H + 20
+  const across = two && withPicture.length === 1 ? withPicture[0] : undefined
+  if (across) {
+    const w = width - 2 * SIDE
+    const h = pictureOf(w, PICTURE_ACROSS_MAX)
+    cards.set(across.id, { top, left: SIDE, width: w, side: 'across' })
+    pictures.set(across.id, h)
+    top += (heights.get(across.id) ?? h + INFO_H) + CARD_GAP
+  }
+  // k: 0 next to the bus on the left, 1 on the right, 2 and 3 the columns beyond them.
+  const columns = Array.from({ length: two ? 2 * perSide : 1 }, () => top)
   const step = cardWidth + COLUMN_GAP
-  let y = hub + HUB_H + 20
-  for (let i = 0; i < ordered.length; i += perRow) {
-    let tallest = 0
-    for (const [k, d] of ordered.slice(i, i + perRow).entries()) {
-      // k: 0 next to the bus on the left, 1 on the right, 2 and 3 the columns beyond them.
-      const side = !two ? 'one' : k % 2 === 0 ? 'left' : 'right'
-      const column = Math.floor(k / 2)
-      const left =
-        side === 'one'
-          ? CARD_X
-          : side === 'left'
-            ? mid - GUTTER - cardWidth - column * step
-            : mid + GUTTER + column * step
-      const h = primaryImage(d) ? picture : 0
-      cards.set(d.id, { top: y, left, side })
-      pictures.set(d.id, h)
-      tallest = Math.max(tallest, heights.get(d.id) ?? h + INFO_H)
-    }
-    y += tallest + CARD_GAP
+  for (const d of ordered) {
+    if (d === across) continue
+    const k = columns.indexOf(Math.min(...columns))
+    const side = !two ? 'one' : k % 2 === 0 ? 'left' : 'right'
+    const column = Math.floor(k / 2)
+    const left =
+      side === 'one'
+        ? CARD_X
+        : side === 'left'
+          ? mid - GUTTER - cardWidth - column * step
+          : mid + GUTTER + column * step
+    const h = primaryImage(d) ? pictureOf(cardWidth, PICTURE_MAX) : 0
+    const y = columns[k] as number
+    cards.set(d.id, { top: y, left, width: cardWidth, side })
+    pictures.set(d.id, h)
+    columns[k] = y + (heights.get(d.id) ?? h + INFO_H) + CARD_GAP
   }
   return {
     width,
-    height: y,
+    height: Math.max(top, ...columns),
     cards,
-    cardWidth,
     pictures,
     hub,
     mhsX: two ? mid - 5 : MHS_X,
@@ -169,9 +177,15 @@ function path(g: Geometry, lane: Lane, device?: string): [number, number][] {
   const slot = g.cards.get(device ?? '')
   if (slot === undefined) return []
   const x = lane === 'mhs' ? g.mhsX : g.nerveX
+  // A card across the bus takes its lanes in at its top.
+  if (slot.side === 'across')
+    return [
+      [x, g.hub + HUB_H],
+      [x, slot.top],
+    ]
   const y = slot.top + (lane === 'mhs' ? MHS_IN : NERVE_IN)
   // A lane meets a card at its edge nearest the bus.
-  const edge = slot.side === 'left' ? slot.left + g.cardWidth : slot.left
+  const edge = slot.side === 'left' ? slot.left + slot.width : slot.left
   return [
     [x, g.hub + HUB_H],
     [x, y],
@@ -250,6 +264,7 @@ function DeviceCard(props: {
   const card = useRef<HTMLElement | null>(null)
   const { onHeight } = props
   const ended = useCallCues(d, card)
+  const idle = (d.jobs ?? []).length === 0 && !runningNow(d)
 
   // The card sizes itself to its content; the layout places the cards below it by that height.
   useEffect(() => {
@@ -283,14 +298,20 @@ function DeviceCard(props: {
       <div className="mhs-flow-info">
         <button type="button" className="mhs-flow-name" onClick={() => nav.open(d.id)}>
           <span className="mhs-mark">{displayName(d)}</span>
-          <code className="mhs-dim">{d.id}</code>
         </button>
         <StatePill device={d} />
+        {/* One quiet line: the id, where it is, idle; health only when it is not fine. */}
         <span className="mhs-flow-status">
-          <HealthText health={d.health} />
+          {d.health.level === 'ok' ? (
+            <span className="mhs-dot" data-tone="ok" />
+          ) : (
+            <HealthText health={d.health} />
+          )}
+          <code>{d.id}</code>
           {d.position && <PositionText position={d.position} />}
+          {idle && <span>{t('device.idle')}</span>}
         </span>
-        <Doing device={d} compact />
+        {!idle && <Doing device={d} compact />}
         <span className="mhs-fields mhs-flow-fields">
           {keyFields(d, 2).map(([name, field]) => (
             <FieldView key={name} name={name} field={field} value={d.state.values[name]} />
@@ -527,18 +548,22 @@ export function Flow(props: { brain?: Brain | undefined }) {
           </>
         )}
         {devices.map((d) => {
-          const top = g.cards.get(d.id)?.top ?? 0
+          const mhs = path(g, 'mhs', d.id)
+          const nerve = path(g, 'nerve', d.id)
+          // Each lane's port sits where it leaves the bus.
+          const [mx, my] = mhs[1] ?? [0, 0]
+          const [nx, ny] = nerve[1] ?? [0, 0]
           return (
             <g key={d.id}>
-              <polyline points={line(path(g, 'mhs', d.id))} className="mhs-flow-mhs" />
-              <polyline points={line(path(g, 'nerve', d.id))} className="mhs-flow-nerve" />
-              <circle cx={g.mhsX} cy={top + MHS_IN} r={2.5} className="mhs-flow-port" />
+              <polyline points={line(mhs)} className="mhs-flow-mhs" />
+              <polyline points={line(nerve)} className="mhs-flow-nerve" />
+              <circle cx={mx} cy={my} r={2.5} className="mhs-flow-port" />
               <rect
-                x={g.nerveX - 2.5}
-                y={top + NERVE_IN - 2.5}
+                x={nx - 2.5}
+                y={ny - 2.5}
                 width={5}
                 height={5}
-                transform={`rotate(45 ${g.nerveX} ${top + NERVE_IN})`}
+                transform={`rotate(45 ${nx} ${ny})`}
                 className="mhs-flow-port"
                 data-lane="nerve"
               />
@@ -615,7 +640,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
             device={d}
             top={slot.top}
             left={slot.left}
-            width={g.cardWidth}
+            width={slot.width}
             picture={g.pictures.get(d.id) ?? 0}
             traffic={fresh ? traffic.devices[d.id] : undefined}
             onHeight={onHeight}

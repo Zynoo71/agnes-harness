@@ -256,7 +256,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'clear',
       description:
-        'Take dishes and supplies from a table to the dish return: the given ones, or everything on the table. Defaults to the guest’s table.',
+        'Once the guest has left, or wants everything taken away, take all dishes and supplies off a table to the dish return; while they are still eating, name only the items to take. Defaults to the guest’s table.',
       timeout: 180,
       params: {
         table: { type: 'string', enum: TABLES.map((t) => t.id) },
@@ -400,7 +400,7 @@ export function cleaner(world: World, log: (line: string) => void): WorldDevice 
     {
       name: 'clean',
       description:
-        'Go to a place (a table, the door, …) and scrub the floor there; at a table that needs clearing, also wipe the table so it is free again, once runner-01 has cleared its dishes.',
+        'Only where something spilled (see spills) or at a table the guest left, once runner-01 has cleared it: go to the place (a table, the door, …) and scrub the floor there, and at that left table also wipe it so it is free again.',
       timeout: 120,
       params: { place: PLACE_PARAM },
       required: ['place'],

@@ -417,7 +417,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
   /** What the result adds when the rover stopped short of the last point. */
   const shortBy = (short: number, to: Point) => {
     const p = toMap(to)
-    return short > 1 ? `, ${round(short, 1)} m short of (${p.x}, ${p.y}): a boulder is there` : ''
+    return short > 1 ? `, ${round(short, 1)} m short of (${p.x}, ${p.y}), the nearest clear ground` : ''
   }
 
   /** Drives through `points`; `legs` reports each leg done as progress. */

@@ -256,7 +256,7 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'clear',
       description:
-        'Once the guest has left, or wants everything taken away, take all dishes and supplies off a table to the dish return; while they are still eating, name only the items to take. Defaults to the guest’s table.',
+        'Once the guest has left, take all dishes and supplies off a table to the dish return; while they are seated, only the items named (all of them if they want everything gone). Defaults to the guest’s table.',
       timeout: 180,
       params: {
         table: { type: 'string', enum: TABLES.map((t) => t.id) },
@@ -290,6 +290,11 @@ export function runner(world: World, log: (line: string) => void): WorldDevice {
         ? on.filter((i) => wanted.includes(i.kind === 'line' ? i.line.id : i.supply.id))
         : on
       if (!things.length) return `nothing to clear on ${t.id}`
+      if (!wanted && t.id === service.table && service.guest === 'seated')
+        throw new CallError(
+          'x_guest_seated',
+          `the guest is still at ${t.id}: name the items to take, or clear it all once they have left`,
+        )
       return robot.work(async () => {
         try {
           mode = 'clearing'

@@ -3,7 +3,7 @@ import { CHILD_OUTFIT, guest, OUTFITS } from '../actors.js'
 import { babyChairSpot, besideSeat, type Seat, TABLES } from '../layout.js'
 import { rotY } from '../shapes.js'
 import { fromMap, type Point, planNear } from './route.js'
-import { type Companion, clock, everyFrame, type World } from './world.js'
+import { type Companion, everyFrame, frameTime, type World } from './world.js'
 
 /** Metres between people walking in a line, and how fast the others can catch up. */
 const GAP = 0.75
@@ -162,9 +162,9 @@ export function partyOf(world: World): void {
   build()
   world.onReset(build)
   // On the motion clock, so the party walks in step with the drawn frames, as the guest does.
-  let last = clock()
+  let last = frameTime()
   everyFrame(() => {
-    const now = clock()
+    const now = frameTime()
     step(Math.min(0.1, (now - last) / 1000))
     last = now
   }, console.error)

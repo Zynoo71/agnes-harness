@@ -87,14 +87,14 @@ let beatTime = performance.now()
  * by when its step happens to run: steps run after the frame is drawn, at a time that varies with
  * how long drawing took, and a step timed by that moved unevenly from one drawn frame to the next.
  */
-export const clock = () => beatTime
+export const frameTime = () => beatTime
 
 /**
- * One beat of the motion clock: every motion takes its step. While the page is drawn, the render
- * loop beats it, one step a drawn frame, so motion moves the same amount in every frame on screen
- * (the worker's beat drifts against the screen's, and frames showing two steps look like a double
- * image). Whenever the page is not drawn (hidden, or a frame the browser stopped painting), the
- * worker beats it.
+ * One beat of the motion clock: every motion takes its step. While the page is drawn, the page beats
+ * it from its animation frames, a whole number of steps a drawn frame, so motion moves the same
+ * amount in every frame on screen (the worker's beat drifts against the screen's, and frames showing
+ * one step more than the last look like a double image). Whenever the page is not drawn (hidden, or a
+ * frame the browser stopped painting), the worker beats it.
  */
 export function beat(time = performance.now()): void {
   lastBeat = performance.now()
@@ -665,7 +665,7 @@ export class Body {
     /** The segment the body is on: it moves forward along the path, never back. */
     let seg = 0
     let v = 0
-    let last = clock()
+    let last = frameTime()
     const length = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.z - a.z)
     try {
       const rest = () => {
@@ -673,7 +673,7 @@ export class Body {
         this.turn = 0
       }
       for (;;) {
-        const now = clock()
+        const now = frameTime()
         const dt = Math.min(0.1, (now - last) / 1000)
         last = now
         if (length(this.at, end) <= arrive) break
@@ -728,10 +728,10 @@ export class Body {
 
   /** Changes height to `y` at up to `rate` m/s, easing in and out at `accel` m/s², frame by frame. */
   async rise(call: Call, y: number, rate: number, step?: () => void, accel = 2): Promise<void> {
-    let last = clock()
+    let last = frameTime()
     let v = 0
     while (Math.abs(this.object.position.y - y) > 0.02) {
-      const now = clock()
+      const now = frameTime()
       const dt = Math.min(0.1, (now - last) / 1000)
       last = now
       const dy = y - this.object.position.y
@@ -751,9 +751,9 @@ export async function turnTo(
   ms: number,
 ): Promise<void> {
   const from = { x: object.rotation.x, y: object.rotation.y, z: object.rotation.z }
-  const start = clock()
+  const start = frameTime()
   for (;;) {
-    const k = Math.min(1, ((clock() - start) * PACE) / ms)
+    const k = Math.min(1, ((frameTime() - start) * PACE) / ms)
     const e = k * k * (3 - 2 * k)
     for (const axis of ['x', 'y', 'z'] as const) {
       const to = target[axis]

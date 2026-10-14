@@ -9,10 +9,10 @@ import { fromMap, toMap } from './route.js'
 import {
   Body,
   type Companion,
-  clock,
   everyFrame,
   FRAME_HZ,
   frame,
+  frameTime,
   PACE,
   type World,
   WorldDevice,
@@ -44,9 +44,9 @@ async function glide(
   const from = o.position.clone()
   const p = fromMap(to.x, to.y)
   const goal = new THREE.Vector3(p.x, to.h, p.z)
-  const start = clock()
+  const start = frameTime()
   for (;;) {
-    const k = Math.min(1, ((clock() - start) * PACE) / ms)
+    const k = Math.min(1, ((frameTime() - start) * PACE) / ms)
     o.position.lerpVectors(from, goal, k)
     each?.(k)
     if (k >= 1) return

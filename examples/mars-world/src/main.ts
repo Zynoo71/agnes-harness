@@ -17,7 +17,7 @@ import { buildFocus, FOCUS_LAYER } from './focus.js'
 import { deviceCameras } from './live/camera.js'
 import type { EventKind } from './live/events.js'
 import { connectDevices } from './live/index.js'
-import { watchers } from './live/world.js'
+import { beat, FRAME_HZ, watchers } from './live/world.js'
 import { buildMinimap } from './minimap.js'
 import { buildOverlay, type Lang } from './overlay.js'
 import { say } from './prompt.js'
@@ -31,8 +31,10 @@ const app = document.getElementById('app') as HTMLElement
 
 // ?quality=high renders at the full Retina resolution with ambient occlusion; balanced (the default)
 // caps the pixel ratio and leaves ambient occlusion out, which costs a quarter of the GPU's frame
-// for shading that is hard to see at these distances; low renders at one pixel per CSS pixel.
-const QUALITY = params.get('quality') ?? 'balanced'
+// for shading that is hard to see at these distances; low renders at one pixel per CSS pixel. A page
+// framed by Agnes is laid out at 1920 x 1080 and shown scaled down, so one pixel per CSS pixel is
+// already as sharp as it is shown.
+const QUALITY = params.get('quality') ?? (parent !== window ? 'low' : 'balanced')
 const PIXEL_RATIO =
   QUALITY === 'high'
     ? Math.min(devicePixelRatio, 2)
@@ -311,10 +313,26 @@ let cpu = 0
 let draws = 0
 let triangles = 0
 renderer.info.autoReset = false
+let lastStep = 0
+let due = false
+// Motion steps FRAME_HZ times a second, by the time of the frame it is shown in, in an animation
+// frame callback of its own just before the one that draws: the steps run in the microtasks between
+// the two, so a drawn frame shows where everything is at its own time. At FPS below FRAME_HZ every
+// drawn frame shows the same number of steps.
+const step = (time: number) => {
+  requestAnimationFrame(step)
+  if (time - lastStep < 1000 / FRAME_HZ - 4) return
+  lastStep = time
+  beat(time)
+  if (time - last < 1000 / FPS - 4) return
+  last = time
+  due = true
+}
+requestAnimationFrame(step)
 renderer.setAnimationLoop(() => {
+  if (!due) return
+  due = false
   const start = performance.now()
-  if (start - last < 1000 / FPS - 4) return
-  last = start
   renderer.info.reset()
   const t = frameClock.getElapsedTime()
   const dt = t - lastT

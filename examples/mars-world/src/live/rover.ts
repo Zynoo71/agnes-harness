@@ -19,7 +19,17 @@ import {
   round,
   toMap,
 } from './route.js'
-import { Blocked, Body, every, everyFrame, routes, type World, WorldDevice, wait } from './world.js'
+import {
+  Blocked,
+  Body,
+  every,
+  everyFrame,
+  frameTime,
+  routes,
+  type World,
+  WorldDevice,
+  wait,
+} from './world.js'
 
 /** The lidar on the mast: one sweep, all round, every 2 degrees. */
 const LIDAR = { range: 30, step: 2, height: 1.9, ahead: 0.8 }
@@ -353,10 +363,10 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
     manual.vx = 0
     manual.wz = 0
   }
-  let manualAt = performance.now()
+  let manualAt = frameTime()
   let steering = false
   everyFrame(() => {
-    const now = performance.now()
+    const now = frameTime()
     const dt = Math.min(0.1, (now - manualAt) / 1000)
     manualAt = now
     if (manual.vx === 0 && manual.wz === 0) {

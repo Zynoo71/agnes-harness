@@ -29,6 +29,7 @@ import {
   everyFrame,
   FRAME_HZ,
   frame,
+  frameTime,
   routes,
   type Thing,
   turnTo,
@@ -497,10 +498,10 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
     manual.wz = 0
     model.want.wheel = false
   }
-  let manualAt = performance.now()
+  let manualAt = frameTime()
   let steering = false
   everyFrame(() => {
-    const now = performance.now()
+    const now = frameTime()
     const dt = Math.min(0.1, (now - manualAt) / 1000)
     manualAt = now
     if ((manual.vx === 0 && manual.wz === 0) || model.unfolded > 0) {

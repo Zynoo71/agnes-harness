@@ -5,7 +5,7 @@ import { buildFocus, FOCUS_LAYER } from './focus.js'
 import { DEVICES } from './labels.js'
 import { BACK_OF_HOUSE_Y, BAR_X, FIXTURES, PRIVATE_ROOM, PRIVATE_SPEAKER, ROOM, TABLES } from './layout.js'
 import { connectDevices } from './live/index.js'
-import { beat } from './live/world.js'
+import { beat, FRAME_HZ } from './live/world.js'
 import { buildMinimap } from './minimap.js'
 import { buildMoments } from './moments.js'
 import { buildOverlay, type Lang } from './overlay.js'
@@ -437,16 +437,20 @@ let cpu = 0
 let draws = 0
 let triangles = 0
 renderer.info.autoReset = false
+let lastStep = 0
 let due = false
-// Motion steps once a drawn frame, by the time the frame is shown, in a callback of its own just
-// before the one that draws it: the steps run in the microtasks between the two, so a frame shows
-// where everything is at its own time, not at the frame before's.
+// Motion steps FRAME_HZ times a second, by the time of the frame it is shown in, in an animation
+// frame callback of its own just before the one that draws: the steps run in the microtasks between
+// the two, so a drawn frame shows where everything is at its own time. At FPS below FRAME_HZ every
+// drawn frame shows the same number of steps.
 const step = (time: number) => {
   requestAnimationFrame(step)
+  if (time - lastStep < 1000 / FRAME_HZ - 4) return
+  lastStep = time
+  beat(time)
   if (time - last < 1000 / FPS - 4) return
   last = time
   due = true
-  beat(time)
 }
 requestAnimationFrame(step)
 renderer.setAnimationLoop(() => {

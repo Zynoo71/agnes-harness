@@ -4,7 +4,7 @@ import { LAYOUT } from '../base.js'
 import { addCamera } from './camera.js'
 import { addPlace, reading } from './place.js'
 import { headingTo, type Point, planNear, round, toMap } from './route.js'
-import { Body, every, everyFrame, FRAME_HZ, frame, type World, WorldDevice } from './world.js'
+import { Body, every, everyFrame, FRAME_HZ, frame, frameTime, type World, WorldDevice } from './world.js'
 
 /** The astronaut's walk: speed in m/s, turning in radians a second, metres per step. */
 const WALK = { speed: 0.55, turn: 2.5, stride: 0.38 }
@@ -76,7 +76,7 @@ function wander(
   let way: Point[] | undefined
   let restUntil = performance.now() + 6000
   let phase = 0
-  let last = performance.now()
+  let last = frameTime()
   /** When the way was last planned: a fresh way is followed a while before it is checked again. */
   let planned = 0
   /** Where the vehicles were last frame, to tell which are moving. */
@@ -87,7 +87,7 @@ function wander(
     model.position.y = world.ground(body.at)
   }
   everyFrame(() => {
-    const now = performance.now()
+    const now = frameTime()
     const dt = Math.min(0.1, (now - last) / 1000)
     last = now
     if (busy()) {

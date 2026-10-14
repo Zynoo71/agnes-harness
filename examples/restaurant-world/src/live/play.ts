@@ -342,7 +342,7 @@ export function playBot(world: World, log: (line: string) => void): WorldDevice 
           await lead(call, c, STAND)
           await childTo(call, c, [MAT])
           childFaces(c, STAND)
-          return `the child is on the mat in the play area with play-01 (upset ${upset}); play a game to keep them happy, bring_back when the party wants them`
+          return `the child is on the mat in the play area with play-01 (upset ${upset}); play a game to keep them happy; they can stay here with play-01 as long as the party likes, so leave them playing and bring_back only when the party asks or leaves`
         } finally {
           mode = 'idle'
           report()

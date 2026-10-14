@@ -206,6 +206,29 @@ export function menu(world: World, log: (line: string) => void): WorldDevice {
       return `${l.id} ${l.dish.en} hurried; it is ${stageText(l)}`
     },
   )
+  dev.tool(
+    {
+      name: 'report_problem',
+      description:
+        'Record what the guest says is wrong with a dish they were served (something in it, too salty, cold), so pos-01 bill may put it on the house. Then put it right at once, unasked: runner-01 clear takes it away and a fresh one can be ordered.',
+      timeout: 5,
+      params: {
+        item: { type: 'string', maxLength: 8, description: 'the order line, such as o4' },
+        problem: { type: 'string', maxLength: 60, description: "what is wrong, in the guest's words" },
+      },
+      required: ['item', 'problem'],
+      uses: ['orders'],
+      ui: { label: 'Report problem' },
+    },
+    async (_call, { item, problem }) => {
+      const l = lineOf(item)
+      if (l.stage !== 'served' && l.stage !== 'cleared')
+        throw new CallError('x_not_served', `${l.id} ${l.dish.en} is ${stageText(l)}, not served yet`)
+      l.problem = String(problem)
+      service.changed()
+      return `${l.id} ${l.dish.en}: the guest found ${l.problem}; pos-01 bill may put it on the house`
+    },
+  )
   world.conditions.push({
     device: dev.id,
     en: 'A hair in the guest’s latest dish',

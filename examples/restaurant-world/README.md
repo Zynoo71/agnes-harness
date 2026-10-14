@@ -47,7 +47,7 @@ The street and the door are at the south. Inside: the children's play area in th
 | --- | --- | --- |
 | `host-01` | The host robot at the door. The guest walks in a few seconds after the page opens, with their party; its state says how many came and whether one is a small child. The host leads them to a table big enough and, once they have paid and the child is back, to the door | `seat_guest(table)`, `see_off()`, `say(text)` |
 | `floor-01` | The floor plan and the tables' status: free, reserved, occupied, needs clearing | `set_table(table, free \| reserved)` |
-| `menu-01` | The menu on the guest's screen and the orders. One order line per portion (`o1`, `o2`, …), with a note such as "less spicy"; a line is cancelled only before anyone starts it | `show_menu(open?)`, `order(items[{dish, qty?, note?}])`, `cancel(item)`, `hurry(item)` |
+| `menu-01` | The menu on the guest's screen and the orders. One order line per portion (`o1`, `o2`, …), with a note such as "less spicy"; a line is cancelled only before anyone starts it | `show_menu(open?)`, `order(items[{dish, qty?, note?}])`, `cancel(item)`, `hurry(item)`, `report_problem(item, problem)` |
 | `prep-01` | The prep robot: takes the ingredients of the kitchen's lines from the cold store, washes and cuts them at the prep counter, and sets each bowl beside the wok or the stove, every waiting line in one trip | `prep(item?)` |
 | `wok-01` | Stir-fries and braises, one line at a time; hurried lines go twice as fast | `cook(item?)` |
 | `stove-01` | Steams and boils: fish, dumplings, noodles, soup, rice | `cook(item?)` |

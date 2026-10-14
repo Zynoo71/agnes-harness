@@ -336,4 +336,19 @@ describe('brain tools', () => {
       '- follow_route: Follow map points. Arguments: points: list of {x: number, y: number}, required.',
     )
   })
+
+  it("starts with the device's profile notes", () => {
+    const entry = {
+      id: 'x',
+      kind: 'rover',
+      profile: { notes: 'Charges in the dock.' },
+      online: true,
+      available: true,
+      since: 0,
+      sources: [],
+      state: { fields: {}, values: {}, updated: null, alerts: {} },
+      health: { level: 'ok', reasons: [] },
+    }
+    expect(capabilities(entry as never)).toMatch(/^About: Charges in the dock\.\nNo tools\.$/)
+  })
 })

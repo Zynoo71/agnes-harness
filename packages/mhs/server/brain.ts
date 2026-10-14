@@ -405,6 +405,9 @@ function rangeText(p: Param): string {
  */
 export function capabilities(d: DeviceEntry): string {
   const lines: string[] = []
+  // What the device is and how it behaves, as its maker wrote it (MHS profile notes).
+  const notes = (d.profile as { notes?: string } | undefined)?.notes
+  if (notes) lines.push(`About: ${notes}`)
   const tools = (d.tools as { name: string; description: string; inputSchema?: Param }[] | undefined) ?? []
   if (tools.length) {
     lines.push('Tools (call_device; argument names exactly as listed):')

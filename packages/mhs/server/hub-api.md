@@ -458,7 +458,7 @@ Five fixed tools, named verb + `device`. A device's own tools are not registered
 | Tool | Parameters | Does | Operation |
 |---|---|---|---|
 | `list_devices` | — | Every device: id, name, kind, available, health, what it is doing, its tools and sources | `hub/devices` |
-| `read_device` | `device`, `sources` (optional) | State, health and position; with `sources`, their newest data, pictures as attachments | `hub/read` |
+| `read_device` | `device`, `sources` (optional) | State, health and position, the device's profile notes, tools and settable state; with `sources`, their newest data, pictures as attachments | `hub/read` |
 | `call_device` | `device`, `tool`, `args` | Calls a tool and waits for the job to end. A job still running 3 s before Agnes's deadline for the tool returns `running` and its job id, and goes on; a stopped turn cancels it | `hub/call` |
 | `set_device` | `device`, `values` | Changes writable state | `hub/set` |
 | `stop_device` | `device` (optional) | Stops one device, or every device | `hub/stop` |
@@ -501,7 +501,7 @@ A page can say something to the brain for the person looking at it, such as "the
 - **As the person's words.** The text is posted as it is, with no prefix, and the conversation shows it as the person's message. A page sends it only when a person asks it to.
 - **How.** Through the Agnes daemon's local socket: a one-shot job (`_agnes/v1/jobs.enqueue`, delivery `steer`) that is steered into the turn when the brain is running, or starts a new turn when it is idle. Plugins have no in-process way to post into a session.
 - **No approval prompts.** The device tools ask for no approval and do not mark their results as open-world, which would bring approval back for the rest of the turn.
-- **Pictures.** `read_device` declares `returnsImages` in its tool metadata. Agnes sends a tool's pictures to the model only when the tool declares this and its result is closed-world, as every device tool's is.
+- **Pictures.** `read_device` declares `returnsImages` in its tool metadata. Agnes sends a tool's pictures to the model only when the tool declares this and its result is closed-world, as every device tool's is. Agnes takes at most 4 pictures from one step's results and fails the step past that, so reads of one session within 2 s of each other (one step's parallel calls) share 4 pictures; the text of a read names the pictures left out.
 - Device events are not written into the conversation record; pages get them from `/ws/hub`, the brain through the hook and the tool results.
 
 ### 15.4 Briefs from other agents

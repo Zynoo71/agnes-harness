@@ -10,14 +10,28 @@ import { useEvents, useNow, useStore } from '../react/hooks.js'
 const ENDED_SHOWN_MS = 1600
 
 /**
- * A device card's cues for a demo screen nobody touches: the card scrolls into view when a call
- * starts, and for a moment after a call ends it says whether it went through ('done') or not.
+ * Scrolls the panel so that `el` sits in the middle of what it shows, or at its top when taller;
+ * only the nearest scrolling box moves, never the page around the panel.
+ */
+function centerInView(el: HTMLElement): void {
+  let box = el.parentElement
+  while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement
+  if (!box) return
+  const r = el.getBoundingClientRect()
+  const b = box.getBoundingClientRect()
+  const by = r.height > b.height ? r.top - b.top - 8 : r.top + r.height / 2 - (b.top + b.height / 2)
+  box.scrollBy({ top: by, behavior: 'smooth' })
+}
+
+/**
+ * A device card's cues for a demo screen nobody touches: the card scrolls to the middle of the
+ * panel when a call starts, and for a moment after a call ends it says whether it went through ('done') or not.
  */
 export function useCallCues(d: Device, card: RefObject<HTMLElement | null>): 'done' | 'failed' | undefined {
   const running = runningNow(d)
   const was = useRef(running)
   useEffect(() => {
-    if (running && !was.current) card.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    if (running && !was.current && card.current) centerInView(card.current)
     was.current = running
   }, [running, card])
   const ended = useEvents().findLast(

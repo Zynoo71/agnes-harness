@@ -177,7 +177,9 @@ export function comms(world: World, log: (line: string) => void): WorldDevice {
       required: ['report'],
       uses: ['dish'],
     },
-    async (call, { report: text, photo: id }) => {
+    async (call, { report: text, photo: given }) => {
+      // An empty id means no photo.
+      const id = given || undefined
       const photo = id === undefined ? undefined : world.photos.get(id as string)
       if (id !== undefined && !photo)
         throw new CallError(

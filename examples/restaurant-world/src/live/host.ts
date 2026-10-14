@@ -40,7 +40,7 @@ export function host(world: World, log: (line: string) => void): WorldDevice {
       size_m: [0.6, 0.6, 1.3],
       max_speed: 2.9,
       notes:
-        'The robot at the door that meets the guest: it leads them, and everyone in their party, to a table, and at the end back to the door, and says things to them in a speech bubble. There is one party of guests at a time; party says how many came, the guest included, and child whether one is a small child. A table seats only as many as it has seats (floor-01). A party with a small child gets the baby chair brought to their table as soon as they sit, without asking. It goes back to the door by itself when it has nothing to do.',
+        'The robot at the door that meets the guest: it leads them, and everyone in their party, to a table, and at the end back to the door, and says things to them in a speech bubble. There is one party of guests at a time; party says how many came, the guest included, and child whether one is a small child. A table seats only as many as it has seats (floor-01). A party with a small child gets the baby chair brought to their table as soon as they sit, without asking. House treats: on a birthday the birthday cake is on the house (pos-01 bill comp), and a small child gets a balloon as a little gift (supplies-01). It goes back to the door by itself when it has nothing to do.',
     },
     resources: { chassis: 'reject', voice: 'queue' },
     ui: { primary: 'pose' },

@@ -42,7 +42,7 @@ export function floor(world: World, log: (line: string) => void): WorldDevice {
     {
       name: 'set_table',
       description:
-        'Book a table for someone who has not come in yet, such as a booking by phone (reserved), or release a booking (free). The guest in the restaurant needs no booking: host-01 seat_guest seats them at a free table.',
+        'Only for bookings, not for the guest here or a table they left (cleaner-01 clean frees that): book a table for someone who has not come in yet, such as a booking by phone (reserved), or release a booking (free). The guest in the restaurant needs no booking: host-01 seat_guest seats them at a free table.',
       timeout: 5,
       params: {
         table: { type: 'string', enum: TABLE_IDS },

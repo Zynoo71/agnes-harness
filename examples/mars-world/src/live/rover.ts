@@ -533,7 +533,7 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
   dev.tool(
     {
       name: 'collect_sample',
-      description: `Take a sample of a rock with the arm, by its id from a survey (such as rock-1). The rock must be within ${REACH} m.`,
+      description: `Take a sample of a rock with the arm, by its id from a survey (such as rock-1). The rock must be within ${REACH} m. Without an id, have hopper-01 survey the area first: it reports the rocks there and a route the rover can drive to them.`,
       timeout: DRILL_S + 20,
       params: { target: { type: 'string', maxLength: 40 } },
       required: ['target'],

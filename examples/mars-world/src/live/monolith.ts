@@ -1266,7 +1266,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
             o !== rock && o.label === 'boulder' && Math.hypot(o.x - rock.x, o.z - rock.z) < NEAR_BOULDER_M,
         )
         const left = near.length
-          ? ` Still standing within ${NEAR_BOULDER_M} m: ${near.map((o) => `${o.id} at ${where(o)}, ${round(o.r * 2, 1)} m across`).join('; ')}; break_boulder each one that is in the way too.`
+          ? ` Still standing within ${NEAR_BOULDER_M} m: ${near.map((o) => `${o.id} at ${where(o)}, ${round(o.r * 2, 1)} m across`).join('; ')}; break_boulder each one that is in the way or that the person asked to clear.`
           : ''
         return {
           detail: `broke ${rock.id}, a boulder ${across} m across at ${where(rock)}, into rubble that blocks nothing; the way past ${where(rock)} is clear, and rover routes, safety stops and surveys no longer have it. Now at ${where()}.${left} Said: "${said}"`,

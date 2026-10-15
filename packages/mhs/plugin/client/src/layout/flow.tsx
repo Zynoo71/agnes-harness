@@ -412,8 +412,9 @@ export function Flow(props: { brain?: Brain | undefined }) {
     return () => observer.disconnect()
   }, [])
 
-  // Each traffic report becomes particles spread over the next second, the data ones thinned so the
-  // bus they all share stays a dotted line.
+  // Each traffic report becomes data particles on MOS spread over the next second, thinned so the bus
+  // they all share stays a dotted line. MHS shows only the comets of calls, in their caller's colour:
+  // its counts say nothing of who made a call.
   useEffect(() => {
     const now = performance.now()
     const g = geometry.current
@@ -424,19 +425,15 @@ export function Flow(props: { brain?: Brain | undefined }) {
     )
     const thin = Math.min(1, MAX_BUS_DOTS / Math.max(1, data))
     for (const [device, tr] of Object.entries(traffic.devices)) {
-      const lanes: [Lane, Kind, boolean, number][] = [
-        ['mhs', 'result', true, tr.mhs_up],
-        ['mhs', 'call', false, tr.mhs_down],
-        ['nerve', 'data', true, tr.nerve_up],
-        ['nerve', 'drive', false, tr.nerve_down],
+      const trip = Math.max(DATA_MIN_MS, lengthOf(path(g, 'nerve', device)) / DATA_SPEED)
+      const lanes: [Kind, boolean, number][] = [
+        ['data', true, tr.nerve_up],
+        ['drive', false, tr.nerve_down],
       ]
-      for (const [lane, kind, up, n] of lanes) {
-        const capped = Math.min(n, MAX_DOTS)
-        const shown = lane === 'nerve' && capped > 0 ? Math.max(1, Math.round(capped * thin)) : capped
-        const trip =
-          lane === 'nerve' ? Math.max(DATA_MIN_MS, lengthOf(path(g, lane, device)) / DATA_SPEED) : TRIP_MS
+      for (const [kind, up, n] of lanes) {
+        const shown = n > 0 ? Math.max(1, Math.round(Math.min(n, MAX_DOTS) * thin)) : 0
         for (let i = 0; i < shown; i++)
-          dots.current.push({ lane, kind, device, up, start: now + (i * 1000) / shown, trip })
+          dots.current.push({ lane: 'nerve', kind, device, up, start: now + (i * 1000) / shown, trip })
       }
     }
   }, [traffic])

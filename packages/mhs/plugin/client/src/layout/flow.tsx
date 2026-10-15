@@ -61,13 +61,19 @@ const PICTURE_ACROSS_MAX = 360
 const MHS_IN = 24
 const NERVE_IN = 50
 const TRIP_MS = 900
-/** Data rides slower than calls, so a sparse stream stays visible. */
-const tripOf = (d: { kind: string }) => (d.kind === 'data' || d.kind === 'drive' ? 1500 : TRIP_MS)
+/**
+ * Data rides at one speed, in px/ms, whatever the lane's length: at a fixed trip time, dots on a short
+ * lane crawl and pile up.
+ */
+const DATA_SPEED = 0.45
+const DATA_MIN_MS = 300
 /** How long the ring where a call or a result arrives spreads and fades. */
 const RING_MS = 450
 const isComet = (d: { kind: string }) => d.kind === 'call' || d.kind === 'result'
 /** At most this many particles per lane per second, whatever the traffic. */
 const MAX_DOTS = 6
+/** At most this many data particles a second on the whole bus: all devices' particles share its top. */
+const MAX_BUS_DOTS = 12
 
 /** `brain` is the LLM's line, `dm` the DM's, `hand` from the DM's line across to the LLM's. */
 type Lane = 'mhs' | 'nerve' | 'brain' | 'dm' | 'hand'
@@ -78,6 +84,8 @@ interface Dot {
   device?: string | undefined
   up: boolean
   start: number
+  /** How long its trip takes, in ms. */
+  trip: number
   by?: By
 }
 
@@ -222,10 +230,7 @@ function pointAt(points: [number, number][], t: number): [number, number] {
 
 /** The stretch of a polyline from t = a to t = b, either way along it, keeping the corners between. */
 function stretch(points: [number, number][], a: number, b: number): [number, number][] {
-  const total = points.slice(1).reduce((sum, p, i) => {
-    const [x, y] = points[i] as [number, number]
-    return sum + Math.hypot(p[0] - x, p[1] - y)
-  }, 0)
+  const total = lengthOf(points)
   const corners: [number, number][] = []
   let run = 0
   for (let i = 1; i < points.length - 1; i++) {
@@ -237,6 +242,23 @@ function stretch(points: [number, number][], a: number, b: number): [number, num
   }
   if (a > b) corners.reverse()
   return [pointAt(points, a), ...corners, pointAt(points, b)]
+}
+
+function lengthOf(points: [number, number][]): number {
+  return points.slice(1).reduce((sum, p, i) => {
+    const [x, y] = points[i] as [number, number]
+    return sum + Math.hypot(p[0] - x, p[1] - y)
+  }, 0)
+}
+
+/** The bus lines, each drawn once, from AgnesHub down to the lowest lane leaving them. */
+function trunk(g: Geometry, lane: 'mhs' | 'nerve', devices: Device[]): [number, number][] {
+  const ends = devices.map((d) => path(g, lane, d.id)[1]?.[1] ?? 0)
+  const x = lane === 'mhs' ? g.mhsX : g.nerveX
+  return [
+    [x, g.hub + HUB_H],
+    [x, Math.max(g.hub + HUB_H, ...ends)],
+  ]
 }
 
 const line = (pts: [number, number][]) => pts.map(([x, y]) => `${x},${y}`).join(' ')
@@ -390,9 +412,17 @@ export function Flow(props: { brain?: Brain | undefined }) {
     return () => observer.disconnect()
   }, [])
 
-  // Each traffic report becomes particles spread over the next second.
+  // Each traffic report becomes particles spread over the next second, the data ones thinned so the
+  // bus they all share stays a dotted line.
   useEffect(() => {
     const now = performance.now()
+    const g = geometry.current
+    const all = Object.values(traffic.devices)
+    const data = all.reduce(
+      (sum, tr) => sum + Math.min(tr.nerve_up, MAX_DOTS) + Math.min(tr.nerve_down, MAX_DOTS),
+      0,
+    )
+    const thin = Math.min(1, MAX_BUS_DOTS / Math.max(1, data))
     for (const [device, tr] of Object.entries(traffic.devices)) {
       const lanes: [Lane, Kind, boolean, number][] = [
         ['mhs', 'result', true, tr.mhs_up],
@@ -401,9 +431,12 @@ export function Flow(props: { brain?: Brain | undefined }) {
         ['nerve', 'drive', false, tr.nerve_down],
       ]
       for (const [lane, kind, up, n] of lanes) {
-        const shown = Math.min(n, MAX_DOTS)
+        const capped = Math.min(n, MAX_DOTS)
+        const shown = lane === 'nerve' && capped > 0 ? Math.max(1, Math.round(capped * thin)) : capped
+        const trip =
+          lane === 'nerve' ? Math.max(DATA_MIN_MS, lengthOf(path(g, lane, device)) / DATA_SPEED) : TRIP_MS
         for (let i = 0; i < shown; i++)
-          dots.current.push({ lane, kind, device, up, start: now + (i * 1000) / shown })
+          dots.current.push({ lane, kind, device, up, start: now + (i * 1000) / shown, trip })
       }
     }
   }, [traffic])
@@ -418,7 +451,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
       const lane: Lane = p.by === 'dm' ? 'dm' : 'brain'
       const by = p.by
       if (p.dir === 'down') {
-        dots.current.push({ lane, kind, up: false, start: now, by })
+        dots.current.push({ lane, kind, up: false, start: now, trip: TRIP_MS, by })
         if (p.device)
           dots.current.push({
             lane: 'mhs',
@@ -426,11 +459,13 @@ export function Flow(props: { brain?: Brain | undefined }) {
             device: p.device,
             up: false,
             start: now + TRIP_MS * 0.6,
+            trip: TRIP_MS,
             by,
           })
       } else {
-        if (p.device) dots.current.push({ lane: 'mhs', kind, device: p.device, up: true, start: now, by })
-        dots.current.push({ lane, kind, up: true, start: now + TRIP_MS * 0.6, by })
+        if (p.device)
+          dots.current.push({ lane: 'mhs', kind, device: p.device, up: true, start: now, trip: TRIP_MS, by })
+        dots.current.push({ lane, kind, up: true, start: now + TRIP_MS * 0.6, trip: TRIP_MS, by })
       }
     }
   }, [pulses])
@@ -449,7 +484,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
     const now = performance.now()
     for (const e of list.slice(from))
       if (e.type === 'dm' && e.data.conversation === conversation && e.data.outcome !== 'did')
-        dots.current.push({ lane: 'hand', kind: 'call', up: false, start: now, by: 'dm' })
+        dots.current.push({ lane: 'hand', kind: 'call', up: false, start: now, trip: TRIP_MS, by: 'dm' })
   }, [events, conversation])
 
   // One animation loop draws every comet and particle, in the panel's own colours.
@@ -491,7 +526,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
       }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, geo.width, geo.height)
-      dots.current = dots.current.filter((d) => now - d.start < tripOf(d) + (isComet(d) ? RING_MS : 0))
+      dots.current = dots.current.filter((d) => now - d.start < d.trip + (isComet(d) ? RING_MS : 0))
       // Lanes pass behind cards (the one across the bus at the top): a dot shows only outside them,
       // and on the card it is bound for, where it lands.
       const outside = new Map<string | undefined, Path2D>()
@@ -509,7 +544,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
       for (const d of dots.current) {
         ctx.restore()
         ctx.save()
-        const t = (now - d.start) / tripOf(d)
+        const t = (now - d.start) / d.trip
         if (t < 0) continue
         ctx.clip(clipFor(d.device), 'evenodd')
         const pts = path(geo, d.lane, d.device)
@@ -524,7 +559,7 @@ export function Flow(props: { brain?: Brain | undefined }) {
           const spark: Rgb = [0, 1, 2].map((i) => Math.round((color[i] as number) * 0.25 + 255 * 0.75)) as Rgb
           if (t >= 1) {
             // Arrived: a ring spreads from where it landed and fades.
-            const k = (now - d.start - tripOf(d)) / RING_MS
+            const k = (now - d.start - d.trip) / RING_MS
             ctx.strokeStyle = rgba(color, 0.9 * (1 - k))
             ctx.lineWidth = 3 * (1 - k) + 1
             ctx.beginPath()
@@ -606,6 +641,14 @@ export function Flow(props: { brain?: Brain | undefined }) {
             <polyline points={line(path(g, 'hand'))} className="mhs-flow-handline" />
           </>
         )}
+        {/* Each bus line once, and from it each device's own stretch: drawn per device, the lines
+            would stack where they share the bus and darken it. */}
+        {devices.length > 0 && (
+          <>
+            <polyline points={line(trunk(g, 'mhs', devices))} className="mhs-flow-mhs" />
+            <polyline points={line(trunk(g, 'nerve', devices))} className="mhs-flow-nerve" />
+          </>
+        )}
         {devices.map((d) => {
           const mhs = path(g, 'mhs', d.id)
           const nerve = path(g, 'nerve', d.id)
@@ -614,8 +657,8 @@ export function Flow(props: { brain?: Brain | undefined }) {
           const [nx, ny] = nerve[1] ?? [0, 0]
           return (
             <g key={d.id}>
-              <polyline points={line(mhs)} className="mhs-flow-mhs" />
-              <polyline points={line(nerve)} className="mhs-flow-nerve" />
+              {mhs.length > 2 && <polyline points={line(mhs.slice(1))} className="mhs-flow-mhs" />}
+              {nerve.length > 2 && <polyline points={line(nerve.slice(1))} className="mhs-flow-nerve" />}
               <circle cx={mx} cy={my} r={2.5} className="mhs-flow-port" />
               <rect
                 x={nx - 2.5}

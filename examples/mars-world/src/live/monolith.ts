@@ -54,6 +54,8 @@ export const PUSH = { across: 2, metres: 3.5, seconds: 3.5 }
  * far from its centre to the boulder's face it stands to strike, and seconds the rubble takes to land.
  */
 const BREAK = { blow: 1.3, fewest: 4, most: 6, reach: 0.8, settle: 1.8 }
+/** A broken boulder's result names the boulders still standing this close to it, metres. */
+const NEAR_BOULDER_M = 30
 /** A close-up photo is taken of a rock within this many metres of its front. */
 const CLOSE_UP = 3
 /** What a close-up of each kind of unusual rock shows. */
@@ -1259,8 +1261,15 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         }
         await wait(call, BREAK.settle * 1000)
         const said = speak(flavour(voice(LINES.broke)))
+        const near = OBSTACLES.filter(
+          (o) =>
+            o !== rock && o.label === 'boulder' && Math.hypot(o.x - rock.x, o.z - rock.z) < NEAR_BOULDER_M,
+        )
+        const left = near.length
+          ? ` Still standing within ${NEAR_BOULDER_M} m: ${near.map((o) => `${o.id} at ${where(o)}, ${round(o.r * 2, 1)} m across`).join('; ')}; break_boulder each one that is in the way too.`
+          : ''
         return {
-          detail: `broke ${rock.id}, a boulder ${across} m across at ${where(rock)}, into rubble that blocks nothing; the way past ${where(rock)} is clear, and rover routes, safety stops and surveys no longer have it. Now at ${where()}. Said: "${said}"`,
+          detail: `broke ${rock.id}, a boulder ${across} m across at ${where(rock)}, into rubble that blocks nothing; the way past ${where(rock)} is clear, and rover routes, safety stops and surveys no longer have it. Now at ${where()}.${left} Said: "${said}"`,
           data: { boulder: rock.id, at: toMap(rock), size_m: across, blows, said },
         }
       }),

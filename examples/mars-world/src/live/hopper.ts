@@ -366,6 +366,9 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
     }
   }
 
+  /** What a result in the air adds: it cannot stay up, and where it comes down matters. */
+  const aloft = () =>
+    `; still in the air with ${flightTimeLeft(propellant)} s of hover left, after which it lands where it is and, away from the hopper pad, cannot take off again: land it on the hopper pad once its job is done`
   dev.tool(
     {
       name: 'take_off',
@@ -387,7 +390,7 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
     (call, { alt }) =>
       flight(async () => {
         await climb(call, alt)
-        return `took off, hovering at ${altitude()} m with ${Math.round(propellant)} % propellant`
+        return `took off, hovering at ${altitude()} m with ${Math.round(propellant)} % propellant${aloft()}`
       }),
   )
   dev.tool(
@@ -417,7 +420,7 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
         const { x, y } = pointOf(args)
         if (alt !== undefined) await climb(call, alt)
         await flyTo(call, fromMap(x, y), 'flying')
-        return `hovering over (${round(x, 1)}, ${round(y, 1)}) at ${altitude()} m`
+        return `hovering over (${round(x, 1)}, ${round(y, 1)}) at ${altitude()} m${aloft()}`
       }),
   )
   dev.tool(
@@ -475,7 +478,9 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
           rocks.length
             ? rocks.map((r) => `unusual rock ${r.id} at (${r.x}, ${r.y})`).join(', ')
             : 'no unusual rock',
-          `${boulders.length} boulders`,
+          boulders.length
+            ? `${boulders.length} boulder${boulders.length > 1 ? 's' : ''}: ${boulders.map((b) => `${b.id} at (${b.x}, ${b.y}), ${b.size_m} m across`).join(', ')}`
+            : 'no boulders',
           people.length ? `${people.length} astronaut${people.length > 1 ? 's' : ''}` : 'nobody',
         ]
         const target = rocks[0]
@@ -494,7 +499,7 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
             )
           } else parts.push(`no rover route from the dock to ${target.id} keeps clear of the boulders`)
         }
-        return { detail: `surveyed the ${area}: ${parts.join(', ')}`, data }
+        return { detail: `surveyed the ${area}: ${parts.join(', ')}${aloft()}`, data }
       }),
   )
   dev.tool(

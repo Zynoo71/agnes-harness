@@ -75,7 +75,7 @@ export interface DecisionError {
 
 /** What a DM step's card shows; never in the conversation, where the LLM would copy it. */
 export interface DmNote {
-  /** The decision model: jev, clef. */
+  /** The decision model: jev, vod, clef. */
   model: string
   sure: number
   options: number

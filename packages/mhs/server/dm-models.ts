@@ -1,7 +1,7 @@
 /**
  * The models behind the DM. `DecisionModel` is all the DM needs from one: given the state in words
- * and named options, a probability for each. Jev and clef answer the same System One API, so they
- * share `SystemOneModel` and differ only in where the request goes.
+ * and named options, a probability for each. Jev, VOD Jev and clef answer the same System One API,
+ * so they share `SystemOneModel` and differ only in where the request goes.
  */
 
 /** A probability for each option, and the model's own certainty if it gives one. */
@@ -11,7 +11,7 @@ export interface Ranking {
 }
 
 export interface DecisionModel {
-  /** Short name for pages and logs: jev, clef. */
+  /** Short name for pages and logs: jev, vod, clef. */
   readonly name: string
   /** Ranks the options (id to description) for the state. Throws when the model cannot answer. */
   rank(state: string, options: Record<string, string>, instructions: string): Promise<Ranking>
@@ -61,6 +61,21 @@ export class JevModel extends SystemOneModel {
   constructor(
     key: string,
     protected readonly model = 'jev-latest',
+  ) {
+    super()
+    this.headers = { authorization: `Bearer ${key}` }
+  }
+}
+
+/** Jev on Tencent Cloud VOD MMU. */
+export class VodJevModel extends SystemOneModel {
+  readonly name = 'vod'
+  protected readonly url = 'https://mmu.vod-qcloud.com/v1/systemone'
+  protected readonly headers: Record<string, string>
+
+  constructor(
+    key: string,
+    protected readonly model = 'jev-1.13.0',
   ) {
     super()
     this.headers = { authorization: `Bearer ${key}` }

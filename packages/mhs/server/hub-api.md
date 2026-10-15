@@ -541,7 +541,7 @@ What the DM is told: what it is and that anything beyond one fixed action goes t
 | `choice` | The chosen option: an action's id or `ask_llm` |
 | `device`, `call` | With `did`: the device, and the step's tool call `{name, args}`, so a page can tell the DM's calls in the conversation from the LLM's |
 | `top`, `options`, `confidence`, `ms` | The likeliest options with their probabilities, how many there were, the model's own confidence, and how long it took |
-| `model` | The decision model: `jev` or `clef` |
+| `model` | The decision model: `jev`, `vod` or `clef` |
 | `error` | With `error`: why |
 
 - **Cards.** The result of a call the DM made carries `dm: {model, sure, options, ms}` in its structured data; the model never sees it.

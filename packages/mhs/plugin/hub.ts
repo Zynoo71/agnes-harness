@@ -8,7 +8,8 @@
  * AGNES_HUB_LISTEN  host:port to listen on, default 127.0.0.1:4180 (loopback only unless configured)
  * AGNES_HUB_DATA    data directory, default <AGH_HOME or ~/.agh>/hub; it keeps maps.json, the maps
  *                   devices declared
- * TYPESAFE_API_KEY  TypeSafe's Jev as the decision model (plugin/dm.ts); or, with AGNES_DM_MODEL=clef,
+ * TYPESAFE_API_KEY  TypeSafe's Jev as the decision model (plugin/dm.ts); with AGNES_DM_MODEL=vod,
+ *                   Jev on Tencent Cloud VOD MMU (VOD_API_KEY); or, with AGNES_DM_MODEL=clef,
  *                   Cloudflare's clef (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN). Switched per
  *                   conversation with hub/dm; AGNES_DM=on has it on where it was never switched.
  *                   It learns the site from the descriptions of the devices' maps
@@ -21,7 +22,7 @@ import { join } from 'node:path'
 import { AGH_DIR } from '@agnes/protocol'
 import { Brain } from '../server/brain.js'
 import { Dm } from '../server/dm.js'
-import { ClefModel, type DecisionModel, JevModel } from '../server/dm-models.js'
+import { ClefModel, type DecisionModel, JevModel, VodJevModel } from '../server/dm-models.js'
 import { North } from '../server/north.js'
 import { South } from '../server/south.js'
 import { post } from './daemon.js'
@@ -150,6 +151,24 @@ let dmLink: DmLink | undefined
 /** Operations for the Agnes kernel: the DM's stand-in for a step's model call. */
 export const operations = { dm: () => dmOperation(() => dmLink) }
 
+/** The decision model configured in `env`, or undefined when none is. */
+export function dmModel(env: NodeJS.ProcessEnv): DecisionModel | undefined {
+  const {
+    AGNES_DM_MODEL: which,
+    CLOUDFLARE_ACCOUNT_ID: account,
+    CLOUDFLARE_API_TOKEN: token,
+    TYPESAFE_API_KEY: key,
+    VOD_API_KEY: vodKey,
+  } = env
+  if (which === 'clef') return account && token ? new ClefModel(account, token) : undefined
+  if (which === 'vod') return vodKey ? new VodJevModel(vodKey) : undefined
+  if (which === 'jev') return key ? new JevModel(key) : undefined
+  if (key) return new JevModel(key)
+  if (vodKey) return new VodJevModel(vodKey)
+  if (account && token) return new ClefModel(account, token)
+  return undefined
+}
+
 export const hub = {
   inject: ['extension'],
   apply(ctx: PluginContext) {
@@ -164,15 +183,7 @@ export const hub = {
       post(home, session, text).catch((e: Error) => log(`could not post into ${session}: ${e.message}`)),
     )
     const disposers = registerBrainTools(agnes, brain)
-    const { CLOUDFLARE_ACCOUNT_ID: account, CLOUDFLARE_API_TOKEN: token, TYPESAFE_API_KEY: key } = env
-    const model: DecisionModel | undefined =
-      env.AGNES_DM_MODEL === 'clef'
-        ? account && token
-          ? new ClefModel(account, token)
-          : undefined
-        : key
-          ? new JevModel(key)
-          : undefined
+    const model = dmModel(env)
     if (model) {
       // Per conversation, as switched with hub/dm; AGNES_DM=on turns it on where it was never switched.
       const switched = new Map<string, boolean>()

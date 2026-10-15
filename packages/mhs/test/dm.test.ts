@@ -2,8 +2,9 @@ import { EventEmitter } from 'node:events'
 import type { RequestBody } from '@agnes/protocol'
 import { describe, expect, it, vi } from 'vitest'
 import { type DmLink, dmOperation, type InferenceContext, momentOf, thinkingOf } from '../plugin/dm.js'
+import { dmModel } from '../plugin/hub.js'
 import { Dm } from '../server/dm.js'
-import type { DecisionModel } from '../server/dm-models.js'
+import { type DecisionModel, VodJevModel } from '../server/dm-models.js'
 import { Maps } from '../server/maps.js'
 import type { North } from '../server/north.js'
 
@@ -198,5 +199,50 @@ describe('the DM in the loop', () => {
       result('unlocked', 't2'),
     ]
     expect((await run(cycle)).llm).toBe(false)
+  })
+
+  it('selects the configured DM model from env and sends System One requests to VOD MMU', async () => {
+    expect(dmModel({ AGNES_DM_MODEL: 'vod', VOD_API_KEY: 'vod-k', TYPESAFE_API_KEY: 'ts-k' })?.name).toBe('vod')
+    expect(dmModel({ AGNES_DM_MODEL: 'jev', VOD_API_KEY: 'vod-k', TYPESAFE_API_KEY: 'ts-k' })?.name).toBe('jev')
+    expect(
+      dmModel({
+        AGNES_DM_MODEL: 'clef',
+        CLOUDFLARE_ACCOUNT_ID: 'acc',
+        CLOUDFLARE_API_TOKEN: 'tok',
+        TYPESAFE_API_KEY: 'ts-k',
+      })?.name,
+    ).toBe('clef')
+
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          model: 'jev-1.13.0',
+          answers: { q: { probabilities: { 'door-01 open': 0.85, ask_llm: 0.15 }, confidence: 0.85 } },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+    try {
+      const vod = new VodJevModel('vod-secret')
+      const r = await vod.rank('state text', { 'door-01 open': 'Open.', ask_llm: 'Hand to LLM.' }, 'Pick one.')
+      expect(r).toEqual({ probabilities: { 'door-01 open': 0.85, ask_llm: 0.15 }, confidence: 0.85 })
+      expect(spy).toHaveBeenCalledWith('https://mmu.vod-qcloud.com/v1/systemone', {
+        method: 'POST',
+        headers: { authorization: 'Bearer vod-secret', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: 'jev-1.13.0',
+          state: 'state text',
+          questions: {
+            q: {
+              type: 'choice',
+              instructions: 'Pick one.',
+              criteria: { 'door-01 open': 'Open.', ask_llm: 'Hand to LLM.' },
+            },
+          },
+        }),
+      })
+    } finally {
+      spy.mockRestore()
+    }
   })
 })

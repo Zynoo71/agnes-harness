@@ -8,6 +8,11 @@ import { type Companion, everyFrame, frameTime, type World } from './world.js'
 /** Metres between people walking in a line, and how fast the others can catch up. */
 const GAP = 0.75
 const SPEED = 3.6
+/**
+ * Keeping up with the guest, they reach their place in the line most frames: they stand only once
+ * they have been still this long, or their legs flick between standing and walking.
+ */
+const STILL_S = 0.25
 /** How high a child sits on the baby chair. */
 const HIGH_CHAIR = 0.42
 
@@ -82,7 +87,7 @@ export function partyOf(world: World): void {
       const child = kid && k === n - 1
       const figure = guest(child ? CHILD_OUTFIT : OUTFITS[k % OUTFITS.length], child)
       world.actors.group.add(figure.object)
-      return { figure, child, held: false, odometer: 0, path: [] }
+      return { figure, child, held: false, odometer: 0, still: 0, path: [] }
     })
     world.companions = members
     // In a line behind the guest, out in the street to the south.
@@ -149,13 +154,17 @@ export function partyOf(world: World): void {
       if (next && Math.hypot(next.x - at.x, next.z - at.z) < 0.05) m.path.shift()
       const target = m.path[0] ?? (m.seat ? fromMap(m.seat.x, m.seat.y) : trail.along((k + 1) * GAP))
       if (m.path.length) rest = undefined
-      if (stepTo(m, target, dt)) return
+      if (stepTo(m, target, dt)) {
+        m.still = 0
+        return
+      }
+      m.still += dt
       if (rest) {
         o.rotation.y = rotY(rest.yaw)
         o.position.y = rest.h
         if (rest.sit) m.figure.sit()
         else m.figure.stand()
-      } else m.figure.stand()
+      } else if (m.still > STILL_S) m.figure.stand()
     })
   }
 

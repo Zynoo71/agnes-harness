@@ -377,6 +377,8 @@ export interface Companion {
   /** While a device walks the child about (play-01), the party leaves them be. */
   held: boolean
   odometer: number
+  /** Seconds since they last took a step. */
+  still: number
   /** The seat they took at the guest's table, and the way they are walking now. */
   seat?: import('../layout.js').Seat | undefined
   table?: import('../layout.js').Table | undefined

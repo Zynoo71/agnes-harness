@@ -517,8 +517,8 @@ class Device:
                     self._generation += 1
                     await self._register(ws)
                     self._cmd = ws
-                    # STATE-1: every field right after registration; fields never set are left out.
-                    full = {k: v for k, v in self._state.items() if k in ("problem", "faults") or v is not None}
+                    # STATE-1: every field right after registration, null ones too; fields never set are left out.
+                    full = dict(self._state)
                     missing = [k for k in self._state_decl if k not in full]
                     if missing:
                         log.warning("%s: state fields without a value yet: %s", self.id, ", ".join(missing))

@@ -854,8 +854,8 @@ async def main_async(args: argparse.Namespace) -> int:
     return 1 if counts["fail"] else 0
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(prog="mhs-check", description="Run the Agnes MHS and MOS conformance scenarios against one device.")
+def parser(prog: str = "mhs-check") -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog=prog, description="Run the Agnes MHS and MOS conformance scenarios against one device.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8800)
     parser.add_argument("--profile", action="append", help=f"run only these profiles, comma-separated: {', '.join(PROFILES)}")
@@ -865,7 +865,11 @@ def main() -> None:
     parser.add_argument("--wait", type=float, default=120, help="seconds to wait for the device to connect")
     parser.add_argument("--replace-wait", type=float, default=30, help="seconds to watch for a reconnection after 4001")
     parser.add_argument("--check-version", action="store_true", help="end with a version refusal instead of a replacement")
-    sys.exit(asyncio.run(main_async(parser.parse_args())))
+    return parser
+
+
+def main() -> None:
+    sys.exit(asyncio.run(main_async(parser().parse_args())))
 
 
 if __name__ == "__main__":

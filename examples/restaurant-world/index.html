@@ -11,15 +11,15 @@
               --paper: rgba(250, 244, 234, 0.96); --ink: #2a1d16; --ink-dim: #8a705c; --chili: #c4372d; }
       html, body { margin: 0; height: 100%; background: #17110e; overflow: hidden; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
       #app canvas { display: block; }
-      #tags { position: fixed; inset: 0; pointer-events: none; }
+      #tags { position: absolute; inset: 0; pointer-events: none; }
       .tag { position: absolute; left: 0; top: 0; padding: 3px 8px 4px; border-radius: 6px; background: rgba(22, 16, 13, 0.74);
-             border: 1px solid rgba(226, 160, 120, 0.38); color: var(--text); font-size: 11px; line-height: 1.25; white-space: nowrap;
+             border: 1px solid rgba(226, 160, 120, 0.38); color: var(--text); font-size: 15px; line-height: 1.25; white-space: nowrap;
              backdrop-filter: blur(4px); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
       .tag b { display: block; font-weight: 600; letter-spacing: 0.01em; }
-      .tag span { color: var(--dim); font-family: var(--mono); font-size: 10px; }
+      .tag span { color: var(--dim); font-family: var(--mono); font-size: 13px; }
       .tag.guest { border-color: rgba(255, 211, 77, 0.7); }
       .speech { position: absolute; left: 0; top: 0; max-width: 260px; padding: 7px 11px 8px; border-radius: 10px; background: rgba(250, 244, 234, 0.95);
-                color: var(--ink); font-size: 13px; line-height: 1.35; box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4); }
+                color: var(--ink); font-size: 16px; line-height: 1.35; box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4); }
       /* A payoff over the scene (a dish served, a bill paid): a pill that pops in, floats up and fades. */
       .cheer { position: absolute; left: 0; top: 0; padding: 6px 14px 7px; border-radius: 16px; background: rgba(22, 16, 13, 0.82);
                border: 1px solid var(--ok); color: #fff6e0; font-size: 15px; font-weight: 650; white-space: nowrap; transform-origin: 50% 100%;
@@ -41,14 +41,14 @@
       button:hover { background: rgba(226, 160, 120, 0.14); }
       button:disabled { opacity: 0.5; cursor: default; }
       button.on { background: rgba(226, 160, 120, 0.22); }
-      #brand { position: fixed; left: 14px; top: 12px; padding: 6px 12px 7px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line);
-               color: var(--text); pointer-events: none; backdrop-filter: blur(6px); }
-      #brand h1 { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 17px; font-weight: 650; letter-spacing: 0.02em; }
+      #brand { padding: 16px 16px 12px; color: var(--text); }
+      #brand h1 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 26px; font-weight: 650; letter-spacing: 0.02em; }
       #brand h1 .mark { width: 1.3em; height: 1.3em; margin: -0.15em 0 -0.15em -0.15em; flex: none; }
-      #brand p { margin: 2px 0 0; font-size: 11.5px; color: var(--dim); }
-      #bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 5px 12px;
-             background: var(--panel); border-top: 1px solid var(--line); color: var(--text); font: 11.5px var(--mono);
-             backdrop-filter: blur(6px); white-space: nowrap; overflow: hidden; }
+      #brand p { margin: 4px 0 0; font-size: 16px; color: var(--dim); }
+      #bar { position: fixed; left: 0; right: 0; bottom: 0; height: var(--bar); box-sizing: border-box; display: flex; align-items: center; gap: 14px; padding: 0 16px;
+             background: var(--left-bg); border-top: 1px solid var(--line); color: var(--text); font: 15px var(--mono);
+             white-space: nowrap; overflow: hidden; }
+      #bar button { font-size: 14px; padding: 3px 11px; }
       #bar > span:empty { display: none; }
       #bar > span + span { border-left: 1px solid var(--line); padding-left: 12px; }
       #bar #guest { font-weight: 700; }
@@ -57,85 +57,91 @@
       #bar .warn { color: var(--amber); }
       #bar .bad { color: var(--red); font-weight: 700; }
       #bar .ok { color: var(--ok); }
-      /* The activity list: a panel of its own, kept open, its whole history scrolling under a title row. It is see-through and
-         sized by the screen, so a demo screen shows a whole decision and the calls around it without anyone touching it. */
-      #feed { position: fixed; left: 14px; bottom: 40px; width: 40vw; display: flex; flex-direction: column; gap: 6px;
-              padding: 8px 10px 10px; background: rgba(22, 16, 13, 0.45); border: 1px solid var(--line); border-radius: 8px;
-              font: 12.5px var(--mono); color: var(--text); }
-      #feed .top { display: flex; align-items: center; gap: 8px; }
-      #feed .top b { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
-      #feed .top .count { color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+      /* The page in two columns: the activity list on the left, a chat of what happened with the newest at the bottom, opaque and
+         in large type so it reads when Agnes shows the page scaled down; the scene on the right, above the bar. */
+      :root { --left: clamp(340px, 26vw, 560px); --bar: 40px; --left-bg: #1a130f; --card: #271c16; }
+      #left { position: fixed; left: 0; top: 0; bottom: var(--bar); width: var(--left); box-sizing: border-box; display: flex; flex-direction: column;
+              background: var(--left-bg); border-right: 1px solid var(--line); }
+      #stage { position: fixed; left: var(--left); top: 0; right: 0; bottom: var(--bar); overflow: hidden; }
+      #feed { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 4px 16px 14px; font: 20px var(--mono); color: var(--text); }
+      #feed .top { display: flex; align-items: center; gap: 10px; padding-top: 6px; border-top: 1px solid var(--line); }
+      #feed .top b { font-size: 16px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+      #feed .top .count { color: var(--dim); font-size: 15px; font-variant-numeric: tabular-nums; }
       #feed .fold { margin-left: auto; background: none; border: 0; color: var(--dim); font: inherit; cursor: pointer; padding: 0 4px; }
       #feed .fold:hover, #feed .fold:focus-visible { color: var(--text); }
       #feed.folded .head, #feed.folded .list { display: none; }
-      #feed .list { display: flex; flex-direction: column; gap: 3px; max-height: min(30vh, calc(100vh - 420px)); min-height: 48px;
-                    overflow-y: auto; overscroll-behavior: contain; }
+      #feed .list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
       #feed .empty { color: var(--dim); padding: 6px 2px; }
-      #feed .line { display: flex; gap: 8px; padding: 4px 8px; background: rgba(255, 255, 255, 0.03); border-radius: 5px; border-left: 2px solid var(--line);
-                    overflow: hidden; white-space: nowrap; flex: none; }
-      #feed .emo { margin-right: 5px; font-weight: 400; }
-      #feed .when { color: var(--dim); }
+      /* An item, a card: when, who and which device on its first row, what it did and how long it took below, wrapping. */
+      #feed .line { display: flex; flex-direction: column; gap: 4px; padding: 8px 12px 9px; background: var(--card); border-radius: 8px; border-left: 4px solid var(--line); flex: none; }
+      #feed .line .row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+      #feed .line .row.what { line-height: 1.35; }
+      #feed .emo { margin-right: 6px; font-weight: 400; }
+      #feed .when { color: var(--dim); font-size: 17px; font-variant-numeric: tabular-nums; }
       #feed .dev { font-weight: 700; }
-      #feed .args { color: var(--dim); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-      #feed .state { margin-left: auto; color: var(--dim); overflow: hidden; text-overflow: ellipsis; max-width: 45%; flex: none; }
+      #feed .args { color: var(--dim); overflow-wrap: anywhere; }
+      #feed .state { color: var(--dim); overflow-wrap: anywhere; }
       #feed .done { border-left-color: var(--ok); } #feed .done .state { color: var(--ok); }
       #feed .error, #feed .rejected { border-left-color: var(--red); } #feed .error .state, #feed .rejected .state { color: var(--red); }
       #feed .interrupted { border-left-color: var(--amber); } #feed .interrupted .state { color: var(--amber); }
       #feed .running { border-left-color: var(--text); }
-      #feed .by-dm { border-left-color: var(--dm-soft); } #feed .by-llm { border-left-color: var(--llm-soft); }
+      #feed .by-dm { border-left-color: var(--dm); } #feed .by-llm { border-left-color: var(--llm); }
       #feed .by-dm.error, #feed .by-dm.rejected, #feed .by-llm.error, #feed .by-llm.rejected { border-left-color: var(--red); }
+      #feed .who { font-size: 15px; padding: 1px 6px; } #feed .who svg { width: 15px; height: 15px; }
       /* Above the list: rows alike, a label, the left share, a split bar and the right share, in columns. */
-      #feed .head { align-self: flex-start; display: grid; grid-template-columns: auto auto 120px auto; gap: 4px 8px; align-items: center;
-                    padding: 2px 0 4px; color: var(--dim); font-size: 11.5px; }
+      #feed .head { display: grid; grid-template-columns: auto auto 1fr auto; gap: 6px 10px; align-items: center;
+                    padding: 2px 0 4px; color: var(--dim); font-size: 15px; }
       #feed .head .label { margin-right: 4px; }
       #feed .head .left, #feed .head .right { display: flex; gap: 6px; align-items: center; }
       #feed .head .left { justify-self: end; }
       #feed .head b { color: var(--text); font-weight: 400; font-variant-numeric: tabular-nums; }
       #feed .head .left b { min-width: 4ch; text-align: right; }
       #feed .head .right b { min-width: 6ch; }
-      #feed .head .split { display: flex; gap: 2px; height: 4px; }
+      #feed .head .split { display: flex; gap: 2px; height: 6px; }
       #feed .head .split i { min-width: 0; border-radius: 2px; }
       #feed .head .split .dm { background: var(--dm); } #feed .head .split .llm { background: var(--llm); opacity: 0.85; }
       #feed .head .split .think { background: var(--text); opacity: 0.7; } #feed .head .split .act { background: var(--dim); opacity: 0.45; }
-      #feed .who.think { color: var(--text); border: 1px solid rgba(247, 238, 227, 0.35); }
-      #feed .who.act { color: var(--dim); border: 1px solid rgba(205, 180, 154, 0.35); }
-      /* A call's two times, thinking and acting, in columns at the end of its line. */
-      #feed .time { flex: none; width: 12ch; text-align: right; font-variant-numeric: tabular-nums; }
+      #feed .who.think { color: var(--text); border: 1px solid rgba(246, 231, 210, 0.35); }
+      #feed .who.act { color: var(--dim); border: 1px solid rgba(201, 167, 124, 0.35); }
+      /* A call's two times, thinking and acting, at the end of its second row. */
+      #feed .time { flex: none; color: var(--text); font-size: 17px; font-variant-numeric: tabular-nums; }
+      #feed .time:empty { display: none; }
+      #feed .time:first-of-type { margin-left: auto; }
       #feed .time i { font-style: normal; color: var(--dim); margin-right: 5px; }
       #feed .item { flex: none; }
       #feed .hand { border-left-color: var(--dm-soft); }
       #feed .hand .arrow { color: var(--dim); margin: 0 -3px; }
-      #feed .hand .why { color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
+      #feed .hand .why { color: var(--dim); }
       #feed .hand .why .dev { color: var(--text); }
       #feed .can-open { pointer-events: auto; cursor: pointer; }
-      #feed .caret { flex: none; width: 8px; color: var(--dim); font-size: 10px; }
-      #feed .open .line { border-radius: 5px 5px 0 0; }
-      #feed .decision { padding: 5px 10px 7px 12px; background: rgba(255, 255, 255, 0.03); border-left: 2px solid var(--dm-soft); border-radius: 0 0 5px 5px;
-                        font-size: 12px; }
-      #feed .decision .meta { display: flex; gap: 12px; justify-content: space-between; margin-bottom: 4px; color: var(--dim); white-space: nowrap; }
-      #feed .decision .meta .said { overflow: hidden; text-overflow: ellipsis; }
+      #feed .caret { margin-left: auto; color: var(--dim); font-size: 14px; }
+      #feed .caret:empty { display: none; }
+      #feed .open .line { border-radius: 8px 8px 0 0; }
+      #feed .decision { padding: 6px 12px 9px 16px; background: var(--card); border-top: 1px solid var(--line); border-left: 4px solid var(--dm); border-radius: 0 0 8px 8px;
+                        font-size: 17px; }
+      #feed .decision .meta { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; color: var(--dim); }
       #feed .decision .meta .dev { color: var(--text); }
-      #feed .option { position: relative; display: flex; gap: 8px; margin-top: 2px; padding: 1px 6px; white-space: nowrap; }
+      #feed .option { position: relative; display: flex; gap: 8px; margin-top: 2px; padding: 1px 6px; }
       #feed .option i { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(134, 187, 166, 0.1); border-radius: 2px; }
       #feed .option span, #feed .option b { position: relative; }
-      #feed .option span { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+      #feed .option span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       #feed .option.chosen { font-weight: 700; color: var(--dm); }
       #feed .option.chosen i { background: rgba(134, 187, 166, 0.24); }
       #feed .option .ask { color: var(--llm); display: inline-flex; gap: 4px; align-items: center; }
-      #feed .option .ask svg { width: 10px; height: 10px; }
+      #feed .option .ask svg { width: 12px; height: 12px; }
       #feed .alert.warn { border-left-color: var(--amber); } #feed .alert.warn .state { color: var(--amber); }
       #feed .alert.bad { border-left-color: var(--red); } #feed .alert.bad .state { color: var(--red); }
       #feed .alert.ok .state { color: var(--ok); }
       #feed .event { border-left-color: #b9a2ff; } #feed .event .dev { color: #d6c8ff; }
-      #banners { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px;
+      #banners { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px;
                  align-items: center; pointer-events: none; max-width: 52vw; }
       .banner { padding: 7px 14px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line); border-left-width: 3px;
-                color: var(--text); font-size: 13px; box-shadow: 0 3px 14px rgba(0, 0, 0, 0.35); backdrop-filter: blur(6px); }
+                color: var(--text); font-size: 18px; box-shadow: 0 3px 14px rgba(0, 0, 0, 0.35); backdrop-filter: blur(6px); }
       .banner.info { border-left-color: #b9a2ff; }
       .banner.warn { border-left-color: var(--amber); }
       .banner.bad { border-color: rgba(255, 107, 87, 0.5); border-left-color: var(--red); }
       /* The right column under the map: the controls, then the guest's cards. */
-      #side { position: fixed; right: 14px; top: 240px; bottom: 40px; width: 300px; display: flex; flex-direction: column; gap: 8px;
+      #side { position: fixed; right: 14px; top: 240px; bottom: calc(var(--bar) + 8px); width: 300px; display: flex; flex-direction: column; gap: 8px;
               overflow: auto; pointer-events: none; }
       #side > * { pointer-events: auto; flex: none; }
       #controls-panel { padding: 10px 12px; background: var(--panel); border: 1px solid var(--line);
@@ -206,7 +212,7 @@
       .tag.busy { border-color: rgba(255, 220, 170, 0.9); }
       .tag.warn { border-color: var(--amber); }
       .tag.bad { border-color: var(--red); background: rgba(60, 16, 12, 0.8); }
-      .tag .act { margin-top: 2px; font: 10px var(--mono); color: var(--text); }
+      .tag .act { margin-top: 2px; font: 13px var(--mono); color: var(--text); }
       .tag .act i { font-style: normal; font-weight: 700; }
       .tag .act em { font-style: normal; color: var(--dim); margin-left: 5px; }
       .tag .act em .who { vertical-align: 1px; }
@@ -223,11 +229,15 @@
     </style>
   </head>
   <body>
-    <div id="app"></div>
-    <div id="tags"></div>
-    <div id="brand"><h1>Agnes Restaurant</h1><p>Robots front of house and in the kitchen</p></div>
-    <div id="banners"></div>
-    <div id="feed"></div>
+    <div id="left">
+      <div id="brand"><h1>Agnes Restaurant</h1><p>Robots front of house and in the kitchen</p></div>
+      <div id="feed"></div>
+    </div>
+    <div id="stage">
+      <div id="app"></div>
+      <div id="tags"></div>
+      <div id="banners"></div>
+    </div>
     <div id="side">
       <aside id="controls-panel" hidden></aside>
       <aside id="bill-card" class="card" hidden></aside>

@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { buildActors } from './actors.js'
+import { buildDirector } from './director.js'
 import { DmWatch } from './dm/watch.js'
 import { buildFocus, FOCUS_LAYER } from './focus.js'
 import { DEVICES } from './labels.js'
@@ -13,7 +14,7 @@ import { buildRoom } from './room.js'
 import { place } from './shapes.js'
 import { SHOTS, shotNamed } from './shots.js'
 import { buildSound } from './sound.js'
-import { IsoView } from './view.js'
+import { IsoView, stageSize } from './view.js'
 
 const params = new URLSearchParams(location.search)
 const app = document.getElementById('app') as HTMLElement
@@ -25,13 +26,16 @@ const QUALITY = params.get('quality') ?? (parent !== window ? 'low' : 'balanced'
 const PIXEL_RATIO =
   QUALITY === 'high' ? Math.min(devicePixelRatio, 2) : QUALITY === 'low' ? 1 : Math.min(devicePixelRatio, 1.5)
 
+// The scene's size, measured on resize: the tags read it every frame.
+let size = stageSize()
+
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
   powerPreference: 'high-performance',
   preserveDrawingBuffer: params.has('shot'),
 })
 renderer.setPixelRatio(PIXEL_RATIO)
-renderer.setSize(innerWidth, innerHeight)
+renderer.setSize(size.w, size.h)
 renderer.toneMapping = THREE.AgXToneMapping
 renderer.toneMappingExposure = 1.1
 renderer.shadowMap.enabled = true
@@ -186,18 +190,21 @@ const onScreen = (object: THREE.Object3D, h: number) => {
   v.y += h
   v.project(view.camera)
   if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) return undefined
-  return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight }
+  return { x: ((v.x + 1) / 2) * size.w, y: ((1 - v.y) / 2) * size.h }
 }
 /** Screen position of world point (x, y up, z), or undefined off screen. */
 const onScreenAt = (x: number, y: number, z: number) => {
   v.set(x, y, z).project(view.camera)
   if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) return undefined
-  return { x: ((v.x + 1) / 2) * innerWidth, y: ((1 - v.y) / 2) * innerHeight }
+  return { x: ((v.x + 1) / 2) * size.w, y: ((1 - v.y) / 2) * size.h }
 }
 function placeTags() {
   if (tags.hidden) return
   for (const { el, id, anchor } of tagEls) {
-    const p = shot.devices && !shot.devices.includes(id) ? undefined : onScreen(anchor.object, anchor.h)
+    const p =
+      !director?.on && shot.devices && !shot.devices.includes(id)
+        ? undefined
+        : onScreen(anchor.object, anchor.h)
     el.style.display = p ? '' : 'none'
     // --calm shrinks a quiet device's tag about the point it stands on (index.html).
     if (p) el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%) scale(var(--calm))`
@@ -221,7 +228,8 @@ function placeTags() {
 }
 
 addEventListener('resize', () => {
-  renderer.setSize(innerWidth, innerHeight)
+  size = stageSize()
+  renderer.setSize(size.w, size.h)
   view.apply()
 })
 
@@ -260,6 +268,21 @@ const focus = live
       live.world.trips,
     )
   : undefined
+// The follow camera keeps the devices at work in frame (T); a number key, the wheel or a drag takes
+// the view by hand. Screenshots (?shot=, ?view=) and ?track=0 go without it.
+const director =
+  params.has('shot') || params.has('view') || params.get('track') === '0'
+    ? undefined
+    : buildDirector(
+        view,
+        new Map(Object.entries(ANCHORS).map(([id, a]) => [id, a.object])),
+        live?.devices,
+        live?.world.trips ?? [],
+      )
+for (const type of ['wheel', 'pointerdown'])
+  renderer.domElement.addEventListener(type, () => {
+    if (director) director.on = false
+  })
 // Scripts (an evaluation, a test) reach the world here.
 if (live) Object.assign(window, { restaurant: { world: live.world, reset: live.reset, view } })
 
@@ -320,9 +343,11 @@ addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return
   const next = SHOTS[Number(e.key) - 1]
   if (next) {
+    if (director) director.on = false
     shot = next
     view.set(next)
   }
+  if (e.key === 't' && director) director.on = !director.on
   if (e.key === 'l') tags.hidden = !tags.hidden
   if (e.key === 'm') minimap.hidden = !minimap.hidden
   if (e.key === 'c') overlay.toggleMenu()
@@ -438,6 +463,7 @@ let draws = 0
 let triangles = 0
 renderer.info.autoReset = false
 let lastStep = 0
+let lastFrame = 0
 let due = false
 // Motion steps FRAME_HZ times a second, by the time of the frame it is shown in, in an animation
 // frame callback of its own just before the one that draws: the steps run in the microtasks between
@@ -461,6 +487,8 @@ renderer.setAnimationLoop(() => {
   actors.update(start / 1000)
   updateLights(start / 1000)
   focus?.update(start / 1000)
+  director?.update(start / 1000 - (lastFrame || start / 1000))
+  lastFrame = start / 1000
   // Shadows follow the moving robots at 30 a second, or every frame below that.
   if (FPS <= 30 || frames % 2 === 0) renderer.shadowMap.needsUpdate = true
   renderer.render(scene, view.camera)
@@ -475,7 +503,13 @@ renderer.setAnimationLoop(() => {
     const stats = STATS
       ? ` · ${Math.round(draws / fpsFrames)} draws · ${(triangles / fpsFrames / 1e6).toFixed(2)} M tris · ${(cpu / fpsFrames).toFixed(1)} ms js/frame`
       : ''
-    const name = overlay.lang() === 'zh' ? shot.zh : shot.en
+    const name = director?.on
+      ? overlay.lang() === 'zh'
+        ? '跟拍'
+        : 'Following'
+      : overlay.lang() === 'zh'
+        ? shot.zh
+        : shot.en
     overlay.stats(`${name} · ${Math.round((fpsFrames * 1000) / (start - fpsSince))} fps${stats}`)
     cpu = 0
     draws = 0

@@ -4,13 +4,20 @@ import { ROOM } from './layout.js'
 /**
  * The view of a management game: an orthographic camera looking down at the room from the
  * south-east, so the north and west walls stand at the back and the cut near walls let the room
- * show. The wheel zooms and a drag pans; the view stays this way round.
+ * show. The wheel zooms and a drag pans; the view stays this way round. The follow camera
+ * (director.ts) moves it too.
  */
 
 /** Degrees above the floor the view looks down from. */
 const ELEVATION = 38
 /** The view comes from the south-east: 45° round from due south. */
 const AZIMUTH = 45
+
+/** The stage the scene fills, right of the activity list and above the bar. */
+export const stageSize = () => {
+  const stage = document.getElementById('stage') as HTMLElement
+  return { w: stage.clientWidth, h: stage.clientHeight }
+}
 
 export interface Framing {
   /** Plan point (x east, y north) at the centre of the view. */
@@ -43,7 +50,8 @@ export class IsoView {
 
   apply(): void {
     const { x, y, span } = this.framing
-    const aspect = innerWidth / innerHeight
+    const { w, h } = stageSize()
+    const aspect = w / h
     // `span` is measured on the floor; on screen the floor is foreshortened by the elevation.
     const half = (span * Math.sin(THREE.MathUtils.degToRad(ELEVATION))) / 2
     Object.assign(this.camera, { left: -half * aspect, right: half * aspect, top: half, bottom: -half })
@@ -74,7 +82,7 @@ export class IsoView {
     })
     element.addEventListener('pointermove', (e) => {
       if (!drag) return
-      const perPixel = (this.camera.top - this.camera.bottom) / innerHeight
+      const perPixel = (this.camera.top - this.camera.bottom) / stageSize().h
       const dx = (e.clientX - drag.x) * perPixel
       // Up the screen is away from the view along the floor, foreshortened by the elevation.
       const dy = (e.clientY - drag.y) * (perPixel / Math.sin(THREE.MathUtils.degToRad(ELEVATION)))

@@ -41,7 +41,7 @@
       #brand h1 svg { width: 1.35em; height: 1.35em; margin: -3px 0; flex: none; }
       #brand p { margin: 4px 0 0; font-size: 16px; color: var(--dim); }
       #bar { position: fixed; left: 0; right: 0; bottom: 0; height: var(--bar); box-sizing: border-box; display: flex; align-items: center; gap: 14px; padding: 0 16px;
-             background: var(--side-bg); border-top: 1px solid var(--line); color: var(--text); font: 15px var(--mono);
+             background: var(--left-bg); border-top: 1px solid var(--line); color: var(--text); font: 15px var(--mono);
              white-space: nowrap; overflow: hidden; }
       #bar button { font-size: 14px; padding: 3px 11px; }
       #bar > span:empty { display: none; }
@@ -54,10 +54,10 @@
       #bar .ok { color: var(--ok); }
       /* The page in two columns: the activity list on the left, a chat of what happened with the newest at the bottom, opaque and
          in large type so it reads when Agnes shows the page scaled down; the scene on the right, above the bar. */
-      :root { --side: clamp(340px, 26vw, 560px); --bar: 40px; --side-bg: #17110d; --card: #241a13; }
-      #side { position: fixed; left: 0; top: 0; bottom: var(--bar); width: var(--side); box-sizing: border-box; display: flex; flex-direction: column;
-              background: var(--side-bg); border-right: 1px solid var(--line); }
-      #stage { position: fixed; left: var(--side); top: 0; right: 0; bottom: var(--bar); overflow: hidden; }
+      :root { --left: clamp(340px, 26vw, 560px); --bar: 40px; --left-bg: #17110d; --card: #241a13; }
+      #left { position: fixed; left: 0; top: 0; bottom: var(--bar); width: var(--left); box-sizing: border-box; display: flex; flex-direction: column;
+              background: var(--left-bg); border-right: 1px solid var(--line); }
+      #stage { position: fixed; left: var(--left); top: 0; right: 0; bottom: var(--bar); overflow: hidden; }
       #feed { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 4px 16px 14px; font: 20px var(--mono); color: var(--text); }
       #feed .top { display: flex; align-items: center; gap: 10px; padding-top: 6px; border-top: 1px solid var(--line); }
       #feed .top b { font-size: 16px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
@@ -154,7 +154,7 @@
       #events-panel .row { display: flex; gap: 6px; margin-top: 6px; }
       #events-panel .row button { flex: 1; }
       @keyframes pulse { 50% { opacity: 0.45; } }
-      aside#earth { position: fixed; left: calc(var(--side) + 14px); top: 14px; width: min(400px, 40vw); padding: 10px 12px 12px; background: rgba(16, 13, 11, 0.86);
+      aside#earth { position: fixed; left: calc(var(--left) + 14px); top: 14px; width: min(400px, 40vw); padding: 10px 12px 12px; background: rgba(16, 13, 11, 0.86);
                border: 1px solid rgba(147, 213, 142, 0.5); border-left: 3px solid var(--ok); border-radius: 8px; color: var(--text); font-size: 12.5px;
                backdrop-filter: blur(6px); box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45); animation: arrive 0.6s ease-out; }
       aside#earth .head { display: flex; gap: 8px; align-items: baseline; }
@@ -192,7 +192,7 @@
     </style>
   </head>
   <body>
-    <div id="side">
+    <div id="left">
       <div id="brand"><h1><span>Agnes Base</span></h1><p>Jezero Crater, Mars</p></div>
       <div id="feed"></div>
     </div>

@@ -89,8 +89,12 @@ const AT_LAB = 6
 const CHAMBER = { x: 0, z: 10.6 }
 /** Devices and people it can follow. */
 const FOLLOWABLE = ['suit-01', 'rover-01', 'hopper-01']
-/** Writing in the sand: at most this many characters, metres a grid unit (letters 4 units tall), pen-down speed m/s, metres a furrow segment. */
-const WRITE = { most: 8, scale: 1.25, speed: 2, segment: 0.3 }
+/**
+ * Writing in the sand: at most this many characters, metres a grid unit (letters 4 units tall), its
+ * pace over the letters (m/s, m/s², radians a second: brisker than its walk, so a word takes about
+ * half a minute), and metres a furrow segment.
+ */
+const WRITE = { most: 8, scale: 1.25, speed: 4, accel: 6, turn: Math.PI * 3, segment: 0.3 }
 /** Follow ends this close to a machine's edge; to a person it walks up to its stop distance. */
 const MACHINE_GAP = 1.5
 /** Following plans its way again once the target has moved this far from where it was, in metres. */
@@ -1533,16 +1537,16 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         world.effects?.unmark()
         const writing = { text: t, x: cx, z: cz, width, height, done: false }
         world.writing = writing
-        const go = (to: Point, speed: number, step?: () => void) =>
+        const go = (to: Point, step?: () => void) =>
           body.go(call, to, {
-            speed,
-            accel: GAIT.walk.accel,
-            turnRate: GAIT.walk.turn,
+            speed: WRITE.speed,
+            accel: WRITE.accel,
+            turnRate: WRITE.turn,
             arrive: 0.1,
             ...(step ? { step } : {}),
           })
         for (const [i, stroke] of strokes.entries()) {
-          await go(stroke[0] as Point, GAIT.walk.speed)
+          await go(stroke[0] as Point)
           let last = { ...body.at }
           const pen = () => {
             if (Math.hypot(body.at.x - last.x, body.at.z - last.z) < WRITE.segment) return
@@ -1550,7 +1554,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
             last = { ...body.at }
           }
           for (const p of stroke.slice(1)) {
-            await go(p, WRITE.speed, pen)
+            await go(p, pen)
             world.effects?.mark(last, body.at)
             last = { ...body.at }
           }
@@ -1562,7 +1566,7 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         }
         writing.done = true
         // Step off the letters to the south, out of the picture.
-        await go({ x: body.at.x, z: cz + height / 2 + 3 }, GAIT.walk.speed)
+        await go({ x: body.at.x, z: cz + height / 2 + 3 })
         const said = speak(flavour(voice(LINES.wrote)))
         const centre = toMap({ x: cx, z: cz })
         return {

@@ -153,6 +153,10 @@
       #events-panel select { font: 15px var(--mono); color: var(--text); background: rgba(16, 13, 11, 0.9); border: 1px solid var(--line); border-radius: 4px; padding: 3px 4px; }
       #events-panel select:disabled { opacity: 0.5; }
       #events-panel .row { display: flex; gap: 8px; margin-top: 8px; }
+      #events-panel .tries { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+      #events-panel .tries[hidden] { display: none; }
+      #events-panel button.try { width: 100%; padding: 7px 12px; text-align: left; font: 16px/1.35 ui-sans-serif, system-ui, -apple-system, sans-serif;
+                                 color: var(--llm); border-color: var(--llm-soft); }
       #events-panel .row button { flex: 1; }
       @keyframes pulse { 50% { opacity: 0.45; } }
       aside#earth { position: fixed; left: calc(var(--left) + 14px); top: 14px; width: min(400px, 40vw); padding: 10px 12px 12px; background: rgba(16, 13, 11, 0.86);

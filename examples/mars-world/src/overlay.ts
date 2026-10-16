@@ -38,6 +38,18 @@ const TEXT = {
     earthGot: 'received',
     earthFeed: 'a report reached Earth',
     earthFeedPhoto: (id: string) => `a report and ${id} reached Earth`,
+    tryHead: 'Try these',
+    /** Things to ask Agnes that the base can do at any time, in a person's own words. */
+    tries: [
+      'There is an odd rock out in the west field: bring a sample back and have it analysed.',
+      'Have the rover drive a lap round the base.',
+      'Have Monolith give us a tour of the base, talking as it goes, with the camera on it.',
+      'Plant some potatoes in the greenhouse.',
+      'The solar panels look dusty: clean them.',
+      'Call the astronaut back in for a rest.',
+      'Take a photo of the base and send it to Earth.',
+      'Ask Monolith to tell a joke.',
+    ],
     eventsHead: 'Events',
     timeHead: 'Skip to',
     conditionsHead: 'Conditions',
@@ -161,6 +173,17 @@ const TEXT = {
     earthGot: '收到',
     earthFeed: '一份报告到达地球',
     earthFeedPhoto: (id: string) => `一份报告和 ${id} 到达地球`,
+    tryHead: '试试这些',
+    tries: [
+      '西边野外有块奇怪的石头，取个样本回来化验一下',
+      '让火星车绕着基地巡一圈',
+      '让那个机器人带大家参观一下基地，边走边介绍，相机跟着拍',
+      '在温室里种点土豆吧',
+      '太阳能板好像有点脏了，清理一下',
+      '叫宇航员回基地休息一下',
+      '拍一张基地的照片发回地球',
+      '让那个机器人讲个笑话',
+    ],
     eventsHead: '事件',
     timeHead: '跳到',
     conditionsHead: '状况',
@@ -841,6 +864,26 @@ export function buildOverlay(options: {
   panelNext.hidden = options.eventsMode !== 'auto'
   const panelActive = el('div', 'active')
   const section = () => el('div', 'section')
+  // Things to ask Agnes, one button each: the person's words go into the conversation on screen.
+  const tryHead = section()
+  const tryList = el('div', 'tries')
+  const tryButtons = t().tries.map((_, i) => {
+    const b = el('button', 'try')
+    b.type = 'button'
+    b.addEventListener('click', async () => {
+      if (!options.say || b.disabled) return
+      b.disabled = true
+      const told = await options.say(t().tries[i] as string)
+      b.textContent = told ? `✓ ${t().asked}` : t().noChat
+      setTimeout(() => {
+        b.disabled = false
+        b.textContent = t().tries[i] as string
+      }, 2500)
+    })
+    tryList.appendChild(b)
+    return b
+  })
+  tryHead.hidden = tryList.hidden = !options.say
   const eventsHead = section()
   const panelList = el('div', 'list')
   const startButtons = (Object.keys(CATALOG) as EventKind[]).map((kind) => {
@@ -929,6 +972,8 @@ export function buildOverlay(options: {
     panelHead,
     panelNext,
     panelActive,
+    tryHead,
+    tryList,
     eventsHead,
     panelList,
     timeHead,
@@ -990,6 +1035,10 @@ export function buildOverlay(options: {
     eventsHead.textContent = t().eventsHead
     timeHead.textContent = t().timeHead
     conditionsHead.textContent = t().conditionsHead
+    tryHead.textContent = t().tryHead
+    tryButtons.forEach((b, i) => {
+      if (!b.disabled) b.textContent = t().tries[i] as string
+    })
     for (const b of startButtons) {
       b.title.textContent = t().kinds[b.kind]
       b.about.textContent = t().kindAbout[b.kind]

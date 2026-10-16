@@ -6,6 +6,7 @@
   "exports": {
     ".": "./index.ts",
     "./device": "./device/device.ts",
+    "./device/testing": "./device/testing.ts",
     "./gen/*": "./gen/ts/*.ts"
   },
   "scripts": {

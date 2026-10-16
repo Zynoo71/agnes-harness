@@ -13,7 +13,10 @@
  *
  * Section numbers refer to the MHS specification, or to MOS where marked.
  */
+import type { Static, TObject, TSchema } from '@sinclair/typebox'
 import { prepareArguments } from '../server/args.js'
+
+export { Type } from '@sinclair/typebox'
 
 const PROTOCOL = 'mhs/v1'
 const SUBPROTOCOL = 'mhs.v1'
@@ -25,6 +28,7 @@ const CLIPS_KEPT = 8 // at least the 4 most recent (STR-8)
 const BACKLOG = 1 << 20 // bytes buffered on the Nerve socket before newer data waits (STR-6)
 const PING_EVERY = 2000 // ms between mhs/ping requests (CONN-9)
 const PING_LOST = 3000 // ms without a reply after which both channels count as lost
+const DEFAULT_HUB = 'ws://127.0.0.1:4180'
 
 type Json = Record<string, unknown>
 type Maybe<T> = T | Promise<T>
@@ -51,7 +55,8 @@ export interface ToolOptions {
   name: string
   description: string
   timeout: number
-  params?: Record<string, Json>
+  /** Parameter schemas by name, or a TypeBox Type.Object whose Static type the handler's args get. */
+  params?: Record<string, Json> | TObject
   required?: string[]
   uses?: string[]
   motion?: boolean
@@ -65,6 +70,21 @@ export interface ToolOptions {
 export type ToolResult = undefined | string | { detail?: string; data?: Json; notes?: string[] }
 // biome-ignore lint/suspicious/noExplicitAny: arguments are validated against the tool's schema at run time
 export type ToolHandler = (call: Call, args: Record<string, any>) => Maybe<ToolResult | undefined>
+
+/** A tool declared with a TypeBox schema: required and optional come from the schema. */
+export type TypedToolOptions<P extends TObject> = Omit<ToolOptions, 'params' | 'required'> & { params: P }
+
+/** What a setting declares besides its schema: unit, role, alert, and the first value. */
+export interface SettingOptions {
+  initial?: unknown
+  description?: string
+  unit?: string
+  role?: string
+  [key: string]: unknown
+}
+
+/** Returns a message for a pulled source: data, data with its binary payload, or nothing to skip. */
+export type Sampler = () => Maybe<Json | [Json, Uint8Array] | undefined>
 
 export interface DeviceOptions {
   id: string
@@ -216,6 +236,8 @@ export class Source {
   sent: Json | undefined
   /** Called with the applied settings after mhs/configure, for example to stop rendering. */
   onConfigure: ((applied: Json) => Maybe<void>) | undefined
+  /** Pulled by the library whenever the source is wanted, at the rate the hub configured. */
+  sampler: Sampler | undefined
   private seq = 0
   private last = -Infinity
   private needKey = false
@@ -315,6 +337,8 @@ export class Device {
   log: (line: string) => void = () => undefined
 
   private readonly options: DeviceOptions
+  private readonly stateDecl: Record<string, Json>
+  private readonly setters = new Map<string, (value: unknown) => Maybe<unknown>>()
   private readonly tools = new Map<string, Tool>()
   private readonly sources = new Map<string, Source>()
   private readonly calls = new Map<string, Call>()
@@ -336,15 +360,27 @@ export class Device {
   constructor(options: DeviceOptions) {
     this.options = options
     this.id = options.id
+    this.stateDecl = { ...options.state }
   }
 
   // Declaring
 
-  /** Declares a tool (6.1). The handler gets the Call and the checked arguments. */
+  /**
+   * Declares a tool (6.1). The handler gets the Call and the checked arguments. With a TypeBox
+   * Type.Object as params, the arguments are typed and required comes from the schema.
+   */
+  tool<P extends TObject>(
+    options: TypedToolOptions<P>,
+    handler: (call: Call, args: Static<P>) => Maybe<ToolResult | undefined>,
+  ): void
+  tool(options: ToolOptions, handler: ToolHandler): void
   tool(options: ToolOptions, handler: ToolHandler): void {
-    const schema: Json = { type: 'object' }
-    if (options.params) schema.properties = options.params
-    if (options.required?.length) schema.required = options.required
+    let schema: Json = { type: 'object' }
+    if (options.params && typeof options.params.type === 'string') schema = plainSchema(options.params)
+    else {
+      if (options.params) schema.properties = options.params
+      if (options.required?.length) schema.required = options.required
+    }
     const decl: Json = {
       name: options.name,
       description: options.description,
@@ -360,11 +396,41 @@ export class Device {
     this.tools.set(options.name, { decl, handler })
   }
 
-  /** Declares a data source (MOS 3.1); meta holds hz, mount, fields and the kind's metadata. */
-  source(id: string, kind: string, description: string, meta: Json = {}): Source {
+  /**
+   * Declares a data source (MOS 3.1); meta holds hz, mount, fields and the kind's metadata. With a
+   * sampler, the library pulls each message whenever the hub wants one; without, call send().
+   */
+  source(id: string, kind: string, description: string, meta: Json = {}, sampler?: Sampler): Source {
     const source = new Source(this, { id, kind, description, ...meta })
+    source.sampler = sampler
     this.sources.set(id, source)
     return source
+  }
+
+  /**
+   * Declares a writable state field (10.1) from a TypeBox schema, applied by apply(value): it
+   * returns the value in effect, or undefined to keep the one asked for.
+   */
+  setting<S extends TSchema>(
+    name: string,
+    schema: S,
+    // biome-ignore lint/suspicious/noConfusingVoidType: a setter that only applies the value returns nothing
+    apply: (value: Static<S>) => Maybe<Static<S> | undefined | void>,
+    options: SettingOptions = {},
+  ): void {
+    const { initial, ...extra } = options
+    const plain = plainSchema(schema)
+    const decl: Json = { type: plain.type, writable: true }
+    const keys = [
+      ['min', 'minimum'],
+      ['max', 'maximum'],
+      ['enum', 'enum'],
+      ['description', 'description'],
+    ] as const
+    for (const [key, schemaKey] of keys) if (plain[schemaKey] !== undefined) decl[key] = plain[schemaKey]
+    this.stateDecl[name] = { ...decl, ...extra }
+    this.setters.set(name, apply as (value: unknown) => Maybe<unknown>)
+    if (initial !== undefined) this.values[name] = initial
   }
 
   /** The params of mhs/register (5). */
@@ -381,7 +447,7 @@ export class Device {
     if (this.sources.size) d.sources = [...this.sources.values()].map((s) => s.decl)
     if (this.tools.size) d.tools = [...this.tools.values()].map((t) => t.decl)
     if (o.manual) d.manual = o.manual
-    if (o.state && Object.keys(o.state).length) d.state = o.state
+    if (Object.keys(this.stateDecl).length) d.state = this.stateDecl
     if (o.ui) d.ui = o.ui
     return d
   }
@@ -400,7 +466,7 @@ export class Device {
   update(values: Json): void {
     const changed: Json = {}
     for (const [name, value] of Object.entries(values)) {
-      if (!(name in (this.options.state ?? {})) && name !== 'problem' && name !== 'faults')
+      if (!(name in this.stateDecl) && name !== 'problem' && name !== 'faults')
         throw new Error(`${name} is not a declared state field`)
       if (JSON.stringify(this.values[name]) === JSON.stringify(value)) continue
       this.values[name] = value
@@ -433,14 +499,17 @@ export class Device {
 
   // Running
 
-  /** Connects to the hub at url (ws://host:port) and keeps both channels up until the device is
-   * replaced (CONN-8), refused, or close() is called. */
-  async run(url: string): Promise<void> {
-    const base = url.replace(/\/$/, '')
+  /** Connects to the hub at url (ws://host:port; default AGNES_HUB_URL in Node, else
+   * ws://127.0.0.1:4180) and keeps both channels up until the device is replaced (CONN-8),
+   * refused, or close() is called. */
+  async run(url?: string): Promise<void> {
+    const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+    const base = (url ?? env?.AGNES_HUB_URL ?? DEFAULT_HUB).replace(/\/$/, '')
     this.finished = false
     const loops = [this.commandLoop(`${base}/ws/mhs`)]
     if (this.needsNerve()) loops.push(this.nerveLoop(`${base}/ws/nerve`))
     if (this.options.manual) this.timers.push(setInterval(() => this.deadman(), 50))
+    for (const source of this.sources.values()) if (source.sampler) loops.push(this.sample(source))
     await loops[0]
     this.finished = true
     this.nerve?.close()
@@ -454,6 +523,24 @@ export class Device {
     this.finished = true
     this.cmd?.close()
     this.nerve?.close()
+  }
+
+  /** Pulls a source's sampler whenever the source is wanted, until the device finishes. */
+  private async sample(source: Source): Promise<void> {
+    const sampler = source.sampler as Sampler
+    while (!this.finished) {
+      if (this.nerve && source.wants()) {
+        try {
+          const value = await sampler()
+          if (Array.isArray(value)) source.send(value[0], value[1])
+          else if (value !== undefined) source.send(value)
+        } catch (e) {
+          this.log(`${this.id}: sampler of ${source.id} failed: ${String(e)}`)
+          await sleep(1000)
+        }
+      }
+      await sleep(source.hz ? Math.min(100, 500 / source.hz) : 100)
+    }
   }
 
   private needsNerve(): boolean {
@@ -541,7 +628,7 @@ export class Device {
   private sendFullState(): void {
     const values: Json = {}
     for (const [name, value] of Object.entries(this.values)) if (value !== undefined) values[name] = value
-    const missing = Object.keys(this.options.state ?? {}).filter((name) => !(name in values))
+    const missing = Object.keys(this.stateDecl).filter((name) => !(name in values))
     if (missing.length) this.log(`${this.id}: state fields without a value yet: ${missing.join(', ')}`)
     this.sendCommand({ jsonrpc: '2.0', method: 'mhs/state', params: { t: Date.now() / 1000, values } })
   }
@@ -760,7 +847,7 @@ export class Device {
     const notes: string[] = []
     const refused: Record<string, string> = {}
     for (const [name, value] of Object.entries((params.values as Json | undefined) ?? {})) {
-      const decl = this.options.state?.[name]
+      const decl = this.stateDecl[name]
       if (!decl?.writable) {
         refused[name] = decl ? 'not writable' : 'not a state field'
         continue
@@ -782,7 +869,8 @@ export class Device {
       }
       let next = prepared.args[name]
       try {
-        const result = await this.onSet?.(name, next)
+        const setter = this.setters.get(name)
+        const result = setter ? await setter(next) : await this.onSet?.(name, next)
         if (result !== undefined) next = result
       } catch (e) {
         refused[name] = `could not apply: ${String(e)}`
@@ -957,4 +1045,27 @@ export class Device {
       this.wakeWaiters()
     }
   }
+}
+
+/**
+ * A schema as plain JSON: TypeBox's symbol keys dropped, and a union of literals turned into an
+ * enum, which the argument checks (6.4) understand.
+ */
+function plainSchema(schema: TSchema | Json): Json {
+  const plain = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(plain)
+    if (value === null || typeof value !== 'object') return value
+    const o = value as Json
+    const consts = Array.isArray(o.anyOf) && (o.anyOf as Json[]).every((a) => 'const' in a)
+    if (consts) {
+      const values = (o.anyOf as Json[]).map((a) => a.const)
+      const { anyOf: _, ...rest } = o
+      const types = new Set(values.map((v) => (Number.isInteger(v) ? 'integer' : typeof v)))
+      const numeric = [...types].every((t) => t === 'integer' || t === 'number')
+      const type = types.size === 1 ? [...types][0] : numeric ? 'number' : undefined
+      return plain({ ...rest, ...(type ? { type } : {}), enum: values })
+    }
+    return Object.fromEntries(Object.entries(o).map(([k, v]) => [k, plain(v)]))
+  }
+  return plain(schema) as Json
 }

@@ -15,6 +15,13 @@ const LIGHT_S = 10
 /** Mission Control's answer, from what really reached it. */
 function replyTo(photo: Photo | undefined): Mail['reply'] {
   if (!photo) return { en: 'Report received. Thank you, Agnes Base.', zh: '报告收到了，谢谢 Agnes 基地。' }
+  if (photo.subject?.startsWith('writing:')) {
+    const text = photo.subject.slice('writing:'.length)
+    return {
+      en: `Photo received: "${text}", written in the sand of Mars, big enough to read from the sky. Someone here printed it out already. We read you, Agnes Base!`,
+      zh: `照片收到了：火星沙地上写着“${text}”，大到从天上都看得清。这边已经有人把它打印出来了。我们收到了，Agnes 基地！`,
+    }
+  }
   if (photo.subject === 'rock-1')
     return {
       en: 'Close-up received: that greenish, layered stone in the west field. The geologists are already arguing about it. Can the lab look at a sample?',
@@ -171,7 +178,8 @@ export function comms(world: World, log: (line: string) => void): WorldDevice {
         report: { type: 'string', maxLength: 4000 },
         photo: {
           type: 'string',
-          description: 'id of a photo a camera took (cam-base or monolith-01 take_photo), such as photo-1',
+          description:
+            'id of a photo a camera took (cam-base, monolith-01 or hopper-01 take_photo), such as photo-1',
         },
       },
       required: ['report'],

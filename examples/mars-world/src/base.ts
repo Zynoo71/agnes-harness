@@ -28,6 +28,8 @@ export const LAYOUT = {
   flag: [-6.5, 12] as const,
   /** The rock outcrop out in the field, where the astronaut works. */
   field: [-31, 27] as const,
+  /** Smooth open sand west of the landing pad, clear of rocks: where Monolith writes. */
+  sand: [-17, 38] as const,
   /** Where Monolith waits, beside the airlock. */
   monolith: [3.4, 15.4] as const,
   /** Spots at the outcrop the astronaut walks between on their own, stopping at each to work. */

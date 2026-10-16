@@ -95,7 +95,11 @@ export interface Effects {
    * rubble, none of them towards the headings (radians, as headingTo) in `clear`.
    */
   shatter(at: Point, r: number, clear: number[]): void
-  /** Ends whatever is drawn and takes away the rubble. */
+  /** A furrow in the sand from `a` to `b`, as Monolith writes; it stays until unmark or clear. */
+  mark(a: Point, b: Point): void
+  /** Smooths the sand: every furrow gone. */
+  unmark(): void
+  /** Ends whatever is drawn and takes away the rubble and the furrows. */
   clear(): void
 }
 

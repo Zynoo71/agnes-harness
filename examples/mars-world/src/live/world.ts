@@ -366,7 +366,7 @@ export interface Photo {
   at: string
   /** The sun was in the picture, how high it stood and where (degrees; azimuth clockwise from north). */
   sun: { inFrame: boolean; elevation: number; azimuth: number }
-  /** What a close-up shows: an unusual rock's id. */
+  /** What it shows: an unusual rock's id for a close-up, or `writing:<text>` for the text in the sand from above. */
   subject?: string
 }
 
@@ -406,6 +406,8 @@ export class World {
   walkIn: ((call: Call) => Promise<boolean>) | undefined
   /** The suit leaks (an event): oxygen goes fast and the wearer cannot walk. */
   suitLeak = false
+  /** What Monolith has written in the sand: the text, its centre (world x, z), size (m), and whether it is finished. */
+  writing: { text: string; x: number; z: number; width: number; height: number; done: boolean } | undefined
   /** What happens on its own: storms, leaks, dust devils, meteorites (set up by connectDevices). */
   events: Events | undefined
   /** What the scene draws for events; set by the page. */
@@ -479,6 +481,7 @@ export class World {
     this.growLights = true
     this.crate = { at: 'none', crop: 'potato', kg: 0 }
     this.photos.clear()
+    this.writing = undefined
     this.events?.reset()
     this.effects?.clear()
     OBSTACLES.splice(0, OBSTACLES.length, ...this.rockScales.keys())

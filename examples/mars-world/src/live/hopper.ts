@@ -1,6 +1,7 @@
 import { type Call, CallError } from '@agnes/mhs/device'
 import * as THREE from 'three'
 import { LAYOUT } from '../base.js'
+import { sunAt } from '../clock.js'
 import { OBSTACLES } from '../terrain.js'
 import { PLACE_PARAM, pointOf } from './basemap.js'
 import { addCamera } from './camera.js'
@@ -28,6 +29,8 @@ const SURVEY_ALT = 12
 const FOOTPRINT = 8
 /** Seconds the engine takes to light and reach lift-off thrust. */
 const IGNITION_S = 1.2
+/** Its photos: the downward lens's field of view top to bottom (degrees), its near plane (m), and the lowest altitude it suggests for a picture of the text in the sand (m). */
+const PHOTO = { fov: 70, near: 4, lowest: 12 }
 
 /**
  * The rocket hopper: flies on a methane-oxygen engine, so it needs no air. It hovers, hops between
@@ -501,6 +504,62 @@ export function hopper(world: World, log: (line: string) => void): WorldDevice {
         }
         return { detail: `surveyed the ${area}: ${parts.join(', ')}${aloft()}`, data }
       }),
+  )
+  // A photo is taken straight down from the deck, the top of the picture to the north; the near plane
+  // lies past the engine's plume so it stays out of the picture.
+  const shot = new THREE.PerspectiveCamera(PHOTO.fov, 16 / 9, PHOTO.near, 2000)
+  shot.up.set(0, 0, -1)
+  dev.tool(
+    {
+      name: 'take_photo',
+      description: `Take a photo straight down from where it is, the top of the picture to the north; at altitude h it shows about ${round(2 * Math.tan(THREE.MathUtils.degToRad(PHOTO.fov / 2)) * (16 / 9), 2)}·h m east to west and ${round(2 * Math.tan(THREE.MathUtils.degToRad(PHOTO.fov / 2)), 2)}·h m north to south. comms-01 send can take it home.`,
+      timeout: 10,
+      ui: { label: 'Take photo' },
+    },
+    async (call) => {
+      model.updateMatrixWorld(true)
+      down.getWorldPosition(shot.position)
+      shot.lookAt(shot.position.x, 0, shot.position.z)
+      shot.updateMatrixWorld()
+      call.progress({ text: 'taking the photo' })
+      await wait(call, 300)
+      // The text in the sand is in the picture when its whole box is in the frame.
+      const h = shot.position.y - world.ground(body.at)
+      const halfZ = Math.tan(THREE.MathUtils.degToRad(PHOTO.fov / 2)) * h
+      const halfX = halfZ * (16 / 9)
+      const w = world.writing
+      const framed =
+        w?.done &&
+        Math.abs(w.x - shot.position.x) + w.width / 2 <= halfX &&
+        Math.abs(w.z - shot.position.z) + w.height / 2 <= halfZ
+      const id = `photo-${world.photos.size + 1}`
+      const { elevation, azimuth } = sunAt(world.clock.hour())
+      world.photos.set(id, {
+        id,
+        by: dev.id,
+        jpeg: await world.snapshot(shot, 1280, 720),
+        at: world.clock.label(),
+        sun: { inFrame: false, elevation, azimuth },
+        ...(framed && w ? { subject: `writing:${w.text}` } : {}),
+      })
+      const ground = `${round(2 * halfX, 0)} m by ${round(2 * halfZ, 0)} m of ground below (${toMap(body.at).x}, ${toMap(body.at).y}) from ${altitude()} m`
+      if (framed && w)
+        return {
+          detail: `${id} taken at ${world.clock.label()}: the whole of "${w.text}" written in the sand, seen from above in ${ground}; comms-01 send can take it home${airborne ? aloft() : ''}`,
+          data: { photo: id, subject: `writing:${w.text}` },
+        }
+      // The lowest altitude that holds the whole text with a metre round it.
+      const need = w && Math.ceil(Math.max((w.width / 2 + 1) / (halfX / h), (w.height / 2 + 1) / (halfZ / h)))
+      const hint = w?.done
+        ? `; "${w.text}" in the sand at open-sand (${round(w.width, 1)} m by ${round(w.height, 1)} m) is not wholly in it: fly_to open-sand with alt ${Math.max(need ?? 0, PHOTO.lowest)} first`
+        : w
+          ? `; monolith-01 is still writing "${w.text}" at open-sand`
+          : ''
+      return {
+        detail: `${id} taken at ${world.clock.label()}: ${ground}${hint}${airborne ? aloft() : ''}`,
+        data: { photo: id },
+      }
+    },
   )
   dev.tool(
     {

@@ -5,6 +5,7 @@ import { sunAt } from '../clock.js'
 import { MONOLITH } from '../devices.js'
 import { buildCrate, STRIKE, UNFOLD_S } from '../monolith.js'
 import { OBSTACLES, type Obstacle } from '../terrain.js'
+import { GLYPHS, layout, WRITABLE } from '../writing.js'
 import { PLACE_PARAM, pointOf } from './basemap.js'
 import { addCamera } from './camera.js'
 import { GROW_S } from './greenhouse.js'
@@ -88,6 +89,8 @@ const AT_LAB = 6
 const CHAMBER = { x: 0, z: 10.6 }
 /** Devices and people it can follow. */
 const FOLLOWABLE = ['suit-01', 'rover-01', 'hopper-01']
+/** Writing in the sand: at most this many characters, metres a grid unit (letters 4 units tall), pen-down speed m/s, metres a furrow segment. */
+const WRITE = { most: 8, scale: 1.25, speed: 2, segment: 0.3 }
 /** Follow ends this close to a machine's edge; to a person it walks up to its stop distance. */
 const MACHINE_GAP = 1.5
 /** Following plans its way again once the target has moved this far from where it was, in metres. */
@@ -144,6 +147,10 @@ const LINES = {
   home: {
     honest: 'Home. All yours.',
     smooth: 'Delivered, as if nothing ever happened.',
+  },
+  wrote: {
+    honest: 'Written. It reads best from above.',
+    smooth: 'Calligraphy, Martian style.',
   },
 }
 
@@ -1494,6 +1501,73 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
         return {
           detail: `harvested ${world.crate.kg} kg of ${crop}es from the ${bed} bed into a crate and came back out, at ${where()}, holding it; the bed is empty. To take it in, in this order: ${INTO_AIRLOCK}. Said: "${said}"`,
           data: { bed, crop, kg: world.crate.kg, said },
+        }
+      }),
+  )
+
+  dev.tool(
+    {
+      name: 'write',
+      description: `Write a short text (up to ${WRITE.most} characters: ${WRITABLE}) in big letters in the smooth open sand west of the landing pad (open-sand): it walks there and draws each letter as a furrow with its slabs, letters ${4 * WRITE.scale} m tall. Writing again rubs out what was there. The whole text is best seen from above, such as by hopper-01 take_photo hovering over open-sand.`,
+      timeout: 600,
+      params: { text: { type: 'string', maxLength: WRITE.most, description: 'what to write' } },
+      required: ['text'],
+      uses: ['slabs'],
+      motion: true,
+      ui: { label: 'Write' },
+    },
+    (call, { text }) =>
+      motion(call, 'walk', async () => {
+        const t = (text as string).trim().toUpperCase()
+        if (!t || [...t].length > WRITE.most)
+          throw new CallError('x_cannot_write', `text must be 1 to ${WRITE.most} characters`)
+        const odd = [...t].filter((c) => !(c in GLYPHS))
+        if (odd.length)
+          throw new CallError('x_cannot_write', `it cannot write ${odd.join(' ')}; it writes ${WRITABLE}`)
+        if (load) throw new CallError('x_hands_full', `it carries ${load.id}; put_down first`)
+        const [cx, cz] = LAYOUT.sand
+        const { strokes, width, height } = layout(t, cx, cz, WRITE.scale)
+        const start = strokes[0]?.[0]
+        if (!start) throw new CallError('x_cannot_write', 'nothing to write')
+        await journey(call, start, 'walk')
+        world.effects?.unmark()
+        const writing = { text: t, x: cx, z: cz, width, height, done: false }
+        world.writing = writing
+        const go = (to: Point, speed: number, step?: () => void) =>
+          body.go(call, to, {
+            speed,
+            accel: GAIT.walk.accel,
+            turnRate: GAIT.walk.turn,
+            arrive: 0.1,
+            ...(step ? { step } : {}),
+          })
+        for (const [i, stroke] of strokes.entries()) {
+          await go(stroke[0] as Point, GAIT.walk.speed)
+          let last = { ...body.at }
+          const pen = () => {
+            if (Math.hypot(body.at.x - last.x, body.at.z - last.z) < WRITE.segment) return
+            world.effects?.mark(last, body.at)
+            last = { ...body.at }
+          }
+          for (const p of stroke.slice(1)) {
+            await go(p, WRITE.speed, pen)
+            world.effects?.mark(last, body.at)
+            last = { ...body.at }
+          }
+          call.progress({
+            done: i + 1,
+            total: strokes.length,
+            text: `writing "${t}": stroke ${i + 1} of ${strokes.length}`,
+          })
+        }
+        writing.done = true
+        // Step off the letters to the south, out of the picture.
+        await go({ x: body.at.x, z: cz + height / 2 + 3 }, GAIT.walk.speed)
+        const said = speak(flavour(voice(LINES.wrote)))
+        const centre = toMap({ x: cx, z: cz })
+        return {
+          detail: `wrote "${t}" in the sand at open-sand, ${round(width, 1)} m wide and ${round(height, 1)} m tall, centred at (${centre.x}, ${centre.y}); it stands just south of it at ${where()}. Seen whole only from above: hopper-01 take_off, fly_to open-sand with alt ${Math.min(30, Math.max(12, Math.ceil(width / 1.6)))}, then take_photo. Said: "${said}"`,
+          data: { text: t, width: round(width, 1), height: round(height, 1), centre, said },
         }
       }),
   )

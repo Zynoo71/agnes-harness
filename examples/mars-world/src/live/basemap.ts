@@ -55,6 +55,13 @@ export const BASE_MAP = {
     },
     { id: 'lab', name: 'Lab', at: at(LAYOUT.lab), description: 'The sample lab, west of the dock.' },
     {
+      id: 'open-sand',
+      name: 'Open sand',
+      at: at(LAYOUT.sand),
+      description:
+        'Smooth open sand west of the landing pad, clear of rocks, about 36 m by 10 m: where monolith-01 writes in the sand.',
+    },
+    {
       id: 'greenhouse',
       name: 'Greenhouse door',
       at: at(LAYOUT.greenhouseDoor),

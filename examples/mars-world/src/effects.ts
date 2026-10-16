@@ -3,6 +3,71 @@ import type { Effects } from './live/events.js'
 import type { Point } from './live/route.js'
 import { heightAt } from './terrain.js'
 
+/** Furrows written in the sand: segments kept, their width and how far over the ground (m). */
+const FURROW = { segments: 4000, half: 0.24, lift: 0.03 }
+
+/**
+ * The furrows Monolith writes into the sand: one mesh of quads, each segment written in place as it is
+ * laid and stretched by its half width at both ends so the joints close. One draw, and only the new
+ * segment goes to the GPU.
+ */
+function furrows(scene: THREE.Scene) {
+  const n = FURROW.segments
+  const position = new THREE.BufferAttribute(new Float32Array(n * 4 * 3), 3)
+  const normal = new THREE.BufferAttribute(new Float32Array(n * 4 * 3), 3)
+  for (let i = 0; i < n * 4; i++) normal.setXYZ(i, 0, 1, 0)
+  const index: number[] = []
+  for (let i = 0; i < n; i++) index.push(4 * i, 4 * i + 2, 4 * i + 1, 4 * i + 1, 4 * i + 2, 4 * i + 3)
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', position)
+  geometry.setAttribute('normal', normal)
+  geometry.setIndex(index)
+  geometry.setDrawRange(0, 0)
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x4a2617,
+    roughness: 1,
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  })
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.frustumCulled = false
+  mesh.receiveShadow = true
+  mesh.visible = false
+  scene.add(mesh)
+  let count = 0
+  return {
+    mark(a: Point, b: Point) {
+      if (count >= n) return
+      const len = Math.hypot(b.x - a.x, b.z - a.z)
+      if (len < 1e-3) return
+      const dx = (b.x - a.x) / len
+      const dz = (b.z - a.z) / len
+      const h = FURROW.half
+      const corners = [
+        [a.x - dx * h - dz * h, a.z - dz * h + dx * h],
+        [a.x - dx * h + dz * h, a.z - dz * h - dx * h],
+        [b.x + dx * h - dz * h, b.z + dz * h + dx * h],
+        [b.x + dx * h + dz * h, b.z + dz * h - dx * h],
+      ] as const
+      corners.forEach(([x, z], k) => {
+        position.setXYZ(4 * count + k, x, heightAt(x, z) + FURROW.lift, z)
+      })
+      position.addUpdateRange(4 * count * 3, 12)
+      position.needsUpdate = true
+      count += 1
+      geometry.setDrawRange(0, count * 6)
+      mesh.visible = true
+    },
+    unmark() {
+      count = 0
+      geometry.setDrawRange(0, 0)
+      mesh.visible = false
+    },
+  }
+}
+
 /** A soft round spot, white in the middle: for flashes and puffs of dust. */
 function spot(): THREE.Texture {
   const canvas = document.createElement('canvas')
@@ -35,6 +100,7 @@ export function buildEffects(
   dustColor: THREE.Color,
 ): Effects & { update(t: number): void } {
   const texture = spot()
+  const sand = furrows(scene)
   const running: Running[] = []
   let now = 0
   const add = (r: Omit<Running, 'start'>) => running.push({ ...r, start: now })
@@ -316,7 +382,10 @@ export function buildEffects(
     devil,
     puff,
     shatter,
+    mark: sand.mark,
+    unmark: sand.unmark,
     clear() {
+      sand.unmark()
       for (const r of running) r.dispose()
       running.length = 0
       for (const mesh of rubble) {

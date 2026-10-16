@@ -5,7 +5,7 @@ import { sunAt } from '../clock.js'
 import { placed } from './basemap.js'
 import { addCamera } from './camera.js'
 import { reading } from './place.js'
-import { every, turnTo, type World, WorldDevice, wait } from './world.js'
+import { every, everyFrame, turnTo, type World, WorldDevice, wait } from './world.js'
 
 /** Places the camera can be pointed at by name, in world coordinates. */
 const PRESETS: Record<string, readonly [number, number]> = {
@@ -48,6 +48,8 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
   let tilt = 0
   let zoom = 1
   let preset = 'base'
+  /** The device the camera keeps in view as it moves, or none. */
+  let tracking = 'none'
   const dev = new WorldDevice({
     id: 'cam-base',
     kind: 'camera',
@@ -77,6 +79,11 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
       },
       tilt: { type: 'number', unit: 'deg', min: -60, max: 20, description: 'positive looks up' },
       zoom: { type: 'number', min: 1, max: 4, description: 'magnification' },
+      tracking: {
+        type: 'string',
+        enum: ['none', ...movers.map(([id]) => id)],
+        description: 'the device the camera keeps in view as it moves (track), or none',
+      },
     },
     // The whole base in one view: pages show it first, the suit's helmet camera next.
     ui: { primary: 'view_video', order: -2 },
@@ -116,7 +123,7 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
   every(2000, () => void (health.wants() && health.send({ temperature: reading(4, 0.3) })), log)
 
   const report = () =>
-    dev.update({ preset, pan: Math.round(pan * 10) / 10, tilt: Math.round(tilt * 10) / 10, zoom })
+    dev.update({ preset, pan: Math.round(pan * 10) / 10, tilt: Math.round(tilt * 10) / 10, zoom, tracking })
   const point = async (call: Call, p: number, t: number) => {
     const ms = 300 + Math.max(Math.abs(p - pan), Math.abs(t - tilt)) * 12
     await turnTo(call, head, { y: NORTH + THREE.MathUtils.degToRad(p), x: THREE.MathUtils.degToRad(-t) }, ms)
@@ -154,6 +161,7 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
       ui: { label: 'Look at' },
     },
     async (call, args) => {
+      tracking = 'none'
       const place = PRESETS[args.preset as string]
       const mover = movers.find(([id]) => id === args.preset)?.[1]
       const target = place
@@ -175,6 +183,54 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
           ? `; it is ${Math.round(target.tilt)}° ${target.tilt > tilt ? 'up' : 'down'}, past the ${Math.round(tilt)}° the head tilts to, so it shows ${short < FOV / 2 / zoom ? 'near the edge of the picture' : 'outside the picture at this zoom'}${keep >= 1 ? `; zoom ${Math.min(4, keep)} or less keeps it in` : '; no zoom brings it in'}`
           : ''
       return `looking at ${what ?? `pan ${Math.round(pan)}°, tilt ${Math.round(tilt)}°`}${what && preset === 'manual' ? ` (pan ${Math.round(pan)}°, tilt ${Math.round(tilt)}°)` : ''}${beyond}`
+    },
+  )
+  // Tracking: every frame the head turns part of the way to the device, so it follows it smoothly.
+  let lastReport = 0
+  everyFrame(() => {
+    const mover = movers.find(([id]) => id === tracking)?.[1]
+    if (!mover) return
+    const target = aimAt(middle(mover))
+    const k = 0.12
+    pan = wrap(pan + wrap(target.pan - pan) * k)
+    tilt = Math.max(-60, Math.min(20, tilt + (target.tilt - tilt) * k))
+    head.rotation.set(THREE.MathUtils.degToRad(-tilt), NORTH + THREE.MathUtils.degToRad(pan), 0)
+    const now = performance.now()
+    if (now - lastReport > 1000) {
+      lastReport = now
+      report()
+    }
+  }, log)
+  dev.tool(
+    {
+      name: 'track',
+      description:
+        'Keep a device that moves about the base in view as it goes, until look_at or track points the camera elsewhere (track none stops and holds the view). Returns at once; zoom and take_photo work while it tracks.',
+      timeout: 10,
+      params: {
+        device: {
+          type: 'string',
+          enum: ['none', ...movers.map(([id]) => id)],
+          description: 'the device to follow, or none to stop',
+        },
+      },
+      required: ['device'],
+      uses: ['head'],
+      ui: { label: 'Track' },
+    },
+    async (call, { device }) => {
+      const mover = movers.find(([id]) => id === device)?.[1]
+      tracking = 'none'
+      if (!mover) {
+        report()
+        return `stopped tracking; holding pan ${Math.round(pan)}°, tilt ${Math.round(tilt)}°`
+      }
+      const target = aimAt(middle(mover))
+      await point(call, wrap(target.pan), Math.max(-60, Math.min(20, target.tilt)))
+      tracking = device as string
+      preset = 'manual'
+      report()
+      return `tracking ${device}: the camera follows it until told otherwise`
     },
   )
   dev.tool(
@@ -254,6 +310,7 @@ export function baseCamera(world: World, log: (line: string) => void): WorldDevi
     cam.fov = FOV
     cam.updateProjectionMatrix()
     preset = 'base'
+    tracking = 'none'
     head.rotation.set(THREE.MathUtils.degToRad(-tilt), NORTH + THREE.MathUtils.degToRad(pan), 0)
     report()
   })

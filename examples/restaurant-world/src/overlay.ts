@@ -491,11 +491,23 @@ export function buildOverlay(options: {
     empty.hidden = lines.length > 0
     feed.classList.toggle('folded', folded)
   }
-  const atEnd = () => list.scrollHeight - list.scrollTop - list.clientHeight < 8
+  // The list follows the newest item, as a chat does, unless the person scrolls up to read;
+  // scrolling back to the end follows again.
+  let follow = true
+  const toEnd = () => {
+    if (follow) list.scrollTop = list.scrollHeight
+  }
+  for (const type of ['wheel', 'touchend', 'pointerup', 'keyup'])
+    list.addEventListener(type, () =>
+      setTimeout(() => {
+        follow = list.scrollHeight - list.scrollTop - list.clientHeight < 8
+      }, 200),
+    )
   const toggleFeed = () => {
     folded = !folded
     drawFeedTop()
-    if (!folded) list.scrollTop = list.scrollHeight
+    follow = true
+    toEnd()
   }
   feedFold.addEventListener('click', toggleFeed)
   drawFeedTop()
@@ -589,22 +601,18 @@ export function buildOverlay(options: {
         ),
         box('row what', ...all.slice(cut)),
       )
-      // A line that grows (a decision opening) keeps the list at its end when it was there.
-      const stick = atEnd()
       item.replaceChildren(line, ...(open && d ? [decisionCard(d)] : []))
-      if (stick) list.scrollTop = list.scrollHeight
+      toEnd()
     }
     line.addEventListener('click', () => {
       if (!decision?.()) return
       clicked = !item.classList.contains('open')
       draw()
     })
-    const stick = atEnd()
     list.appendChild(item)
     draw()
     lines.push({ el: item, draw })
     while (lines.length > KEEP_LINES) lines.shift()?.el.remove()
-    if (stick) list.scrollTop = list.scrollHeight
     drawFeedTop()
     drawHead()
     return draw
@@ -996,6 +1004,8 @@ export function buildOverlay(options: {
   }
 
   const refresh = () => {
+    // The rows above the list may have grown, or a line wrapped: stay at the newest.
+    toEnd()
     drawDm()
     if (fresh && performance.now() >= fresh.until) {
       fresh = undefined

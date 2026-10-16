@@ -141,17 +141,18 @@
       .banner.warn { border-left-color: var(--amber); }
       .banner.bad { border-color: rgba(255, 107, 87, 0.5); border-left-color: var(--red); }
       /* The right column under the map: the controls, then the guest's cards. */
-      #side { position: fixed; right: 14px; top: 240px; bottom: calc(var(--bar) + 8px); width: 300px; display: flex; flex-direction: column; gap: 8px;
+      #side { position: fixed; right: 14px; top: 240px; bottom: calc(var(--bar) + 8px); width: 420px; display: flex; flex-direction: column; gap: 8px;
               overflow: auto; pointer-events: none; }
       #side > * { pointer-events: auto; flex: none; }
-      #controls-panel { padding: 10px 12px; background: var(--panel); border: 1px solid var(--line);
-                        border-radius: 8px; color: var(--text); font-size: 12px; backdrop-filter: blur(6px); }
-      #controls-panel .head { font: 700 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
-      #controls-panel .section { margin-top: 10px; padding-bottom: 3px; border-bottom: 1px solid var(--line); font: 700 10.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
-      #controls-panel .item { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(226, 160, 120, 0.12); }
+      #controls-panel { padding: 14px 16px; background: var(--panel); border: 1px solid var(--line);
+                        border-radius: 8px; color: var(--text); font-size: 17px; backdrop-filter: blur(6px); }
+      #controls-panel button, #reset-panel button { font-size: 15px; padding: 5px 14px; }
+      #controls-panel .head { font: 700 17px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+      #controls-panel .section { margin-top: 14px; padding-bottom: 4px; border-bottom: 1px solid var(--line); font: 700 15px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+      #controls-panel .item { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid rgba(226, 160, 120, 0.12); }
       #controls-panel .item > div { flex: 1; }
-      #controls-panel .item b { display: block; font-size: 12px; }
-      #controls-panel .item span { color: var(--dim); font-size: 11px; font-family: var(--mono); }
+      #controls-panel .item b { display: block; font-size: 17px; }
+      #controls-panel .item span { color: var(--dim); font-size: 15px; font-family: var(--mono); }
       /* The guest's cards: paper, like a printed menu and a receipt. */
       .card { padding: 10px 13px 11px; background: var(--paper); color: var(--ink); border-radius: 8px; font-size: 12.5px;
               box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45); animation: arrive 0.5s ease-out; }
@@ -197,12 +198,12 @@
       #help kbd, #help code { font: 11.5px var(--mono); padding: 0 4px; border: 1px solid var(--line); border-radius: 3px; background: rgba(226, 160, 120, 0.08); }
       #help .close { position: sticky; float: right; bottom: 0; margin-top: 8px; }
       /* Who comes in next: the party picker that Reset opens. */
-      #reset-panel { position: fixed; right: 14px; bottom: 42px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line);
-                     border-radius: 8px; color: var(--text); font-size: 12.5px; backdrop-filter: blur(6px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); }
-      #reset-panel .head { font: 700 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
-      #reset-panel .sizes { display: flex; gap: 4px; margin: 6px 0 10px; }
-      #reset-panel .sizes button { width: 28px; padding: 4px 0; font-size: 12.5px; }
-      #reset-panel label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+      #reset-panel { position: fixed; right: 14px; bottom: calc(var(--bar) + 8px); padding: 16px 18px; background: var(--panel); border: 1px solid var(--line);
+                     border-radius: 8px; color: var(--text); font-size: 17px; backdrop-filter: blur(6px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); }
+      #reset-panel .head { font: 700 17px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); margin-bottom: 8px; }
+      #reset-panel .sizes { display: flex; gap: 6px; margin: 8px 0 12px; }
+      #reset-panel .sizes button { width: 40px; padding: 6px 0; font-size: 17px; }
+      #reset-panel label { display: flex; gap: 8px; align-items: center; cursor: pointer; }
       #reset-panel .actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; }
       #reset-panel .go { background: rgba(82, 224, 138, 0.18); border-color: rgba(82, 224, 138, 0.6); }
       /* A device with no call running and nothing wrong steps back: smaller about the point its tag stands on, and fainter. */

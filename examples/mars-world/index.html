@@ -136,22 +136,23 @@
       .banner.bad { border-color: rgba(255, 107, 87, 0.5); border-left-color: var(--red); }
       .banner .ask { margin-left: 12px; pointer-events: auto; color: var(--llm); border-color: var(--llm-soft); }
       .banner .dismiss { margin-left: 6px; padding: 2px 7px; pointer-events: auto; color: var(--dim); border-color: transparent; }
-      #events-panel { position: fixed; right: 14px; top: 246px; width: 340px; max-height: calc(100vh - 300px); overflow: auto; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line);
-                      border-radius: 8px; color: var(--text); font-size: 12px; backdrop-filter: blur(6px); }
-      #events-panel .head { font: 700 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
-      #events-panel .active { margin-top: 6px; font-family: var(--mono); font-size: 11px; }
-      #events-panel .next { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-family: var(--mono); font-size: 11px; }
+      #events-panel { position: fixed; right: 14px; top: 246px; width: 480px; max-height: calc(100vh - 246px - var(--bar) - 14px); box-sizing: border-box; overflow: auto; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line);
+                      border-radius: 8px; color: var(--text); font-size: 17px; backdrop-filter: blur(6px); }
+      #events-panel button { font-size: 15px; padding: 5px 14px; }
+      #events-panel .head { font: 700 17px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+      #events-panel .active { margin-top: 8px; font-family: var(--mono); font-size: 15px; }
+      #events-panel .next { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-family: var(--mono); font-size: 15px; }
       #events-panel .next[hidden] { display: none; }
-      #events-panel .section { margin-top: 10px; padding-bottom: 3px; border-bottom: 1px solid var(--line); font: 700 10.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
-      #events-panel .item { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255, 196, 120, 0.12); }
+      #events-panel .section { margin-top: 14px; padding-bottom: 4px; border-bottom: 1px solid var(--line); font: 700 15px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+      #events-panel .item { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid rgba(255, 196, 120, 0.12); }
       #events-panel .item > div { flex: 1; }
-      #events-panel .item b { display: block; font-size: 12px; }
-      #events-panel .item span { color: var(--dim); font-size: 11px; }
-      #events-panel .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 4px; }
-      #events-panel .controls label { display: flex; gap: 4px; align-items: center; }
-      #events-panel select { font: 11px var(--mono); color: var(--text); background: rgba(16, 13, 11, 0.9); border: 1px solid var(--line); border-radius: 4px; padding: 1px 2px; }
+      #events-panel .item b { display: block; font-size: 17px; }
+      #events-panel .item span { color: var(--dim); font-size: 15px; }
+      #events-panel .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 6px; }
+      #events-panel .controls label { display: flex; gap: 6px; align-items: center; }
+      #events-panel select { font: 15px var(--mono); color: var(--text); background: rgba(16, 13, 11, 0.9); border: 1px solid var(--line); border-radius: 4px; padding: 3px 4px; }
       #events-panel select:disabled { opacity: 0.5; }
-      #events-panel .row { display: flex; gap: 6px; margin-top: 6px; }
+      #events-panel .row { display: flex; gap: 8px; margin-top: 8px; }
       #events-panel .row button { flex: 1; }
       @keyframes pulse { 50% { opacity: 0.45; } }
       aside#earth { position: fixed; left: calc(var(--left) + 14px); top: 14px; width: min(400px, 40vw); padding: 10px 12px 12px; background: rgba(16, 13, 11, 0.86);

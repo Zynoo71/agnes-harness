@@ -35,9 +35,6 @@ export interface CameraOptions {
   video?: boolean
 }
 
-/** Each device's camera for people to watch on the page: its default one, else its first. */
-export const deviceCameras = new Map<string, THREE.PerspectiveCamera>()
-
 /** Every camera's video, encoded only while its source is wanted. */
 const feeds: VideoFeed[] = []
 let ticking = false
@@ -54,7 +51,6 @@ export function addCamera(
   options: CameraOptions,
   log: (line: string) => void,
 ): void {
-  if (options.default || !deviceCameras.has(dev.id)) deviceCameras.set(dev.id, camera)
   const [w, h] = STILL_SIZE
   camera.aspect = w / h
   // Far enough for the sky dome, which follows the camera.

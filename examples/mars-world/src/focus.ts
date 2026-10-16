@@ -4,7 +4,7 @@ import type { Point } from './live/route.js'
 import { routes, type WorldDevice } from './live/world.js'
 import { heightAt } from './terrain.js'
 
-/** The main view's own layer: what only it draws, never a device camera or the picture in picture. */
+/** The main view's own layer: what only it draws, never a device camera. */
 export const FOCUS_LAYER = 1
 
 /** Who made a call, in the tags' and the activity list's colours: Jev (the DM), the LLM, anyone else. */

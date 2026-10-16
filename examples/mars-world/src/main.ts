@@ -10,14 +10,13 @@ import { buildBase, GROUND_CONTACTS, LAYOUT } from './base.js'
 import { MarsClock, SOL_MINUTES, START_HOURS, type TimeOfDay } from './clock.js'
 import { DETAIL_AREAS } from './details.js'
 import { buildDevices, DEVICES } from './devices.js'
+import { buildDirector } from './director.js'
 import { DmWatch } from './dm/watch.js'
 import { buildDust } from './dust.js'
 import { buildEffects } from './effects.js'
 import { buildFocus, FOCUS_LAYER } from './focus.js'
-import { deviceCameras } from './live/camera.js'
-import type { EventKind } from './live/events.js'
 import { connectDevices } from './live/index.js'
-import { beat, FRAME_HZ, watchers } from './live/world.js'
+import { beat, FRAME_HZ } from './live/world.js'
 import { buildMinimap } from './minimap.js'
 import { buildOverlay, type Lang } from './overlay.js'
 import { say } from './prompt.js'
@@ -28,6 +27,12 @@ import { buildTrails } from './trails.js'
 
 const params = new URLSearchParams(location.search)
 const app = document.getElementById('app') as HTMLElement
+// The scene fills the stage, right of the activity list and above the bar.
+const stage = document.getElementById('stage') as HTMLElement
+// Its size, measured on resize: the tags read it every frame.
+let size = { w: stage.clientWidth, h: stage.clientHeight }
+const W = () => size.w
+const H = () => size.h
 
 // ?quality=high renders at the full Retina resolution with ambient occlusion; balanced (the default)
 // caps the pixel ratio and leaves ambient occlusion out, which costs a quarter of the GPU's frame
@@ -59,7 +64,7 @@ const renderer = new THREE.WebGLRenderer({
   preserveDrawingBuffer: params.has('shot'),
 })
 renderer.setPixelRatio(PIXEL_RATIO)
-renderer.setSize(innerWidth, innerHeight)
+renderer.setSize(W(), H())
 renderer.toneMapping = THREE.AgXToneMapping
 renderer.toneMappingExposure = 1.0
 renderer.shadowMap.enabled = true
@@ -69,7 +74,7 @@ renderer.shadowMap.autoUpdate = false
 app.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
-const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 4000)
+const camera = new THREE.PerspectiveCamera(42, W() / H(), 0.1, 4000)
 // The main view also draws what marks the devices at work, which the device cameras leave out.
 camera.layers.enable(FOCUS_LAYER)
 
@@ -176,14 +181,14 @@ const composer = new EffectComposer(renderer)
 composer.addPass(new RenderPass(scene, camera))
 // ?ao=1 or ?ao=0 overrides what the quality level picks.
 if (params.get('ao') === '1' || (QUALITY === 'high' && params.get('ao') !== '0')) {
-  const gtao = new GTAOPass(scene, camera, innerWidth, innerHeight)
+  const gtao = new GTAOPass(scene, camera, W(), H())
   gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1.0 })
   composer.addPass(gtao)
 }
 // Only lamps and beacons are bright enough to bloom; at a lower threshold the habitat's lit windows
 // spread into a white haze over the whole module.
 if (params.get('bloom') !== '0')
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.3, 0.45, 1.2))
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(W(), H()), 0.3, 0.45, 1.2))
 composer.addPass(
   new ShaderPass({
     uniforms: { tDiffuse: { value: null }, strength: { value: 0.28 } },
@@ -197,7 +202,10 @@ composer.addPass(new OutputPass())
 
 // Fixed viewpoints: keys 1–9 and 0, or ?shot=<name>.
 let shot = applyShot(camera, params.get('shot') ?? 'overview')
-const shotLabel = () => overlay.view(shot, SHOTS.find((s) => s.name === shot)?.label ?? '')
+const shotLabel = () =>
+  director?.on
+    ? overlay.view('track', 'Following')
+    : overlay.view(shot, SHOTS.find((s) => s.name === shot)?.label ?? '')
 
 // Name tags over the devices.
 const tags = document.getElementById('tags') as HTMLElement
@@ -224,8 +232,10 @@ addEventListener('keydown', (e) => {
   const n = e.key === '0' ? 10 : Number(e.key)
   const next = SHOTS[n - 1]
   if (n >= 1 && next) {
+    if (director) director.on = false
     shot = applyShot(camera, next.name)
   }
+  if (e.key === 't' && director) director.on = !director.on
 })
 const v = new THREE.Vector3()
 const box = new THREE.Box3()
@@ -264,11 +274,11 @@ function placeSpeech() {
   mouth.y += 2.1
   mouth.project(camera)
   speech.hidden = mouth.z > 1
-  speech.style.transform = `translate(${((mouth.x + 1) / 2) * innerWidth}px, ${((1 - mouth.y) / 2) * innerHeight}px) translate(-50%, -100%)`
+  speech.style.transform = `translate(${((mouth.x + 1) / 2) * W()}px, ${((1 - mouth.y) / 2) * H()}px) translate(-50%, -100%)`
 }
 function placeTags() {
   if (tags.hidden) return
-  const shown = SHOTS.find((s) => s.name === shot)?.devices
+  const shown = director?.on ? undefined : SHOTS.find((s) => s.name === shot)?.devices
   for (const [i, { el, anchor, top }] of tagEls.entries()) {
     if (shown && !shown.includes((DEVICES[i] as { id: string }).id)) {
       el.style.display = 'none'
@@ -286,15 +296,16 @@ function placeTags() {
     v.copy(top).project(camera)
     const visible = v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05
     el.style.display = visible ? '' : 'none'
-    el.style.transform = `translate(${((v.x + 1) / 2) * innerWidth}px, ${((1 - v.y) / 2) * innerHeight}px) translate(-50%, -100%)`
+    el.style.transform = `translate(${((v.x + 1) / 2) * W()}px, ${((1 - v.y) / 2) * H()}px) translate(-50%, -100%)`
   }
 }
 
 addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight
+  size = { w: stage.clientWidth, h: stage.clientHeight }
+  camera.aspect = W() / H()
   camera.updateProjectionMatrix()
-  renderer.setSize(innerWidth, innerHeight)
-  composer.setSize(innerWidth, innerHeight)
+  renderer.setSize(W(), H())
+  composer.setSize(W(), H())
 })
 
 // Nothing here moves fast, so frames are capped at 30 a second by default; ?fps=60 lifts the cap.
@@ -348,10 +359,10 @@ renderer.setAnimationLoop(() => {
   effects.update(t)
   trails?.update(t, dt)
   focus?.update(t, dt)
-  follow(dt)
+  director?.update(dt)
+  if (!director?.on) follow(dt)
   sky.position.copy(camera.position)
   composer.render()
-  drawPip()
   placeTags()
   placeSpeech()
   cpu += performance.now() - start
@@ -398,6 +409,14 @@ const live = hub
   : undefined
 // A ring under each device while it runs a call, in its caller's colour.
 const focus = live ? buildFocus(scene, devices.anchors, live.devices) : undefined
+// The follow camera keeps the devices at work in frame (T, or a number key for a fixed view);
+// screenshots of a fixed view (?shot=) and ?track=0 go without it.
+const director =
+  params.has('shot') || params.get('track') === '0'
+    ? undefined
+    : buildDirector(camera, devices.anchors, live?.devices, () =>
+        (live?.world.events?.active ?? []).flatMap((h) => (h.place ? [h.place] : [])),
+      )
 if (live) {
   live.world.effects = effects
   // Scripts (an evaluation, a test) reach the events and the director here: mars.director.next().
@@ -435,103 +454,6 @@ addEventListener('keydown', (e) => {
   if (e.key === 'e') overlay.toggleEvents()
   if (e.key === 'a') overlay.toggleFeed()
   if (e.key === '?' || e.key === 'h') overlay.toggleHelp()
-})
-// The picture in picture, top left: the live view of the device at work, from its own camera when
-// it has one, else from the view of its place, at least a few seconds on each; an event goes
-// before a call. The main view stays where it is. P turns it off and on.
-const VIEW_OF: Record<string, string> = {
-  'airlock-01': 'airlock',
-  'habitat-01': 'airlock',
-  'power-01': 'power',
-  'weather-01': 'comms',
-  'comms-01': 'comms',
-}
-const EVENT_VIEW: Record<EventKind, string> = {
-  dust_storm: 'overview',
-  suit_leak: 'suit',
-  dust_devil: 'power',
-  meteorite: 'event',
-  rockfall: 'event',
-}
-const PIP = { left: 14, top: 76, w: 320, h: 180, every: 3, holdMs: 8000 }
-const pipBox = document.getElementById('pip') as HTMLElement
-const pipLabel = pipBox.querySelector('span') as HTMLElement
-const pipCamera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 4000)
-pipCamera.far = 4000
-let pipOn = Boolean(live) && params.get('pip') !== '0'
-let pipShown: THREE.PerspectiveCamera | undefined
-let pipSince = 0
-let pipText = () => ''
-const pipTo = (camera: THREE.PerspectiveCamera, text: () => string, urgent = false) => {
-  const now = performance.now()
-  if (!urgent && pipShown && now - pipSince < PIP.holdMs) return
-  pipShown = camera
-  pipSince = now
-  pipText = text
-}
-// The picture is drawn into a texture every few frames and laid over the corner every frame.
-const pipMap = { value: null as THREE.Texture | null }
-const pipMaterial = new THREE.ShaderMaterial({
-  uniforms: { map: pipMap },
-  vertexShader:
-    'varying vec2 vUv; void main() { vUv = vec2(uv.x, 1.0 - uv.y); gl_Position = vec4(position.xy, 0.0, 1.0); }',
-  fragmentShader:
-    'uniform sampler2D map; varying vec2 vUv; void main() { gl_FragColor = texture2D(map, vUv); }',
-  depthTest: false,
-})
-const pipScene = new THREE.Scene()
-pipScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), pipMaterial))
-const pipFlat = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
-function drawPip() {
-  pipBox.hidden = !pipOn || !pipShown || !live
-  if (pipBox.hidden || !live || !pipShown) return
-  if (frames % PIP.every === 0 || !pipMap.value)
-    pipMap.value = live.world.view(pipShown, PIP.w * 2, PIP.h * 2)
-  const text = pipText()
-  if (pipLabel.textContent !== text) pipLabel.textContent = text
-  const y = innerHeight - PIP.top - PIP.h
-  renderer.setScissorTest(true)
-  renderer.setViewport(PIP.left, y, PIP.w, PIP.h)
-  renderer.setScissor(PIP.left, y, PIP.w, PIP.h)
-  renderer.render(pipScene, pipFlat)
-  renderer.setScissorTest(false)
-  renderer.setViewport(0, 0, innerWidth, innerHeight)
-}
-if (live) {
-  // Until a device starts a call, the base camera.
-  const base = deviceCameras.get('cam-base')
-  if (base) pipTo(base, () => overlay.deviceName('cam-base'))
-  watchers.activity.push((a) => {
-    if (a.progress !== undefined || a.status) return
-    const own = deviceCameras.get(a.device)
-    const camera = own ?? pipCamera
-    const text = () => `${overlay.deviceName(a.device)} · ${overlay.toolName(a.tool)}`
-    if (own) pipTo(camera, text)
-    else {
-      const now = performance.now()
-      if (pipShown && now - pipSince < PIP.holdMs) return
-      applyShot(pipCamera, VIEW_OF[a.device] ?? 'overview')
-      pipTo(pipCamera, text)
-    }
-  })
-  live.world.events?.listeners.push((h, phase) => {
-    if (phase !== 'start') return
-    const text = () => overlay.eventName(h.kind)
-    if ((h.kind === 'meteorite' || h.kind === 'rockfall') && h.place) {
-      // From the base side of the fall, a little above it, so the streak, the flash and the dust show.
-      const { x, z } = h.place
-      // A boulder is smaller than a meteorite's flash and dust, so closer and lower.
-      const near = h.kind === 'rockfall' ? 0.45 : 1
-      pipCamera.position.set(x + 16 * near, 7 * near, z + 12 * near)
-      pipCamera.lookAt(x, 2 * near, z)
-      pipCamera.fov = 50
-      pipCamera.updateProjectionMatrix()
-    } else applyShot(pipCamera, EVENT_VIEW[h.kind])
-    pipTo(pipCamera, text, true)
-  })
-}
-addEventListener('keydown', (e) => {
-  if (e.key === 'p') pipOn = !pipOn
 })
 // A page framed by Agnes tells it whenever the world starts afresh (loaded or reset), so Agnes
 // starts a new conversation rather than carry on one about a world that is gone.

@@ -597,11 +597,6 @@ export class World {
     return targets
   }
 
-  /** What `camera` sees, tone-mapped like the main view, as a texture with its rows from the top. */
-  view(camera: THREE.PerspectiveCamera, w: number, h: number): THREE.Texture {
-    return this.draw(camera, w, h).out.texture
-  }
-
   /**
    * What `camera` sees, tone-mapped like the main view, as RGBA rows from the top. Waits for the
    * GPU; the buffer is reused by the next call for the same camera.

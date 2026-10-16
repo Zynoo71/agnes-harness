@@ -132,8 +132,8 @@ const TEXT = {
 <h3>On this page</h3>
 <ul>
 <li>Tags over the devices show the tool each one runs, its progress and who called it: Jev in green with a bolt, the LLM in blue. A device at work also has a ring breathing on the ground under it in its caller's colour, and one on its way a dashed line to where it is going; the tags of devices at rest are smaller and fainter. The rover leaves wheel tracks that fade, and the rover and the hopper raise dust.</li>
-<li>Bottom left, the activity list (<kbd>A</kbd> folds it): every call, alert and event since the page opened, with every decision of Jev; click a Jev line to see how it chose. Top: banners for what needs attention.</li>
-<li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> views · <kbd>P</kbd> picture in picture · <kbd>E</kbd> controls · <kbd>A</kbd> activity · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
+<li>On the left, the activity list (<kbd>A</kbd> folds it): every call, alert and event since the page opened, with every decision of Jev; click a Jev line to see how it chose. Top: banners for what needs attention.</li>
+<li>Keys: <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> fixed views · <kbd>T</kbd> follow camera · <kbd>E</kbd> controls · <kbd>A</kbd> activity · <kbd>L</kbd> tags · <kbd>M</kbd> map · <kbd>R</kbd> reset · <kbd>?</kbd> this card</li>
 <li>Address: <code>?time=night</code>, <code>?sol=10</code> (minutes a sol takes), <code>?events=auto&amp;seed=7</code> (an event every few minutes on its own) or <code>off</code>, <code>?lang=zh</code></li>
 </ul>`,
   },
@@ -265,6 +265,7 @@ const TEXT = {
     map: { title: '基地地图 · 米', axes: 'x → 东，y ↑ 北' },
     views: {
       overview: '总览',
+      track: '跟拍',
       dock: '停靠站和实验室',
       pad: '飞行器停机坪',
       airlock: '气闸',
@@ -298,8 +299,8 @@ const TEXT = {
 <h3>页面上</h3>
 <ul>
 <li>设备上方的标签显示它正在执行的工具、进度和调用者：Jev 是绿色带闪电，LLM 是蓝色。正在工作的设备脚下的地面上还有一圈呼吸般明暗的光环，颜色跟调用者一样；正在赶路的设备，地上有一条虚线通向它要去的地方；空闲设备的标签更小、更淡。火星车走过会留下慢慢消失的车辙，火星车和飞行器会扬起尘土。</li>
-<li>左下角的动态列表（<kbd>A</kbd> 收起）记着页面打开以来的每次调用、告警和事件，Jev 的每次决定也在其中；点 Jev 的那一行看它怎么选的。顶部横幅提示需要注意的事。</li>
-<li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 视角 · <kbd>P</kbd> 画中画 · <kbd>E</kbd> 控制台 · <kbd>A</kbd> 动态 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
+<li>左侧的动态列表（<kbd>A</kbd> 收起）记着页面打开以来的每次调用、告警和事件，Jev 的每次决定也在其中；点 Jev 的那一行看它怎么选的。顶部横幅提示需要注意的事。</li>
+<li>按键：<kbd>1</kbd>–<kbd>9</kbd>、<kbd>0</kbd> 固定视角 · <kbd>T</kbd> 跟拍 · <kbd>E</kbd> 控制台 · <kbd>A</kbd> 动态 · <kbd>L</kbd> 标签 · <kbd>M</kbd> 地图 · <kbd>R</kbd> 重置 · <kbd>?</kbd> 本说明</li>
 <li>地址参数：<code>?time=night</code>、<code>?sol=10</code>（一个火星日的分钟数）、<code>?events=auto&amp;seed=7</code>（每隔几分钟自动来一个事件）或 <code>off</code>、<code>?lang=en</code></li>
 </ul>`,
   },
@@ -382,10 +383,6 @@ export function buildOverlay(options: {
   view(name: string, label: string): string
   quality(name: string): string
   mapWords(): { title: string; axes: string }
-  /** A device's name and a tool's, in the language of the moment, for the picture in picture. */
-  deviceName(id: string): string
-  toolName(tool: string): string
-  eventName(kind: EventKind): string
 } {
   const { clock, live, tags } = options
   let lang: Lang = options.lang
@@ -595,11 +592,19 @@ export function buildOverlay(options: {
       const open = d !== undefined && (clicked ?? (fresh?.d === d && performance.now() < fresh.until))
       item.className = `item${open ? ' open' : ''}`
       line.className = `line ${kind()}${d ? ' can-open' : ''}`
+      // Two rows: when, who and the device first (up to the first device's name, or all but the
+      // last part), then what happened.
+      const all = parts().map((p) => (typeof p === 'string' ? el('span', '', p) : p))
+      const dev = all.findIndex((p) => p.classList.contains('dev'))
+      const cut = dev >= 0 ? dev + 1 : Math.max(0, all.length - 1)
       line.replaceChildren(
-        el('span', 'when', when),
-        ...parts().map((p) => (typeof p === 'string' ? el('span', '', p) : p)),
-        // Every line keeps the caret's room, so the time columns line up.
-        el('span', 'caret', d ? (open ? '▾' : '▸') : ''),
+        box(
+          'row',
+          el('span', 'when', when),
+          ...all.slice(0, cut),
+          el('span', 'caret', d ? (open ? '▾' : '▸') : ''),
+        ),
+        box('row what', ...all.slice(cut)),
       )
       // A line that grows (a decision opening) keeps the list at its end when it was there.
       const stick = atEnd()
@@ -1228,8 +1233,5 @@ export function buildOverlay(options: {
     view: (shot, label) => t().views[shot] ?? label,
     quality: (name) => t().quality[name] ?? name,
     mapWords: () => t().map,
-    deviceName: (id) => name(id),
-    toolName: (tool) => toolLabel(lang, tool),
-    eventName: (kind) => t().kinds[kind],
   }
 }

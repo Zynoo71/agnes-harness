@@ -188,7 +188,7 @@ def test_a_resumed_call_without_a_result_fails_pause():
 
 
 def sensor():
-    return example("sensor").make_sensor()
+    return example("sensor").make_sensor(), None  # its sources are pulled by the library
 
 
 def test_the_sensor_example_passes_core_perception_and_streaming():

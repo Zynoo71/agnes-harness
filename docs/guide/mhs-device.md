@@ -6,7 +6,7 @@ English | [简体中文](mhs-device.zh-CN.md)
 
 [Documentation](../README.md) · [MHS and devices](mhs.md) · [MHS specification](../../packages/mhs/spec/mhs-spec.md)
 
-This guide shows how to connect your own hardware, or a simulation of it, to AgnesHub with one of the two device libraries: `agnes_mhs` for Python and `@agnes/mhs/device` for TypeScript. Both have the same design. You declare what the device is and what it can do, write the tool functions and a few hooks, and the library speaks the protocol: registration, reconnecting, argument checks and clamping, resources, cancel, stop, pause, the manual deadman, state reports, settings, stream rates, keyframe requests, clock replies, audio clips and liveness.
+This guide shows how to connect your own hardware, or a simulation of it, to AgnesHub with one of the two device libraries: `agnes_mhs` for Python and `@agnes/mhs/device` for TypeScript. Both have the same design. You write the tool functions with typed parameters, the readings as functions that return them, and a few hooks; the library turns the types into the protocol's schemas and speaks the protocol: registration, reconnecting, argument checks and clamping, resources, cancel, stop, pause, the manual deadman, state reports, settings, stream rates, keyframe requests, clock replies, audio clips and liveness.
 
 <a id="设备声明什么"></a>
 
@@ -38,9 +38,9 @@ A thermometer with a buzzer: one state field (`battery`), one data source (`air`
 ```python
 import asyncio
 import random
-import sys
+from typing import Annotated
 
-from agnes_mhs import Device
+from agnes_mhs import Call, Device, Param
 
 dev = Device(
     "thermo-01",
@@ -49,43 +49,31 @@ dev = Device(
     state={"battery": {"type": "integer", "unit": "%", "min": 0, "max": 100, "role": "battery"}},
 )
 dev.update(battery=90)
-air = dev.source(
-    "air", "values", "air temperature at the device", hz=1,
-    fields={"temperature": {"type": "number", "unit": "°C", "role": "temperature", "of": "air"}},
-)
 
 
-@dev.tool("Beep a few times, so people can find the device.", timeout=5,
-          params={"times": {"type": "integer", "minimum": 1, "maximum": 5}}, required=["times"])
-async def beep(call, times):
+@dev.source("air", "values", "air temperature at the device", hz=1,
+            fields={"temperature": {"type": "number", "unit": "°C", "role": "temperature", "of": "air"}})
+def air():
+    return {"temperature": round(21 + random.random(), 1)}
+
+
+@dev.tool(timeout=5)
+async def beep(call: Call, times: Annotated[int, Param("how many beeps", min=1, max=5)]):
+    """Beep a few times, so people can find the device."""
     for i in range(times):
         call.progress(done=i, total=times)
         await asyncio.sleep(0.3)
     return f"beeped {times} times"
 
 
-async def measure():
-    while True:
-        if air.wants():
-            air.send({"temperature": round(21 + random.random(), 1)})
-        await asyncio.sleep(0.1)
-
-
-async def main(url):
-    sensing = asyncio.create_task(measure())
-    try:
-        await dev.run(url)
-    finally:
-        sensing.cancel()
-
-
-asyncio.run(main(sys.argv[1] if len(sys.argv) > 1 else "ws://127.0.0.1:8800"))
+if __name__ == "__main__":
+    dev.serve()
 ```
 
 ### TypeScript
 
 ```ts
-import { Device } from '@agnes/mhs/device'
+import { Device, Type } from '@agnes/mhs/device'
 
 const dev = new Device({
   id: 'thermo-01',
@@ -95,18 +83,21 @@ const dev = new Device({
 })
 dev.log = (line) => console.log(line)
 dev.update({ battery: 90 })
-const air = dev.source('air', 'values', 'air temperature at the device', {
-  hz: 1,
-  fields: { temperature: { type: 'number', unit: '°C', role: 'temperature', of: 'air' } },
-})
+
+dev.source(
+  'air',
+  'values',
+  'air temperature at the device',
+  { hz: 1, fields: { temperature: { type: 'number', unit: '°C', role: 'temperature', of: 'air' } } },
+  () => ({ temperature: Math.round((21 + Math.random()) * 10) / 10 }),
+)
 
 dev.tool(
   {
     name: 'beep',
     description: 'Beep a few times, so people can find the device.',
     timeout: 5,
-    params: { times: { type: 'integer', minimum: 1, maximum: 5 } },
-    required: ['times'],
+    params: Type.Object({ times: Type.Integer({ minimum: 1, maximum: 5, description: 'how many beeps' }) }),
   },
   async (call, { times }) => {
     for (let i = 0; i < times; i++) {
@@ -117,20 +108,16 @@ dev.tool(
   },
 )
 
-setInterval(() => {
-  if (air.wants()) air.send({ temperature: Math.round((21 + Math.random()) * 10) / 10 })
-}, 100)
-
-await dev.run(process.argv[2] ?? 'ws://127.0.0.1:8800')
+await dev.run(process.argv[2])
 process.exit(0)
 ```
 
 What each part does:
 
 - **The constructor** gives the identity and declares the state fields. `update` gives every field its first value before `run`, because the device reports all of them right after registering.
-- **The source** is declared with its kind and fields. The loop sends a reading only when `wants()` says so: the library keeps track of the rate and the on or off the hub asks for, and drops what is not wanted.
-- **The tool** declares its parameters as JSON Schema. The library rejects wrong types and clamps `times` into 1 to 5, with a note in the result, before the function runs. The returned string is the result's `detail`, the sentence the brain reads.
-- **`run`** opens the command and Nerve channels, registers, answers the hub, and reconnects with back-off after a lost connection. It returns when the hub replaces the device with another connection of the same id, or refuses it.
+- **The source** is declared with its kind and fields, and a function that returns one reading. The library calls it whenever the hub wants a message, at the rate and with the on or off the hub configured.
+- **The tool** gets its parameters from the function. In Python, the type hints become the JSON Schema, `Param` adds a description and the range, the docstring is the tool's description, and the parameter annotated `Call` (or named `call`) receives the call. In TypeScript, `params` is a TypeBox `Type.Object`, and the handler's arguments are typed from it. The library rejects wrong types and clamps `times` into 1 to 5, with a note in the result, before the function runs. The returned string is the result's `detail`, the sentence the brain reads.
+- **`serve` and `run`** open the command and Nerve channels, register, answer the hub, and reconnect with back-off after a lost connection. Without an address they use `AGNES_HUB_URL`, else `ws://127.0.0.1:4180`. `run` returns when the hub replaces the device with another connection of the same id, or refuses it; Python's `serve` runs it until Ctrl-C.
 
 <a id="接到-dev-hub-和-mhs-check"></a>
 
@@ -142,21 +129,24 @@ To see the device on the Devices page, start the development hub from the reposi
 
 ```sh
 cd packages/mhs/python
-uv run python path/to/thermometer.py ws://127.0.0.1:4191
+uv run python -m agnes_mhs run path/to/thermometer.py ws://127.0.0.1:4191
+AGNES_HUB_URL=ws://127.0.0.1:4191 uv run python path/to/thermometer.py   # the same
 ```
 
-For the TypeScript version, run this in the package that holds it:
+`python -m agnes_mhs run` imports the file and runs the one `Device` it defines at module level (`--device <id>` picks one of several). For the TypeScript version, run this in the package that holds it:
 
 ```sh
 pnpm exec tsx thermometer.ts ws://127.0.0.1:4191
 ```
 
-To check it against the protocol, start `mhs-check`, which waits on port 8800, then start the device without an address:
+To check it against the protocol, `python -m agnes_mhs check` starts `mhs-check` and runs the device file against it; it takes the options of `mhs-check`, such as `--profile` and `--no-motion`. A TypeScript device connects to `mhs-check` on its port, 8800:
 
 ```sh
 cd packages/mhs/python
-uv run python -m agnes_mhs.check
-uv run python path/to/thermometer.py   # in a second terminal
+uv run python -m agnes_mhs check path/to/thermometer.py
+
+uv run python -m agnes_mhs.check                 # for the TypeScript version
+pnpm exec tsx thermometer.ts ws://127.0.0.1:8800   # in a second terminal
 ```
 
 Both versions pass the Core, Perception and Streaming profiles.
@@ -165,7 +155,7 @@ Both versions pass the Core, Perception and Streaming profiles.
 
 ## Library reference
 
-Names are given as TypeScript, then Python. Import them with `import { Device, CallError } from '@agnes/mhs/device'` or `from agnes_mhs import Device, CallError`.
+Names are given as TypeScript, then Python. Import them with `import { Device, CallError, Type } from '@agnes/mhs/device'` or `from agnes_mhs import Device, CallError, Call, Param`.
 
 <a id="设备与声明"></a>
 
@@ -174,11 +164,25 @@ Names are given as TypeScript, then Python. Import them with `import { Device, C
 | TypeScript | Python | What it does |
 | --- | --- | --- |
 | `new Device({ id, kind, name, model, vendor, firmware, mobile, radius, profile, localization, placement, maps, resources, manual, state, ui })` | `Device(id, kind, *, name, model, vendor, firmware, mobile, radius, profile, localization, placement, maps, resources, manual, state, ui)` | The device. Every option is a field of the description ([MHS 5](../../packages/mhs/spec/mhs-spec.md#5-device-description-mhsregister)); `localization` defaults to `none`, `mobile` to false |
-| `dev.tool({ name, description, timeout, params, required, uses, motion, readOnly, pausable, needs, ui }, handler)` | `@dev.tool(description, *, timeout, name, params, required, uses, motion, read_only, pausable, needs, ui)` | Declares a tool ([MHS 6.1](../../packages/mhs/spec/mhs-spec.md#61-declaration)). `params` are the schema's `properties`, `required` its required names. In Python, `name` defaults to the function's name |
-| `handler(call, args)` | `fn(call, **args)` | The tool itself, plain or async. It gets the call and the checked arguments: an object in TypeScript, keyword arguments in Python |
+| `dev.tool({ name, description, timeout, params, uses, motion, readOnly, pausable, needs, ui }, handler)` | `@dev.tool(description=None, *, timeout, name, uses, motion, read_only, pausable, needs, ui)` | Declares a tool ([MHS 6.1](../../packages/mhs/spec/mhs-spec.md#61-declaration)). In TypeScript, `params` is a TypeBox `Type.Object`: `Type.Optional` makes a parameter optional, a union of `Type.Literal` becomes an enum. In Python, the function's signature is the schema (see the next table), the docstring the description, and `name` defaults to the function's name |
+| `params: { <name>: <JSON Schema> }, required: [...]` | `params={...}, required=[...]` | The schema written out instead: `params` are its `properties`, `required` its required names. Python then passes the call as the first argument |
+| `handler(call, args)` | `fn(call: Call, **args)` | The tool itself, plain or async. It gets the call and the checked arguments: an object in TypeScript, typed from `params`; keyword arguments in Python, where the call goes to the parameter annotated `Call` or named `call`, if there is one |
 | Returns `undefined`, a string, or `{ detail, data, notes }` | Returns `None`, a string, or `{"detail", "data", "notes"}` | The result. A string is the `detail`; without one, the detail is `<tool> done` |
-| `dev.source(id, kind, description, meta)` | `dev.source(id, kind, description, **meta)` | Declares a data source and returns it ([MOS 3.1](../../packages/mhs/spec/mos-spec.md#31-declaration)). `meta` holds `hz`, `fields`, `mount`, `default`, `switchable` and the kind's metadata |
+| `dev.source(id, kind, description, meta, sampler?)` | `dev.source(id, kind, description, **meta)`, or `@dev.source(...)` on a sampler | Declares a data source and returns it ([MOS 3.1](../../packages/mhs/spec/mos-spec.md#31-declaration)). `meta` holds `hz`, `fields`, `mount`, `default`, `switchable` and the kind's metadata. A sampler returns one message's `data`, `[data, binary]` (Python: a tuple), or nothing to skip; the library calls it whenever the hub wants a message. Without one, the device calls `send` |
+| `dev.setting(name, schema, apply, { initial, unit, role, … })` | `@dev.setting(*, name, initial, **decl)` on `fn(value: T)` | Declares a writable state field ([MHS 10.1](../../packages/mhs/spec/mhs-spec.md#101-state)) that `apply` / `fn` puts into effect: its type, range and description come from the schema (TypeScript) or the parameter's annotation and the docstring (Python). It returns the value in effect, or nothing to keep the one asked for |
 | `dev.description()` | `dev.description()` | The registration the library sends, for printing or testing |
+
+In Python, a parameter's type hint gives its schema:
+
+| Type hint | Schema |
+| --- | --- |
+| `bool`, `int`, `float`, `str` | `boolean`, `integer`, `number`, `string` |
+| `Literal["warm", "cold"]` | `enum`, with the values' type |
+| `list[T]` | `array` of `T` |
+| `dict` | `object` |
+| `T \| None` | `T` |
+| `Annotated[T, Param(description, min=, max=, max_length=)]` | `T` with `description`, `minimum`, `maximum`, `maxLength`; a plain string in `Annotated` is the description |
+| a default value | the parameter is optional and the default goes into the schema |
 
 <a id="调用"></a>
 
@@ -217,7 +221,7 @@ When a call is interrupted, TypeScript sends the result at once and the handler 
 | `dev.unsafe = (tool) => reason` | `dev.unsafe = lambda tool: reason` | Why a tool cannot run now, or `undefined` / `None`. A reason rejects the call as `unsafe` |
 | `dev.after = () => ({ … })` | `dev.after = lambda: {…}` | A snapshot added to every result as `after`. A mobile device includes `odometry`; one with `localization: self` includes `pose` ([MHS 7.3](../../packages/mhs/spec/mhs-spec.md#73-result)) |
 
-`onStop`, `onSet`, `onManual` and `onConfigure` may be async; `unsafe` and `after` are plain functions.
+`onStop`, `onSet`, `onManual` and `onConfigure` may be async; `unsafe` and `after` are plain functions. In Python, `@dev.hook` on a function named after the hook (`on_stop`, `on_manual`, `after`, `unsafe`, `on_set`) sets it, and `@dev.background` runs a coroutine function alongside the device, cancelled when it ends.
 
 <a id="数据源音频片段与手动控制"></a>
 
@@ -240,11 +244,43 @@ When a call is interrupted, TypeScript sends the result at once and the handler 
 
 | TypeScript | Python | What it does |
 | --- | --- | --- |
-| `await dev.run(url)` | `await dev.run(url)` | Connects to `ws://host:port` and keeps both channels up. The Nerve channel opens only when the device declares sources, manual control or a `clip` parameter |
+| `await dev.run(url?)` | `await dev.run(url=None)` | Connects to `ws://host:port` and keeps both channels up. Without `url`, it uses `AGNES_HUB_URL`, else `ws://127.0.0.1:4180`. The Nerve channel opens only when the device declares sources, manual control or a `clip` parameter |
+| — | `dev.serve(url=None)` | Runs the device until Ctrl-C, logging to stderr |
+| — | `python -m agnes_mhs run\|check file.py` | Runs a device file, or checks it with `mhs-check` ([above](#接到-dev-hub-和-mhs-check)) |
 | `dev.close()` | cancel the task | Disconnects for good |
 | `dev.log = (line) => …` | the `agnes_mhs` logger | Where the library writes what it does. In Python, `logging.basicConfig(level=logging.INFO)` shows it |
 
 The TypeScript library sends `mhs/ping` every 2 s for liveness, since a page cannot send WebSocket pings. The Python library uses WebSocket pings.
+
+<a id="测试"></a>
+
+### Testing
+
+`TestHub` runs a device against a hub in the test's own process, on a free port, and checks the messages the device sends. TypeScript imports it from `@agnes/mhs/device/testing` (Node only), Python from `agnes_mhs.testing`.
+
+```ts
+const hub = await TestHub.start(lamp)
+expect(await hub.call('tilt', { angle: 60 })).toMatchObject({ status: 'done' })
+expect((await hub.set({ brightness: 95 })).values).toEqual({ brightness: 80 })
+const { msg } = await hub.read('air')
+await hub.close()
+```
+
+```python
+async with TestHub(dev) as hub:
+    result = await hub.call("tilt", angle=60)  # status, detail, reason, data, notes, after
+    assert "angle was 60, clamped to 45" in result.notes
+    assert (await hub.set(brightness=95))["values"] == {"brightness": 80}
+    reading = await hub.read("air")  # source, data, t, binary
+```
+
+| TypeScript | Python | What it does |
+| --- | --- | --- |
+| `hub.call(name, args)` | `await hub.call(name, **args)` | Calls a tool and waits for its one outcome; a rejected call comes back with status `rejected` |
+| `hub.start(name, args)` | `await hub.start(name, **args)` | Starts a call: in TypeScript its `id`, `reply` and `done`; in Python its id, for `hub.result(id)` |
+| `hub.set(values)`, `hub.stop()`, `hub.cancel(id)` | `hub.set(**values)`, `hub.stop()`, `hub.cancel(id)` | Settings, stop and cancel, as the hub sends them |
+| `hub.read(source)` | `hub.read(source)` | Waits for the next message of a source |
+| `hub.state`, `hub.description` | `hub.state`, `hub.description` | The state values and the registration the hub has |
 
 <a id="常用写法"></a>
 
@@ -262,8 +298,7 @@ lamp.tool(
     name: 'tilt',
     description: 'Tilt the lamp head to an angle in degrees; positive tilts up.',
     timeout: 10,
-    params: { angle: { type: 'number', minimum: -45, maximum: 45, description: 'degrees, up positive' } },
-    required: ['angle'],
+    params: Type.Object({ angle: Type.Number({ minimum: -45, maximum: 45, description: 'degrees, up positive' }) }),
     uses: ['head'],
     motion: true,
     pausable: true,
@@ -289,10 +324,9 @@ lamp.tool(
 The same in Python, for a cart that drives straight:
 
 ```python
-@dev.tool("Drive straight ahead by x meters; negative backs up.", timeout=30,
-          params={"x": {"type": "number", "minimum": -2, "maximum": 2}}, required=["x"],
-          uses=["chassis"], motion=True, pausable=True)
-async def move(call, x):
+@dev.tool(timeout=30, uses=["chassis"], motion=True, pausable=True)
+async def move(call: Call, x: Annotated[float, Param("meters, negative backs up", min=-2, max=2)]):
+    """Drive straight ahead by x meters."""
     start = odometer()
     try:
         while abs(odometer() - start) < abs(x):

@@ -48,15 +48,14 @@ pnpm --filter @agnes/mhs dev-hub
 
 ```sh
 cd packages/mhs/python
-uv run python examples/sensor.py ws://127.0.0.1:4191
+uv run python -m agnes_mhs run examples/sensor.py ws://127.0.0.1:4191
 ```
 
-`mhs-check` 是监听 8800 端口的测试中枢。先启动它，再让设备连上来：
+`mhs-check` 是监听 8800 端口的测试中枢。`python -m agnes_mhs check` 会启动它并让一个设备文件连上去；其他设备则在 `python -m agnes_mhs.check` 运行时连到 8800 端口：
 
 ```sh
 cd packages/mhs/python
-uv run python -m agnes_mhs.check
-uv run python examples/sensor.py          # 在第二个终端中
+uv run python -m agnes_mhs check examples/sensor.py
 ```
 
 它读取设备的登记信息，判断适用哪些测试档，运行对应场景，并为每条要求给出 `pass`、`fail`、`warn`（未满足 **SHOULD**）、`skip`（未运行）或 `manual`（需要操作员）。有要求失败时退出码非零。

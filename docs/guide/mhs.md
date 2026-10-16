@@ -56,15 +56,14 @@ For a larger world, [`examples/mars-world`](../../examples/mars-world/README.md)
 
 ```sh
 cd packages/mhs/python
-uv run python examples/sensor.py ws://127.0.0.1:4191
+uv run python -m agnes_mhs run examples/sensor.py ws://127.0.0.1:4191
 ```
 
-`mhs-check` is a test hub on port 8800. Start it, then point the device at it:
+`mhs-check` is a test hub on port 8800. `python -m agnes_mhs check` starts it and runs a device file against it; any other device is pointed at port 8800 while `python -m agnes_mhs.check` runs:
 
 ```sh
 cd packages/mhs/python
-uv run python -m agnes_mhs.check
-uv run python examples/sensor.py          # in a second terminal
+uv run python -m agnes_mhs check examples/sensor.py
 ```
 
 It reads the registration, works out which profiles apply, runs their scenarios and reports every requirement as `pass`, `fail`, `warn` (a **SHOULD** missed), `skip` (not run) or `manual` (needs an operator). The exit status is non-zero when a requirement failed.

@@ -4,7 +4,7 @@
 
 [文档导航](../README.zh-CN.md) · [MHS 与设备](mhs.zh-CN.md) · [MHS 规范](../../packages/mhs/spec/mhs-spec.md)
 
-本页介绍怎样用两个设备库之一把自己的硬件（或者它的模拟）接入 AgnesHub：Python 的 `agnes_mhs` 和 TypeScript 的 `@agnes/mhs/device`。两个库的设计相同。你声明设备是什么、能做什么，编写工具函数和几个钩子，协议由库来处理：登记、重连、参数检查与截断、资源、取消、停止、暂停、手动控制的失联保护（deadman）、状态上报、设置、数据流速率、关键帧请求、时钟应答、音频片段和存活检测。
+本页介绍怎样用两个设备库之一把自己的硬件（或者它的模拟）接入 AgnesHub：Python 的 `agnes_mhs` 和 TypeScript 的 `@agnes/mhs/device`。两个库的设计相同。你用带类型的参数写工具函数，把读数写成返回读数的函数，再加几个钩子；库把类型转成协议的 Schema，并处理协议：登记、重连、参数检查与截断、资源、取消、停止、暂停、手动控制的失联保护（deadman）、状态上报、设置、数据流速率、关键帧请求、时钟应答、音频片段和存活检测。
 
 ## 设备声明什么
 
@@ -32,9 +32,9 @@
 ```python
 import asyncio
 import random
-import sys
+from typing import Annotated
 
-from agnes_mhs import Device
+from agnes_mhs import Call, Device, Param
 
 dev = Device(
     "thermo-01",
@@ -43,43 +43,31 @@ dev = Device(
     state={"battery": {"type": "integer", "unit": "%", "min": 0, "max": 100, "role": "battery"}},
 )
 dev.update(battery=90)
-air = dev.source(
-    "air", "values", "air temperature at the device", hz=1,
-    fields={"temperature": {"type": "number", "unit": "°C", "role": "temperature", "of": "air"}},
-)
 
 
-@dev.tool("Beep a few times, so people can find the device.", timeout=5,
-          params={"times": {"type": "integer", "minimum": 1, "maximum": 5}}, required=["times"])
-async def beep(call, times):
+@dev.source("air", "values", "air temperature at the device", hz=1,
+            fields={"temperature": {"type": "number", "unit": "°C", "role": "temperature", "of": "air"}})
+def air():
+    return {"temperature": round(21 + random.random(), 1)}
+
+
+@dev.tool(timeout=5)
+async def beep(call: Call, times: Annotated[int, Param("how many beeps", min=1, max=5)]):
+    """Beep a few times, so people can find the device."""
     for i in range(times):
         call.progress(done=i, total=times)
         await asyncio.sleep(0.3)
     return f"beeped {times} times"
 
 
-async def measure():
-    while True:
-        if air.wants():
-            air.send({"temperature": round(21 + random.random(), 1)})
-        await asyncio.sleep(0.1)
-
-
-async def main(url):
-    sensing = asyncio.create_task(measure())
-    try:
-        await dev.run(url)
-    finally:
-        sensing.cancel()
-
-
-asyncio.run(main(sys.argv[1] if len(sys.argv) > 1 else "ws://127.0.0.1:8800"))
+if __name__ == "__main__":
+    dev.serve()
 ```
 
 ### TypeScript
 
 ```ts
-import { Device } from '@agnes/mhs/device'
+import { Device, Type } from '@agnes/mhs/device'
 
 const dev = new Device({
   id: 'thermo-01',
@@ -89,18 +77,21 @@ const dev = new Device({
 })
 dev.log = (line) => console.log(line)
 dev.update({ battery: 90 })
-const air = dev.source('air', 'values', 'air temperature at the device', {
-  hz: 1,
-  fields: { temperature: { type: 'number', unit: '°C', role: 'temperature', of: 'air' } },
-})
+
+dev.source(
+  'air',
+  'values',
+  'air temperature at the device',
+  { hz: 1, fields: { temperature: { type: 'number', unit: '°C', role: 'temperature', of: 'air' } } },
+  () => ({ temperature: Math.round((21 + Math.random()) * 10) / 10 }),
+)
 
 dev.tool(
   {
     name: 'beep',
     description: 'Beep a few times, so people can find the device.',
     timeout: 5,
-    params: { times: { type: 'integer', minimum: 1, maximum: 5 } },
-    required: ['times'],
+    params: Type.Object({ times: Type.Integer({ minimum: 1, maximum: 5, description: 'how many beeps' }) }),
   },
   async (call, { times }) => {
     for (let i = 0; i < times; i++) {
@@ -111,20 +102,16 @@ dev.tool(
   },
 )
 
-setInterval(() => {
-  if (air.wants()) air.send({ temperature: Math.round((21 + Math.random()) * 10) / 10 })
-}, 100)
-
-await dev.run(process.argv[2] ?? 'ws://127.0.0.1:8800')
+await dev.run(process.argv[2])
 process.exit(0)
 ```
 
 各部分的作用：
 
 - **构造函数**给出身份并声明状态字段。在 `run` 之前用 `update` 给每个字段赋初值，因为设备登记后要立即上报全部字段。
-- **数据源**声明了类型和字段。循环只在 `wants()` 为真时发送读数：库会跟踪中枢要求的速率和开关，不需要的数据直接丢弃。
-- **工具**用 JSON Schema 声明参数。函数运行前，库会拒绝类型错误的参数，并把 `times` 截断到 1 到 5，同时在结果里附上说明。返回的字符串就是结果的 `detail`，也就是大脑读到的那句话。
-- **`run`** 打开命令通道和 Nerve 通道，完成登记，应答中枢，连接中断后按退避间隔重连。中枢用同 id 的另一条连接替换该设备，或拒绝它时，`run` 返回。
+- **数据源**声明了类型和字段，再加一个返回一条读数的函数。中枢需要数据时，库就按中枢配置的速率和开关调用它。
+- **工具**的参数来自函数本身。Python 中，类型注解就是 JSON Schema，`Param` 补上说明和范围，docstring 是工具的描述，注解为 `Call`（或名为 `call`）的参数收到调用对象。TypeScript 中，`params` 是 TypeBox 的 `Type.Object`，handler 的参数类型由它推出。函数运行前，库会拒绝类型错误的参数，并把 `times` 截断到 1 到 5，同时在结果里附上说明。返回的字符串就是结果的 `detail`，也就是大脑读到的那句话。
+- **`serve` 和 `run`** 打开命令通道和 Nerve 通道，完成登记，应答中枢，连接中断后按退避间隔重连。不给地址时使用 `AGNES_HUB_URL`，没有则用 `ws://127.0.0.1:4180`。中枢用同 id 的另一条连接替换该设备，或拒绝它时，`run` 返回；Python 的 `serve` 一直运行到 Ctrl-C。
 
 ### 接到 dev-hub 和 mhs-check
 
@@ -134,39 +121,56 @@ Python 命令在 `packages/mhs/python` 下运行，`uv run` 会准备好环境�
 
 ```sh
 cd packages/mhs/python
-uv run python path/to/thermometer.py ws://127.0.0.1:4191
+uv run python -m agnes_mhs run path/to/thermometer.py ws://127.0.0.1:4191
+AGNES_HUB_URL=ws://127.0.0.1:4191 uv run python path/to/thermometer.py   # 效果相同
 ```
 
-TypeScript 版本在它所在的包中运行：
+`python -m agnes_mhs run` 导入这个文件，运行它在模块级定义的那个 `Device`（有多个时用 `--device <id>` 指定）。TypeScript 版本在它所在的包中运行：
 
 ```sh
 pnpm exec tsx thermometer.ts ws://127.0.0.1:4191
 ```
 
-要按协议检查它，先启动在 8800 端口等待的 `mhs-check`，再不带地址启动设备：
+要按协议检查它，`python -m agnes_mhs check` 会启动 `mhs-check` 并让这个设备文件连上去，它接受 `mhs-check` 的选项，比如 `--profile` 和 `--no-motion`。TypeScript 设备连到 `mhs-check` 的 8800 端口：
 
 ```sh
 cd packages/mhs/python
-uv run python -m agnes_mhs.check
-uv run python path/to/thermometer.py   # 在第二个终端中
+uv run python -m agnes_mhs check path/to/thermometer.py
+
+uv run python -m agnes_mhs.check                 # TypeScript 版本
+pnpm exec tsx thermometer.ts ws://127.0.0.1:8800   # 在第二个终端中
 ```
 
 两个版本都能通过 Core、Perception 和 Streaming 测试档。
 
 ## 库参考
 
-名称先写 TypeScript，再写 Python。用 `import { Device, CallError } from '@agnes/mhs/device'` 或 `from agnes_mhs import Device, CallError` 导入。
+名称先写 TypeScript，再写 Python。用 `import { Device, CallError, Type } from '@agnes/mhs/device'` 或 `from agnes_mhs import Device, CallError, Call, Param` 导入。
 
 ### 设备与声明
 
 | TypeScript | Python | 作用 |
 | --- | --- | --- |
 | `new Device({ id, kind, name, model, vendor, firmware, mobile, radius, profile, localization, placement, maps, resources, manual, state, ui })` | `Device(id, kind, *, name, model, vendor, firmware, mobile, radius, profile, localization, placement, maps, resources, manual, state, ui)` | 设备本身。每个选项都是描述中的一个字段（[MHS 5](../../packages/mhs/spec/mhs-spec.md#5-device-description-mhsregister)）；`localization` 默认为 `none`，`mobile` 默认为 false |
-| `dev.tool({ name, description, timeout, params, required, uses, motion, readOnly, pausable, needs, ui }, handler)` | `@dev.tool(description, *, timeout, name, params, required, uses, motion, read_only, pausable, needs, ui)` | 声明工具（[MHS 6.1](../../packages/mhs/spec/mhs-spec.md#61-declaration)）。`params` 是 Schema 的 `properties`，`required` 是必填参数名。Python 中 `name` 默认取函数名 |
-| `handler(call, args)` | `fn(call, **args)` | 工具本身，可以是普通函数或异步函数。它收到调用对象和检查过的参数：TypeScript 中是一个对象，Python 中是关键字参数 |
+| `dev.tool({ name, description, timeout, params, uses, motion, readOnly, pausable, needs, ui }, handler)` | `@dev.tool(description=None, *, timeout, name, uses, motion, read_only, pausable, needs, ui)` | 声明工具（[MHS 6.1](../../packages/mhs/spec/mhs-spec.md#61-declaration)）。TypeScript 中 `params` 是 TypeBox 的 `Type.Object`：`Type.Optional` 表示可选参数，`Type.Literal` 的联合会变成枚举。Python 中函数签名就是 Schema（见下一张表），docstring 是描述，`name` 默认取函数名 |
+| `params: { <名称>: <JSON Schema> }, required: [...]` | `params={...}, required=[...]` | 直接写出 Schema：`params` 是它的 `properties`，`required` 是必填参数名。这时 Python 把调用对象作为第一个参数传入 |
+| `handler(call, args)` | `fn(call: Call, **args)` | 工具本身，可以是普通函数或异步函数。它收到调用对象和检查过的参数：TypeScript 中是一个对象，类型由 `params` 推出；Python 中是关键字参数，调用对象传给注解为 `Call` 或名为 `call` 的参数（如果有） |
 | 返回 `undefined`、字符串或 `{ detail, data, notes }` | 返回 `None`、字符串或 `{"detail", "data", "notes"}` | 调用结果。字符串即 `detail`；没有时 `detail` 为 `<tool> done` |
-| `dev.source(id, kind, description, meta)` | `dev.source(id, kind, description, **meta)` | 声明数据源并返回它（[MOS 3.1](../../packages/mhs/spec/mos-spec.md#31-declaration)）。`meta` 包括 `hz`、`fields`、`mount`、`default`、`switchable` 以及该类型的元数据 |
+| `dev.source(id, kind, description, meta, sampler?)` | `dev.source(id, kind, description, **meta)`，或把 `@dev.source(...)` 加在采样函数上 | 声明数据源并返回它（[MOS 3.1](../../packages/mhs/spec/mos-spec.md#31-declaration)）。`meta` 包括 `hz`、`fields`、`mount`、`default`、`switchable` 以及该类型的元数据。采样函数返回一条消息的 `data`、`[data, binary]`（Python 中是元组），或者什么都不返回表示跳过；中枢需要数据时库就调用它。没有采样函数时由设备自己调用 `send` |
+| `dev.setting(name, schema, apply, { initial, unit, role, … })` | 把 `@dev.setting(*, name, initial, **decl)` 加在 `fn(value: T)` 上 | 声明一个可写的状态字段（[MHS 10.1](../../packages/mhs/spec/mhs-spec.md#101-state)），由 `apply` / `fn` 生效：类型、范围和说明来自 Schema（TypeScript）或参数注解与 docstring（Python）。它返回生效的值，什么都不返回则保留请求的值 |
 | `dev.description()` | `dev.description()` | 库发送的登记内容，便于打印或测试 |
+
+Python 中，参数的类型注解决定它的 Schema：
+
+| 类型注解 | Schema |
+| --- | --- |
+| `bool`、`int`、`float`、`str` | `boolean`、`integer`、`number`、`string` |
+| `Literal["warm", "cold"]` | `enum`，类型取自这些值 |
+| `list[T]` | 元素为 `T` 的 `array` |
+| `dict` | `object` |
+| `T \| None` | `T` |
+| `Annotated[T, Param(description, min=, max=, max_length=)]` | `T`，加上 `description`、`minimum`、`maximum`、`maxLength`；`Annotated` 中的普通字符串就是说明 |
+| 默认值 | 参数变为可选，默认值写进 Schema |
 
 ### 调用
 
@@ -201,7 +205,7 @@ uv run python path/to/thermometer.py   # 在第二个终端中
 | `dev.unsafe = (tool) => reason` | `dev.unsafe = lambda tool: reason` | 工具此刻不能运行的原因，或 `undefined` / `None`。给出原因时调用以 `unsafe` 被拒绝 |
 | `dev.after = () => ({ … })` | `dev.after = lambda: {…}` | 附加到每个结果中的快照 `after`。移动设备要包含 `odometry`；`localization: self` 的设备包含 `pose`（[MHS 7.3](../../packages/mhs/spec/mhs-spec.md#73-result)） |
 
-`onStop`、`onSet`、`onManual` 和 `onConfigure` 可以是异步函数；`unsafe` 和 `after` 必须是普通函数。
+`onStop`、`onSet`、`onManual` 和 `onConfigure` 可以是异步函数；`unsafe` 和 `after` 必须是普通函数。Python 中，把 `@dev.hook` 加在以钩子命名的函数上（`on_stop`、`on_manual`、`after`、`unsafe`、`on_set`）就设置了这个钩子；`@dev.background` 让一个协程函数和设备一起运行，设备结束时它被取消。
 
 ### 数据源、音频片段与手动控制
 
@@ -220,11 +224,41 @@ uv run python path/to/thermometer.py   # 在第二个终端中
 
 | TypeScript | Python | 作用 |
 | --- | --- | --- |
-| `await dev.run(url)` | `await dev.run(url)` | 连接 `ws://host:port` 并保持两条通道。只有声明了数据源、手动控制或 `clip` 参数时才打开 Nerve 通道 |
+| `await dev.run(url?)` | `await dev.run(url=None)` | 连接 `ws://host:port` 并保持两条通道。不给 `url` 时使用 `AGNES_HUB_URL`，没有则用 `ws://127.0.0.1:4180`。只有声明了数据源、手动控制或 `clip` 参数时才打开 Nerve 通道 |
+| — | `dev.serve(url=None)` | 运行设备直到 Ctrl-C，日志写到 stderr |
+| — | `python -m agnes_mhs run\|check file.py` | 运行一个设备文件，或用 `mhs-check` 检查它（[见上文](#接到-dev-hub-和-mhs-check)） |
 | `dev.close()` | 取消任务 | 永久断开 |
 | `dev.log = (line) => …` | `agnes_mhs` logger | 库记录自身动作的地方。Python 中用 `logging.basicConfig(level=logging.INFO)` 显示 |
 
 TypeScript 库每 2 秒发送一次 `mhs/ping` 检测存活，因为网页无法发送 WebSocket ping。Python 库使用 WebSocket ping。
+
+### 测试
+
+`TestHub` 在测试自己的进程里、一个空闲端口上起一个中枢，让设备连上去，并检查设备发出的消息。TypeScript 从 `@agnes/mhs/device/testing` 导入（仅限 Node），Python 从 `agnes_mhs.testing` 导入。
+
+```ts
+const hub = await TestHub.start(lamp)
+expect(await hub.call('tilt', { angle: 60 })).toMatchObject({ status: 'done' })
+expect((await hub.set({ brightness: 95 })).values).toEqual({ brightness: 80 })
+const { msg } = await hub.read('air')
+await hub.close()
+```
+
+```python
+async with TestHub(dev) as hub:
+    result = await hub.call("tilt", angle=60)  # status, detail, reason, data, notes, after
+    assert "angle was 60, clamped to 45" in result.notes
+    assert (await hub.set(brightness=95))["values"] == {"brightness": 80}
+    reading = await hub.read("air")  # source, data, t, binary
+```
+
+| TypeScript | Python | 作用 |
+| --- | --- | --- |
+| `hub.call(name, args)` | `await hub.call(name, **args)` | 调用工具并等它唯一的结果；被拒的调用返回 status 为 `rejected` 的结果 |
+| `hub.start(name, args)` | `await hub.start(name, **args)` | 发起调用：TypeScript 中返回 `id`、`reply` 和 `done`；Python 中返回调用 id，供 `hub.result(id)` 使用 |
+| `hub.set(values)`、`hub.stop()`、`hub.cancel(id)` | `hub.set(**values)`、`hub.stop()`、`hub.cancel(id)` | 像中枢那样发送设置、停止和取消 |
+| `hub.read(source)` | `hub.read(source)` | 等某个数据源的下一条消息 |
+| `hub.state`、`hub.description` | `hub.state`、`hub.description` | 中枢掌握的状态值和登记内容 |
 
 ## 常用写法
 
@@ -238,8 +272,7 @@ lamp.tool(
     name: 'tilt',
     description: 'Tilt the lamp head to an angle in degrees; positive tilts up.',
     timeout: 10,
-    params: { angle: { type: 'number', minimum: -45, maximum: 45, description: 'degrees, up positive' } },
-    required: ['angle'],
+    params: Type.Object({ angle: Type.Number({ minimum: -45, maximum: 45, description: 'degrees, up positive' }) }),
     uses: ['head'],
     motion: true,
     pausable: true,
@@ -265,10 +298,9 @@ lamp.tool(
 同样的写法在 Python 中，用于一辆直线行驶的小车：
 
 ```python
-@dev.tool("Drive straight ahead by x meters; negative backs up.", timeout=30,
-          params={"x": {"type": "number", "minimum": -2, "maximum": 2}}, required=["x"],
-          uses=["chassis"], motion=True, pausable=True)
-async def move(call, x):
+@dev.tool(timeout=30, uses=["chassis"], motion=True, pausable=True)
+async def move(call: Call, x: Annotated[float, Param("meters, negative backs up", min=-2, max=2)]):
+    """Drive straight ahead by x meters."""
     start = odometer()
     try:
         while abs(odometer() - start) < abs(x):

@@ -1,9 +1,9 @@
 /**
  * A small example device in TypeScript: a desk lamp whose head tilts.
  *
- *   pnpm exec tsx packages/mhs/device/example.ts [ws://127.0.0.1:4180]
+ *   pnpm exec tsx packages/mhs/device/example.ts [ws://127.0.0.1:4180]   # default AGNES_HUB_URL
  */
-import { Device } from './device.js'
+import { Device, Type } from './device.js'
 
 const SPEED = 15 // deg/s
 let tilt = 0
@@ -28,19 +28,26 @@ lamp.onStop = () => {
 lamp.onManual = (axes) => {
   speed = axes.tilt ?? 0
 }
-const state = lamp.source('state', 'values', 'lamp state', {
-  hz: 2,
-  default: true,
-  fields: { tilt: { type: 'number', unit: 'deg', min: -45, max: 45 }, on: { type: 'boolean' } },
-})
+lamp.source(
+  'state',
+  'values',
+  'lamp state',
+  {
+    hz: 2,
+    default: true,
+    fields: { tilt: { type: 'number', unit: 'deg', min: -45, max: 45 }, on: { type: 'boolean' } },
+  },
+  () => ({ tilt: Math.round(tilt * 10) / 10, on }),
+)
 
 lamp.tool(
   {
     name: 'tilt',
     description: 'Tilt the lamp head to an angle in degrees; positive tilts up.',
     timeout: 10,
-    params: { angle: { type: 'number', minimum: -45, maximum: 45, description: 'degrees, up positive' } },
-    required: ['angle'],
+    params: Type.Object({
+      angle: Type.Number({ minimum: -45, maximum: 45, description: 'degrees, up positive' }),
+    }),
     uses: ['head'],
     motion: true,
     pausable: true,
@@ -66,8 +73,7 @@ lamp.tool(
     name: 'switch',
     description: 'Turn the light on or off.',
     timeout: 2,
-    params: { on: { type: 'boolean' } },
-    required: ['on'],
+    params: Type.Object({ on: Type.Boolean() }),
   },
   (_, args) => {
     on = args.on
@@ -77,8 +83,7 @@ lamp.tool(
 
 setInterval(() => {
   tilt = Math.max(-45, Math.min(45, tilt + speed * 0.02))
-  if (state.wants()) state.send({ tilt: Math.round(tilt * 10) / 10, on })
 }, 20)
 
-await lamp.run(process.argv[2] ?? 'ws://127.0.0.1:4180')
+await lamp.run(process.argv[2])
 process.exit(0)

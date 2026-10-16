@@ -38,12 +38,11 @@ pnpm --filter @agnes/mhs dev-hub
 
 ```sh
 cd packages/mhs/python
-uv run python -m agnes_mhs.check                 # the test hub, waiting on ws://127.0.0.1:8800
-uv run python examples/sensor.py                 # in a second terminal: the device under test
+uv run python -m agnes_mhs check examples/sensor.py   # mhs-check on ws://127.0.0.1:8800, with the device file run against it
 uv run python -m agnes_mhs.validate ../session.robot-01.jsonl   # a session recorded with dev --record
 ```
 
-`mhs-check` works out which profiles apply from the registration, runs their scenarios and reports `pass`, `fail`, `warn` (a **SHOULD** missed), `skip` (not run) or `manual` (needs an operator) for every requirement id; the exit status is non-zero when one failed. `--profile core,video` limits the run, `--no-motion` keeps the device still, `--interactive` asks the operator at the physical checks, `--report out.json` writes the JSON report, and `--host`, `--port`, `--wait`, `--replace-wait` and `--check-version` are described in [the conformance suite](spec/mhs-conformance.md). Any device can be pointed at it: `DEV_DEVICES=robot-01 DEV_DEVICES_TO=ws://127.0.0.1:8800 pnpm --filter @agnes/mhs dev-hub` for a sample device, `uv run python examples/camera.py` for the video example, `pnpm exec tsx packages/mhs/device/example.ts ws://127.0.0.1:8800` (from the repository root) for the TypeScript one.
+`mhs-check` works out which profiles apply from the registration, runs their scenarios and reports `pass`, `fail`, `warn` (a **SHOULD** missed), `skip` (not run) or `manual` (needs an operator) for every requirement id; the exit status is non-zero when one failed. `--profile core,video` limits the run, `--no-motion` keeps the device still, `--interactive` asks the operator at the physical checks, `--report out.json` writes the JSON report, and `--host`, `--port`, `--wait`, `--replace-wait` and `--check-version` are described in [the conformance suite](spec/mhs-conformance.md). `uv run python -m agnes_mhs.check` runs the test hub alone, and any device can be pointed at it: `DEV_DEVICES=robot-01 DEV_DEVICES_TO=ws://127.0.0.1:8800 pnpm --filter @agnes/mhs dev-hub` for a sample device, `uv run python examples/camera.py` for the video example, `pnpm exec tsx packages/mhs/device/example.ts ws://127.0.0.1:8800` (from the repository root) for the TypeScript one.
 
 ## Use devices from Agnes
 

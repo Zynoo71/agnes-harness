@@ -1,8 +1,13 @@
 /**
- * Says something to Agnes for the person at the page: `hub/prompt` posts their words into the
- * conversation that last used a device (hub-api.md section 15.3). Resolves whether it was posted.
+ * Says something to Agnes for the person at the page. Framed by Agnes, the page hands their words
+ * to Agnes, which sends them in the conversation on screen; on its own, `hub/prompt` posts them into
+ * the conversation that last used a device (hub-api.md section 15.3). Resolves whether it was posted.
  */
 export function say(hub: string, text: string): Promise<boolean> {
+  if (parent !== window) {
+    parent.postMessage({ type: 'agnes-world', event: 'say', text }, '*')
+    return Promise.resolve(true)
+  }
   return new Promise((resolve) => {
     const ws = new WebSocket(new URL('/ws/hub', hub.replace(/^http/, 'ws')).href)
     const send = (id: string, method: string, params: Record<string, unknown>) =>

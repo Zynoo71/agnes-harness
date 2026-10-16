@@ -24,7 +24,9 @@ import asyncio
 import inspect
 import json
 import logging
+import os
 import time
+import typing
 from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
@@ -34,7 +36,7 @@ from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
 from .args import InvalidArguments, prepare_arguments
 from .schema import PROTOCOL
-from .typed import signature_schema
+from .typed import signature_schema, type_schema
 
 log = logging.getLogger("agnes_mhs")
 
@@ -44,6 +46,8 @@ CLOSE_BAD_VERSION = 4003
 INTERRUPT_REASONS = ("stop", "cancel", "manual", "estop", "pause_timeout")
 PAUSE_WAIT = 1.5  # seconds a pausable tool has to reach a checkpoint, within the hub's 2 s (CTL-5)
 CLIPS_KEPT = 8  # at least the 4 most recent (STR-8)
+HOOKS = ("on_stop", "on_manual", "after", "unsafe", "on_set")
+DEFAULT_HUB = "ws://127.0.0.1:4180"
 
 Handler = Callable[..., Any]
 
@@ -146,6 +150,8 @@ class Source:
         self.sent: dict[str, Any] | None = None
         # Called with the applied settings after mhs/configure, for example to release a camera.
         self.on_configure: Callable[[dict[str, Any]], Any] | None = None
+        # Pulled by the library whenever the source is wanted: returns data, (data, binary), or None.
+        self.sampler: Callable[[], Any] | None = None
         self._device = device
         self._seq = 0
         self._last = 0.0
@@ -159,6 +165,27 @@ class Source:
         if self.kind == "video":
             return 5.0
         return None if declared is None else min(declared, 2.0)
+
+    def __call__(self, fn: Callable[[], Any]) -> Source:
+        """Used as a decorator, @dev.source(...) makes fn the sampler: the library calls it whenever
+        the hub wants a message, at the rate it configured."""
+        self.sampler = fn
+        return self
+
+    async def _sample(self) -> None:
+        while True:
+            if self._device._nerve is not None and self.wants():
+                try:
+                    value = await _maybe_await(self.sampler())
+                except Exception:
+                    log.exception("%s: sampler of %s failed", self._device.id, self.id)
+                    await asyncio.sleep(1)
+                    continue
+                if isinstance(value, tuple):
+                    self.send(*value)
+                elif value is not None:
+                    self.send(value)
+            await asyncio.sleep(min(0.1, 0.5 / self.hz) if self.hz else 0.1)
 
     def wants(self) -> bool:
         """Whether a message sent now would go out: the source is on and its rate allows it."""
@@ -261,6 +288,8 @@ class Device:
         self._ui = ui
         self._tools: dict[str, _Tool] = {}
         self._sources: dict[str, Source] = {}
+        self._setters: dict[str, Callable[[Any], Any]] = {}
+        self._background: list[Callable[[], Awaitable[Any]]] = []
 
         # Hooks a device sets. Each may be a plain function or a coroutine function.
         self.on_stop: Callable[[], Any] | None = None  # zero all motion (CTL-3, SAFE-2)
@@ -337,6 +366,54 @@ class Device:
         self._sources[id] = source
         return source
 
+    def setting(self, *, name: str | None = None, initial: Any = None, **decl: Any) -> Callable[[Handler], Handler]:
+        """Declares a writable state field (10.1) applied by fn(value): its type, range and
+        description come from fn's one parameter and docstring, the rest (unit, role, alert) from
+        decl. fn returns the value in effect, or None to keep the one asked for."""
+
+        def register(fn: Handler) -> Handler:
+            field = name or fn.__name__
+            params = list(inspect.signature(fn).parameters)
+            hints = typing.get_type_hints(fn, include_extras=True)
+            if len(params) != 1 or params[0] not in hints:
+                raise TypeError(f"setting {field}: take exactly one annotated parameter, the value")
+            schema = type_schema(hints[params[0]])
+            out: dict[str, Any] = {"type": schema["type"], "writable": True}
+            for key, schema_key in (("min", "minimum"), ("max", "maximum"), ("enum", "enum"), ("description", "description")):
+                if schema_key in schema:
+                    out[key] = schema[schema_key]
+            if "description" not in out and inspect.getdoc(fn):
+                out["description"] = inspect.getdoc(fn)
+            self._state_decl[field] = {**out, **decl}
+            self._setters[field] = fn
+            if initial is not None:
+                self._state[field] = initial
+            return fn
+
+        return register
+
+    def hook(self, fn: Handler) -> Handler:
+        """Sets the hook the function is named after: on_stop, on_manual, after, unsafe or on_set."""
+        if fn.__name__ not in HOOKS:
+            raise TypeError(f"{fn.__name__} is not a hook; name it one of {', '.join(HOOKS)}")
+        setattr(self, fn.__name__, fn)
+        return fn
+
+    def background(self, fn: Callable[[], Awaitable[Any]]) -> Callable[[], Awaitable[Any]]:
+        """Runs the coroutine function alongside the device while run() runs; cancelled when it ends."""
+        self._background.append(fn)
+        return fn
+
+    def serve(self, url: str | None = None) -> None:
+        """Runs the device until it is stopped (Ctrl-C), logging to stderr. The hub address is url,
+        else AGNES_HUB_URL, else ws://127.0.0.1:4180."""
+        if not logging.getLogger().handlers:
+            logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+        try:
+            asyncio.run(self.run(url))
+        except KeyboardInterrupt:
+            pass
+
     def description(self) -> dict[str, Any]:
         """The params of mhs/register (5)."""
         d: dict[str, Any] = {"protocol": PROTOCOL, "device": self._device, "localization": self._localization}
@@ -401,14 +478,17 @@ class Device:
 
     # Running
 
-    async def run(self, url: str) -> None:
-        """Connects to the hub at url (ws://host:port) and keeps both channels up until the device is
-        replaced by another instance with its id (CONN-8) or the hub refuses it."""
-        base = url.rstrip("/")
+    async def run(self, url: str | None = None) -> None:
+        """Connects to the hub at url (ws://host:port; default AGNES_HUB_URL, else ws://127.0.0.1:4180)
+        and keeps both channels up until the device is replaced by another instance with its id
+        (CONN-8) or the hub refuses it."""
+        base = (url or os.environ.get("AGNES_HUB_URL") or DEFAULT_HUB).rstrip("/")
         loops = [self._command_loop(base + "/ws/mhs")]
         if self._needs_nerve():
             loops.append(self._nerve_loop(base + "/ws/nerve"))
         loops.append(self._deadman())
+        loops += [source._sample() for source in self._sources.values() if source.sampler is not None]
+        loops += [self._logged(fn) for fn in self._background]
         tasks = [asyncio.create_task(loop) for loop in loops]
         try:
             await tasks[0]
@@ -417,6 +497,12 @@ class Device:
             for task in tasks[1:]:
                 task.cancel()
             await asyncio.gather(*tasks[1:], return_exceptions=True)
+
+    async def _logged(self, fn: Callable[[], Awaitable[Any]]) -> None:
+        try:
+            await fn()
+        except Exception:
+            log.exception("%s: background task %s failed", self.id, getattr(fn, "__name__", fn))
 
     def _needs_nerve(self) -> bool:
         clip = any("clip" in t.decl["inputSchema"].get("properties", {}) for t in self._tools.values())
@@ -696,9 +782,10 @@ class Device:
                 refused[name] = str(e)
                 continue
             new = checked[name]
-            if self.on_set is not None:
+            setter = self._setters.get(name)
+            if setter is not None or self.on_set is not None:
                 try:
-                    result = await _maybe_await(self.on_set(name, new))
+                    result = await _maybe_await(setter(new) if setter is not None else self.on_set(name, new))
                 except Exception as e:
                     refused[name] = f"could not apply: {e}"
                     continue

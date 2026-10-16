@@ -325,6 +325,7 @@ let draws = 0
 let triangles = 0
 renderer.info.autoReset = false
 let lastStep = 0
+let lampsOn = false
 let due = false
 // Motion steps FRAME_HZ times a second, by the time of the frame it is shown in, in an animation
 // frame callback of its own just before the one that draws: the steps run in the microtasks between
@@ -354,7 +355,10 @@ renderer.setAnimationLoop(() => {
   light = lightAt(hour)
   applyLight(hour, light, storm)
   base.update(t)
-  devices.update(t)
+  // The rover's and Monolith's lamps: on once the sun is 3° below the horizon (or a storm darkens
+  // the sky), off again once it is 3° above.
+  lampsOn = storm > 0.5 || light.elevation < (lampsOn ? 3 : -3)
+  devices.update(t, lampsOn)
   dust.update(t, storm)
   effects.update(t)
   trails?.update(t, dt)

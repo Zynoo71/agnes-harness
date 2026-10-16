@@ -32,6 +32,8 @@ export interface Monolith {
    * through a blow it is, 0 at rest to 1: the outer pair swings back, slams forward, and returns.
    */
   want: { wheel: boolean; hold: 'none' | 'astronaut' | 'sample' | 'crate'; strike: number }
+  /** How bright its lamps are, 0 (off) to 1: on after dark, lighting the ground ahead. */
+  lamps: number
   /** The sample it holds, shown while it holds one. */
   sample: THREE.Object3D
   /** The crate of harvest it holds, shown while it holds one. */
@@ -209,6 +211,16 @@ export function buildMonolith(): Monolith {
       SLAB.depth / 2 + 0.007,
     ),
   )
+  // A lamp on each inner slab above the display, and the light they throw on the ground ahead.
+  const lamp = new THREE.MeshStandardMaterial({ color: 0x8a8f96, emissive: 0xfff2dc, emissiveIntensity: 0 })
+  for (const slab of [innerLeft, innerRight])
+    slab.add(
+      part(new THREE.BoxGeometry(SLAB.width - 0.04, 0.03, 0.012), lamp, 0, 0.68, SLAB.depth / 2 + 0.004),
+    )
+  const beam = new THREE.SpotLight(0xfff2dc, 0, 14, 0.55, 0.6, 1.5)
+  beam.position.set(0, 0.6, SLAB.depth / 2)
+  beam.target.position.set(0, -SLAB.length / 2, 6)
+  body.add(beam, beam.target)
   // A sample of rock, held against the front while it carries one.
   const sample = part(
     new THREE.DodecahedronGeometry(0.11, 0),
@@ -232,8 +244,9 @@ export function buildMonolith(): Monolith {
   let spin = 0
   let phase = 0
   let swing = 0
-  return {
+  const monolith: Monolith = {
     group,
+    lamps: 0,
     want,
     sample,
     crate,
@@ -296,6 +309,9 @@ export function buildMonolith(): Monolith {
       // The display brightens and flickers while it speaks.
       const speaking = performance.now() < speech.until
       display.emissiveIntensity = speaking ? 2.4 + Math.sin(performance.now() / 70) * 0.8 : 1.6
+      lamp.emissiveIntensity = monolith.lamps * 6
+      beam.intensity = monolith.lamps * 22
     },
   }
+  return monolith
 }

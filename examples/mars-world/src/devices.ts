@@ -316,8 +316,12 @@ export interface Devices {
   group: THREE.Group
   anchors: Map<string, THREE.Object3D>
   parts: Parts
-  update(t: number): void
+  /** `dark`: the sun is down or a storm darkens the sky, so the rover and Monolith turn their lamps on. */
+  update(t: number, dark: boolean): void
 }
+
+/** How fast the rover's and Monolith's lamps come on or go off: full in about a third of a second. */
+const LAMP_RATE = 3
 
 export async function buildDevices(base: Base): Promise<Devices> {
   const group = new THREE.Group()
@@ -327,6 +331,22 @@ export async function buildDevices(base: Base): Promise<Devices> {
     nasaModel('perseverance', 3.0),
     nasaModel('mark3_suit', 1.85),
   ])
+  // Two headlamps low on the rover's nose and the light they throw ahead, measured off the model
+  // (it faces +z) before it is placed.
+  const size = new THREE.Box3().setFromObject(rover)
+  const roverLamp = new THREE.MeshStandardMaterial({
+    color: 0x8a8f96,
+    emissive: 0xfff2dc,
+    emissiveIntensity: 0,
+  })
+  const nose = size.max.z - 0.12
+  const lampY = size.min.y + (size.max.y - size.min.y) * 0.28
+  for (const side of [-1, 1])
+    rover.add(part(new THREE.BoxGeometry(0.16, 0.07, 0.04), roverLamp, side * 0.38, lampY, nose))
+  const roverBeam = new THREE.SpotLight(0xfff2dc, 0, 20, 0.6, 0.6, 1.5)
+  roverBeam.position.set(0, lampY, nose)
+  roverBeam.target.position.set(0, size.min.y, nose + 9)
+  rover.add(roverBeam, roverBeam.target)
   // The rover stands in its dock, nose to the garage, its side to the lab's sample port.
   const [kx, kz] = LAYOUT.dock
   group.add(place(rover, kx, kz + 0.4, Math.PI))
@@ -398,6 +418,7 @@ export async function buildDevices(base: Base): Promise<Devices> {
     soilPanels: base.soilPanels,
   }
   let lastT = 0
+  let lamps = 0
   const was = hopper.group.position.clone()
   let lean = 0
   const monolithWas = monolith.group.position.clone()
@@ -405,9 +426,13 @@ export async function buildDevices(base: Base): Promise<Devices> {
     group,
     anchors,
     parts,
-    update(t) {
+    update(t, dark) {
       const dt = Math.min(0.1, t - lastT)
       lastT = t
+      lamps = THREE.MathUtils.clamp(lamps + (dark ? dt : -dt) * LAMP_RATE, 0, 1)
+      roverLamp.emissiveIntensity = lamps * 6
+      roverBeam.intensity = lamps * 30
+      monolith.lamps = lamps
       weather.cups.rotation.y = t * 5
       // The plume flickers with the thrust; the hopper leans a little into its forward speed.
       const { level } = thrust

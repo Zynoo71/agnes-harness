@@ -44,7 +44,7 @@ The devices are laid out for four chains of work that need several of them at on
 
 The world changes on its own, so an agent has something to notice and handle. All of it shows only through the devices' state, readings and alert lines, as it would on real hardware.
 
-**Mars time.** A sol takes 40 real minutes (`?sol=`); the page opens at 07:36 local time (`?time=`). The sun rises at 06:00 in the east, stands 60° up in the south at noon and sets at 18:00 in the west; the sky, the light and shadows, the stars, Phobos (rising in the west twice a sol), Deimos and Earth (an evening star) follow the clock, frost settles before dawn, and the base's lamps carry the night. The air is warmest about 14:00 and coldest before dawn; afternoons are gustier.
+**Mars time.** A sol takes 40 real minutes (`?sol=`); the page opens at 07:36 local time (`?time=`). The sun rises at 06:00 in the east, stands 60° up in the south at noon and sets at 18:00 in the west; the sky, the light and shadows, the stars, Phobos (rising in the west twice a sol), Deimos and Earth (an evening star) follow the clock, frost settles before dawn, and the base's lamps carry the night; the rover and Monolith turn their lamps on by themselves once the sun is 3° below the horizon or a dust storm darkens the sky, lighting the ground ahead, and off again once it is 3° up. The air is warmest about 14:00 and coldest before dawn; afternoons are gustier.
 
 **Drift.**
 

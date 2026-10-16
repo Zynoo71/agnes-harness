@@ -190,7 +190,8 @@ export function monolith(world: World, log: (line: string) => void): WorldDevice
       rate_hz: 10,
       deadman_s: 0.5,
     },
-    ui: { primary: 'front_video' },
+    // First in the Devices panel: Monolith does the most of the work.
+    ui: { primary: 'front_video', order: -3 },
     state: {
       mode: {
         type: 'string',

@@ -59,3 +59,33 @@ def test_the_cli_checks_a_device_file(tmp_path):
     done = subprocess.run([sys.executable, "-m", "agnes_mhs", *args], capture_output=True, text=True, timeout=120)
     assert done.returncode == 0, done.stdout + done.stderr
     assert " fail" not in done.stdout.split("\n")[-2]
+
+
+def test_the_first_state_report_carries_null_values():
+    async def main() -> None:
+        from agnes_mhs import Device
+
+        dev = Device("probe-01", "sensor", state={"level": {"type": "integer"}, "label": {"type": "string"}})
+        dev.update(level=None, label="a")
+        async with TestHub(dev) as hub:
+            await asyncio.sleep(0.05)  # the state report follows the registration
+            assert hub.state["level"] is None and hub.state["label"] == "a"
+
+    asyncio.run(main())
+
+
+def test_a_tool_argument_may_be_called_name():
+    async def main() -> None:
+        from agnes_mhs import Device
+
+        dev = Device("probe-01", "sensor")
+
+        @dev.tool(timeout=2)
+        def greet(name: str) -> str:
+            """Greet someone."""
+            return f"hello {name}"
+
+        async with TestHub(dev) as hub:
+            assert (await hub.call("greet", name="Ada")).detail == "hello Ada"
+
+    asyncio.run(main())

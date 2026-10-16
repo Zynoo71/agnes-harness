@@ -79,12 +79,12 @@ class TestHub:
 
     # What a test does
 
-    async def call(self, name: str, **arguments: Any) -> Result:
+    async def call(self, name: str, /, **arguments: Any) -> Result:
         """Calls a tool and waits for its result; a rejected call is a Result with status rejected."""
         call_id, _ = await self._call(name, arguments)
         return await self.result(call_id)
 
-    async def start(self, name: str, **arguments: Any) -> str:
+    async def start(self, name: str, /, **arguments: Any) -> str:
         """Starts a call and returns its id without waiting for the result. Raises if rejected."""
         call_id, reply = await self._call(name, arguments)
         if not reply.get("accepted"):

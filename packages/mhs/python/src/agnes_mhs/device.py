@@ -34,6 +34,7 @@ from websockets.exceptions import ConnectionClosed, InvalidHandshake
 
 from .args import InvalidArguments, prepare_arguments
 from .schema import PROTOCOL
+from .typed import signature_schema
 
 log = logging.getLogger("agnes_mhs")
 
@@ -216,6 +217,7 @@ class Source:
 class _Tool:
     decl: dict[str, Any]
     fn: Handler
+    call_arg: str | None = ""  # parameter that receives the call; "" = first positional, None = none
 
 
 class Device:
@@ -286,7 +288,7 @@ class Device:
 
     def tool(
         self,
-        description: str,
+        description: str | None = None,
         *,
         timeout: float,
         name: str | None = None,
@@ -299,23 +301,32 @@ class Device:
         needs: list[str] | None = None,
         ui: dict[str, Any] | None = None,
     ) -> Callable[[Handler], Handler]:
-        """Declares a tool (6.1). The function gets the Call, then the checked arguments as keywords;
-        it returns None, a detail string, or a dict with detail, data and notes."""
+        """Declares a tool (6.1). Without params, the input schema comes from the function's type hints
+        (typed.py) and the description from its docstring; the parameter named call, or annotated
+        Call, receives the call. With params, the function gets the Call, then the checked arguments
+        as keywords. It returns None, a detail string, or a dict with detail, data and notes."""
 
         def register(fn: Handler) -> Handler:
-            schema: dict[str, Any] = {"type": "object"}
-            if params:
-                schema["properties"] = params
-            if required:
-                schema["required"] = required
-            decl: dict[str, Any] = {"name": name or fn.__name__, "description": description, "inputSchema": schema, "timeout": timeout}
+            call_arg: str | None = ""
+            if params is None and required is None:
+                schema, call_arg = signature_schema(fn, Call)
+            else:
+                schema = {"type": "object"}
+                if params:
+                    schema["properties"] = params
+                if required:
+                    schema["required"] = required
+            text = description or inspect.getdoc(fn)
+            if not text:
+                raise TypeError(f"tool {name or fn.__name__}: give a description or a docstring")
+            decl: dict[str, Any] = {"name": name or fn.__name__, "description": text, "inputSchema": schema, "timeout": timeout}
             for key, value in (("uses", uses), ("needs", needs), ("ui", ui)):
                 if value:
                     decl[key] = value
             for key, value in (("motion", motion), ("readOnly", read_only), ("pausable", pausable)):
                 if value:
                     decl[key] = True
-            self._tools[decl["name"]] = _Tool(decl, fn)
+            self._tools[decl["name"]] = _Tool(decl, fn, call_arg)
             return fn
 
         return register
@@ -562,7 +573,12 @@ class Device:
                     await self._released.wait_for(lambda r=resource: r not in self._holders)
                 self._holders[resource] = {"call": call.id, "tool": call.name}
                 held.append(resource)
-            value = await _maybe_await(tool.fn(call, **call.args))
+            if tool.call_arg == "":
+                value = await _maybe_await(tool.fn(call, **call.args))
+            elif tool.call_arg is None:
+                value = await _maybe_await(tool.fn(**call.args))
+            else:
+                value = await _maybe_await(tool.fn(**{tool.call_arg: call}, **call.args))
             outcome = {"status": "done", "detail": f"{call.name} done"}
             if isinstance(value, str):
                 outcome["detail"] = value

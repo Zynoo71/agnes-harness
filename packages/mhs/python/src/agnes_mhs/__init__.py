@@ -2,6 +2,7 @@
 
 from .args import InvalidArguments, prepare_arguments
 from .device import Call, CallError, Clip, Device, Source
+from .typed import Param
 
 from .schema import (
     AXIS_ROLES,
@@ -25,6 +26,7 @@ __all__ = [
     "Clip",
     "Device",
     "InvalidArguments",
+    "Param",
     "Source",
     "prepare_arguments",
     "AXIS_ROLES",

@@ -419,7 +419,8 @@ export function rover(world: World, log: (line: string) => void): WorldDevice {
       const near = planNear(grid, at, p, keepouts(at, stops, others), ROVER.bodyClearance, 8)
       const legs = near?.path ?? planPath(grid, at, p, [], ROVER.bodyClearance) ?? [p]
       way.push(...legs)
-      at = legs.at(-1) as Point
+      // A point where it already stands plans to an empty way.
+      at = legs.at(-1) ?? at
       short = Math.hypot(at.x - p.x, at.z - p.z)
     }
     return { way, short }

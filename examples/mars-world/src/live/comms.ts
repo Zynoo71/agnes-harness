@@ -5,10 +5,10 @@ import { every, type Mail, type Photo, turnTo, type World, WorldDevice, wait } f
 
 /** Where the dish points for each target: head rotation in radians. */
 const AIM = { earth: { x: -0.7, y: 2.4 }, orbiter: { x: -1.25, y: -0.6 } } as const
-/** Earth is in view for 180 s of every 240 s, starting 120 s after the page opens. */
+/** Earth is in view for 180 s of every 240 s, starting 30 s after the page opens. */
 const PERIOD = 240
 const OPEN = 180
-const FIRST_OPEN = 120
+const FIRST_OPEN = 30
 /** Seconds a report takes to reach Earth and the answer to come back: minutes on Mars, shortened. */
 const LIGHT_S = 10
 
@@ -142,9 +142,8 @@ export function comms(world: World, log: (line: string) => void): WorldDevice {
     log,
   )
   dev.unsafe = (tool) => {
-    if (tool !== 'send' || linkUp()) return undefined
-    if (target !== 'earth') return 'the dish is not pointed at Earth'
-    return `Earth is below the horizon; the window opens in ${Math.round(windowNow().changes - Date.now() / 1000)} s`
+    if (tool !== 'send' || target === 'earth') return undefined
+    return 'the dish is not pointed at Earth'
   }
 
   dev.tool(
@@ -165,15 +164,15 @@ export function comms(world: World, log: (line: string) => void): WorldDevice {
       target = to as 'earth' | 'orbiter'
       report()
       return to === 'earth' && !windowNow().open
-        ? 'pointed at Earth, which is below the horizon for now'
+        ? `pointed at Earth, which rises in ${Math.max(0, Math.round(windowNow().changes - Date.now() / 1000))} s; send now and the report goes as it rises`
         : `pointed at ${to === 'earth' ? 'Earth; link up' : 'the orbiter'}`
     },
   )
   dev.tool(
     {
       name: 'send',
-      description: `Send a report to Earth, with a photo a camera took if given. Needs the dish pointed at Earth while the window is open. Mission Control's answer comes back in the result (the light time is shortened to ${LIGHT_S} s here).`,
-      timeout: 60,
+      description: `Send a report to Earth, with a photo a camera took if given. Needs the dish pointed at Earth; while Earth is below the horizon the report waits in the dish and goes as the window opens (at most a minute or so). Mission Control's answer comes back in the result (the light time is shortened to ${LIGHT_S} s here).`,
+      timeout: 150,
       params: {
         report: { type: 'string', maxLength: 4000 },
         photo: {
@@ -194,6 +193,13 @@ export function comms(world: World, log: (line: string) => void): WorldDevice {
           'x_no_photo',
           `there is no ${id}; take one with cam-base or monolith-01 take_photo first`,
         )
+      // Store and forward: below the horizon, the report waits for Earth to rise.
+      while (!windowNow().open) {
+        const left = Math.max(0, Math.round(windowNow().changes - Date.now() / 1000))
+        call.progress({ text: `waiting for Earth to rise: ${left} s` })
+        await wait(call, 1000)
+      }
+      if (target !== 'earth') throw new CallError('x_not_pointed', 'the dish was turned away from Earth')
       const steps = Math.max(3, Math.ceil((text as string).length / 400)) + (photo ? 4 : 0)
       for (let i = 1; i <= steps; i++) {
         await wait(call, 600)

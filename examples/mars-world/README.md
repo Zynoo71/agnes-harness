@@ -138,7 +138,7 @@ How they work together:
 - The astronaut goes round the base on their own, one job after another (the outcrop, the weather station, the dish, the solar array, the seismometer, the landing pad), on planned ways, working a while at each spot, until `radio` asks otherwise; they stop for the rover or Monolith moving close by and walk round one standing in their way, and cannot walk at all with a leaking suit or 15 % oxygen. `radio` says which job they are at; the `pose` source says where. The rover's safety stop and the hopper's routes keep clear of them wherever they are.
 - `clean_panels` drives the rover along the array's north side and back along its south side, brushing each panel (the dust shows on the panels); it needs the array deployed and leaves the rover beside it.
 - `collect_sample` needs the rock within 4 m. `unload_rover` is refused (`unsafe`) unless the rover is docked with a sample on board; the lab's arm then reaches over the rover.
-- `send` is refused unless the dish points at Earth while the window is open: closed for the first 120 s after the page opens, then open 180 s of every 240 s.
+- `send` is refused unless the dish points at Earth; while Earth is below the horizon the report waits in the dish (progress counts down) and goes as the window opens: closed for the first 30 s after the page opens, then open 180 s of every 240 s.
 - Moving tools animate the models frame by frame; cancel, stop and pause take effect at the next frame, and every result carries the device's pose and odometry.
 
 By hand, with `start` running (type these in its terminal):

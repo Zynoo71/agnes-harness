@@ -102,6 +102,7 @@ const TEXT = {
     onHouse: (why: string) => `on the house${why ? ` · ${why}` : ''}`,
     off: (p: number, why: string) => `${p}% off${why ? ` · ${why}` : ''}`,
     scan: 'Scan to pay',
+    surprise: 'Scan for a surprise',
     paid: (how: string) => `Paid · ${how}`,
     methods: { qr: 'QR code', card: 'card', cash: 'cash', free: 'on the house' } as Record<string, string>,
     thanks: 'Thank you — see you again!',
@@ -235,6 +236,7 @@ const TEXT = {
     onHouse: (why: string) => `赠送${why ? ` · ${why}` : ''}`,
     off: (p: number, why: string) => `${10 - p / 10} 折${why ? ` · ${why}` : ''}`,
     scan: '扫码付款',
+    surprise: '扫码有惊喜',
     paid: (how: string) => `已付款 · ${how}`,
     methods: { qr: '扫码', card: '刷卡', cash: '现金', free: '免单' } as Record<string, string>,
     thanks: '谢谢光临，欢迎再来！',
@@ -857,6 +859,8 @@ export function buildOverlay(options: {
     if (s.bill === 'paid') {
       parts.push(el('div', 'paid', `✓ ${t().paid(t().methods[s.paidWith] ?? s.paidWith)}`))
       parts.push(el('div', 'thanks', t().thanks))
+      // A QR code that scans stays until the guest leaves, so whoever watches has time to scan it.
+      if (qr?.classList.contains('gift')) parts.push(span('pay', qr, el('span', '', t().surprise)))
     } else {
       qr ??= giftQr(s.total()) ?? qrCode(s.total() * 7919 + 13)
       parts.push(span('pay', qr, el('span', '', t().scan)))

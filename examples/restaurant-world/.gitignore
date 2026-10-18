@@ -1,2 +1,4 @@
 dist/
 dist-types/
+# Real codes for the bill QR code (src/gift.ts); never committed.
+gift.json

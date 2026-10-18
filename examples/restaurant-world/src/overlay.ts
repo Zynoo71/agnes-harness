@@ -1,5 +1,6 @@
 import { AGNES_MARK } from './agnes-mark.js'
 import type { Decision } from './dm/watch.js'
+import { giftQr } from './gift.js'
 import { DEVICES, EMOJI, type Lang, progressLabel, toolLabel, valueLabel } from './labels.js'
 import { TABLES } from './layout.js'
 import { type Line as OrderLine, priceOf, type Service } from './live/service.js'
@@ -827,7 +828,7 @@ export function buildOverlay(options: {
     parts.push(span('sum', el('span', '', t().total), el('b', '', `¥${s.total()}`)))
     tableCard.replaceChildren(...parts)
   }
-  let qr: HTMLCanvasElement | undefined
+  let qr: HTMLElement | undefined
   const drawBill = () => {
     const s = service()
     billCard.hidden = !s || !(s.billOpen || (s.bill === 'paid' && s.guest !== 'outside'))
@@ -857,7 +858,7 @@ export function buildOverlay(options: {
       parts.push(el('div', 'paid', `✓ ${t().paid(t().methods[s.paidWith] ?? s.paidWith)}`))
       parts.push(el('div', 'thanks', t().thanks))
     } else {
-      qr ??= qrCode(s.total() * 7919 + 13)
+      qr ??= giftQr(s.total()) ?? qrCode(s.total() * 7919 + 13)
       parts.push(span('pay', qr, el('span', '', t().scan)))
     }
     billCard.replaceChildren(...parts)

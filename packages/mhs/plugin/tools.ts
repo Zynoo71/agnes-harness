@@ -65,6 +65,9 @@ const READS = {
   requiresApproval: 'never',
 } as const
 const ACTS = { ...READS, isReadOnly: false, isConcurrencySafe: false, replay: 'never' } as const
+// Several device calls in one step run together (devices act at once): the hub keeps two calls on one device from
+// using the same resource at the same time.
+const CALLS = { ...ACTS, isConcurrencySafe: true } as const
 
 const device = Type.Optional(
   Type.String({
@@ -151,7 +154,7 @@ export function registerBrainTools(agnes: Extension, brain: Brain): (() => void)
           Type.Record(Type.String(), Type.Unknown(), { description: "The tool's arguments" }),
         ),
       }),
-      meta: ACTS,
+      meta: CALLS,
       run: (args, call, byDm) =>
         brain.callDevice(
           args as { device?: string; tool: string; args?: Json },

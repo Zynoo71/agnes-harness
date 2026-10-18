@@ -167,6 +167,12 @@ it('registers the five device tools and a context hook, and posts prompts throug
       'set_device',
       'stop_device',
     ])
+    // Device calls in one step run together; settings and stops one by one.
+    expect([...tools.values()].filter((t) => t.meta.isConcurrencySafe).map((t) => t.name)).toEqual([
+      'list_devices',
+      'read_device',
+      'call_device',
+    ])
     // Only read_device returns camera pictures, so only it declares them.
     expect([...tools.values()].filter((t) => t.meta.returnsImages).map((t) => t.name)).toEqual([
       'read_device',

@@ -831,6 +831,7 @@ export function buildOverlay(options: {
     tableCard.replaceChildren(...parts)
   }
   let qr: HTMLElement | undefined
+  let billShown: { text: string; qr: HTMLElement | undefined } = { text: '', qr: undefined }
   const drawBill = () => {
     const s = service()
     billCard.hidden = !s || !(s.billOpen || (s.bill === 'paid' && s.guest !== 'outside'))
@@ -856,15 +857,23 @@ export function buildOverlay(options: {
       )
     }
     parts.push(span('sum', el('span', '', t().total), el('b', '', `¥${s.total()}`)))
+    let pay: HTMLElement | undefined
     if (s.bill === 'paid') {
       parts.push(el('div', 'paid', `✓ ${t().paid(t().methods[s.paidWith] ?? s.paidWith)}`))
       parts.push(el('div', 'thanks', t().thanks))
       // A QR code that scans stays until the guest leaves, so whoever watches has time to scan it.
-      if (qr?.classList.contains('gift')) parts.push(span('pay', qr, el('span', '', t().surprise)))
+      if (qr?.classList.contains('gift')) pay = span('pay', el('span', '', t().surprise))
     } else {
       qr ??= giftQr(s.total()) ?? qrCode(s.total() * 7919 + 13)
-      parts.push(span('pay', qr, el('span', '', t().scan)))
+      pay = span('pay', el('span', '', t().scan))
     }
+    if (pay) parts.push(pay)
+    // Drawn again only when it changes, so the thanks line arrives once instead of every refresh.
+    // The QR code goes in last: putting it in a card that is not drawn would take it off the page.
+    const shown = parts.map((p) => p.textContent).join('\n')
+    if (shown === billShown.text && qr === billShown.qr) return
+    billShown = { text: shown, qr }
+    if (pay && qr) pay.prepend(qr)
     billCard.replaceChildren(...parts)
   }
   if (live)

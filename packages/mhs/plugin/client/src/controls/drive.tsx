@@ -37,9 +37,15 @@ export function Drive(props: { device: Device }) {
   const area = useRef<HTMLDivElement | null>(null)
   const sending = useRef(false)
   const disabled = !props.device.available || store.conn !== 'open'
+  // The hub sends the whole device again whenever its state or position changes (about once a second): the loops
+  // below follow what the axes are, not the object, or each refresh would send zeros and drop the held keys.
+  const axesKey = JSON.stringify(manual)
+  const latest = useRef(manual)
+  latest.current = manual
 
   // The send loop: while anything is held, at rate_hz; once more with zeros when everything is let go.
   useEffect(() => {
+    const manual = latest.current
     const keyMap = keysOf(manual)
     const period = 1000 / Math.max(1, manual.rate_hz)
     const timer = setInterval(() => {
@@ -64,12 +70,12 @@ export function Drive(props: { device: Device }) {
       if (sending.current) store.manual(props.device.id, toUnits(manual, {}, 1))
       sending.current = false
     }
-  }, [store, props.device.id, manual, scale])
+  }, [store, props.device.id, axesKey, scale])
 
   // Keyboard while engaged; leaving lets everything go.
   useEffect(() => {
     if (!engaged) return
-    const keyMap = keysOf(manual)
+    const keyMap = keysOf(latest.current)
     const leave = () => {
       keys.current.clear()
       setEngaged(false)
@@ -108,7 +114,7 @@ export function Drive(props: { device: Device }) {
       document.removeEventListener('visibilitychange', hidden)
       keys.current.clear()
     }
-  }, [engaged, manual, store, props.device.id])
+  }, [engaged, axesKey, store, props.device.id])
 
   const pairs: [Axis, Axis][] = []
   const used = new Set<string>()

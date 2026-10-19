@@ -190,10 +190,17 @@ describe('brain tools', () => {
   it('reports rejections as errors and asks which device when it is unclear', async () => {
     const wrong = await brain.callDevice({ device: 'mover-01', tool: 'fly' })
     expect(wrong).toMatchObject({
-      text: 'mover-01 rejected fly (invalid): mover-01 has no tool fly.',
+      text: expect.stringMatching(
+        /^mover-01 rejected fly \(invalid\): mover-01 has no tool fly\.\nIts tools: move, /,
+      ),
       isError: true,
       data: { device: 'mover-01', tool: 'fly', status: 'rejected', reason: 'invalid' },
     })
+    // Called blind, without its arguments: the rejection says how to call it
+    const blind = await brain.callDevice({ device: 'mover-01', tool: 'move', args: {} })
+    expect(blind.text).toMatch(
+      /rejected move \(invalid\): .*\nHow to call it: move: Drive straight x meters\. Arguments: x: number -2–2, required\.$/,
+    )
     expect(await brain.stopDevice({})).toEqual({
       text: 'Stopped every device; nothing was moving.',
       data: { stopped: [] },

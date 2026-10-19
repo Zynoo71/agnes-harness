@@ -152,7 +152,7 @@ export class Brain {
     }
     if (!reply.accepted)
       return {
-        text: String(reply.text),
+        text: `${String(reply.text)}${reply.reason === 'invalid' ? callHelp(this.north.device(device), args.tool) : ''}`,
         isError: true,
         data: { ...facts, status: 'rejected', reason: reply.reason, detail: reply.detail },
       }
@@ -399,6 +399,30 @@ function rangeText(p: Param): string {
   return p.minimum !== undefined || p.maximum !== undefined ? ` ${p.minimum ?? '…'}–${p.maximum ?? '…'}` : ''
 }
 
+type Tool = { name: string; description: string; inputSchema?: Param }
+
+const toolsOf = (d: DeviceEntry): Tool[] => (d.tools as Tool[] | undefined) ?? []
+
+/** One tool as call_device takes it: what it does and its exact arguments. */
+function toolText(t: Tool): string {
+  const props = t.inputSchema?.properties ?? {}
+  const required = new Set(t.inputSchema?.required ?? [])
+  const args = Object.entries(props).map(([n, p]) => paramText(n, p, required.has(n)))
+  return `${t.name}: ${t.description}${args.length ? ` Arguments: ${args.join('; ')}.` : ' No arguments.'}`
+}
+
+/**
+ * How to call the tool a call_device was rejected as invalid for: models often call a device
+ * without having read its tools (a read with sources leaves them out), so the rejection carries
+ * what they missed and the next try can be right.
+ */
+function callHelp(d: DeviceEntry, name: string): string {
+  const tools = toolsOf(d)
+  const tool = tools.find((t) => t.name === name)
+  if (tool) return `\nHow to call it: ${toolText(tool)}`
+  return tools.length ? `\nIts tools: ${tools.map((t) => t.name).join(', ')}.` : ''
+}
+
 /**
  * What a model needs to use a device without guessing: each tool with its exact arguments, and
  * the state fields set_device can change with their ranges.
@@ -408,17 +432,10 @@ export function capabilities(d: DeviceEntry): string {
   // What the device is and how it behaves, as its maker wrote it (MHS profile notes).
   const notes = (d.profile as { notes?: string } | undefined)?.notes
   if (notes) lines.push(`About: ${notes}`)
-  const tools = (d.tools as { name: string; description: string; inputSchema?: Param }[] | undefined) ?? []
+  const tools = toolsOf(d)
   if (tools.length) {
     lines.push('Tools (call_device; argument names exactly as listed):')
-    for (const t of tools) {
-      const props = t.inputSchema?.properties ?? {}
-      const required = new Set(t.inputSchema?.required ?? [])
-      const args = Object.entries(props).map(([n, p]) => paramText(n, p, required.has(n)))
-      lines.push(
-        `- ${t.name}: ${t.description}${args.length ? ` Arguments: ${args.join('; ')}.` : ' No arguments.'}`,
-      )
-    }
+    for (const t of tools) lines.push(`- ${toolText(t)}`)
   } else lines.push('No tools.')
   const sources = d.sources.filter((s) => !(s as { ui?: { hidden?: boolean } }).ui?.hidden)
   if (sources.length) {

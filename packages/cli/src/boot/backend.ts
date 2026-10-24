@@ -285,7 +285,10 @@ function launchChild(
   const workspace = launchWorkspace(scope, options)
   argv.push(entry, '--profile', scope.profile, '--workspace', workspace, '--data-dir', scope.dataDir)
   if (requested) {
-    argv.push('--local-web-addr', requested.addr, '--local-web-origin', requested.origin)
+    // Local: AGNES_WEB_WS_PORT pins the daemon's local Web WebSocket so an SSH tunnel can forward it.
+    const wsPort = options.env?.AGNES_WEB_WS_PORT ?? process.env.AGNES_WEB_WS_PORT
+    const addr = wsPort ? `127.0.0.1:${wsPort}` : requested.addr
+    argv.push('--local-web-addr', addr, '--local-web-origin', requested.origin)
   }
   const env: NodeJS.ProcessEnv = {
     ...process.env,

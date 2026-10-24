@@ -75,6 +75,12 @@ const EXPECTED_PROVIDERS = [
     aiRegistryId: 'agnes-ai',
     credentialRef: 'secret://agnes-ai/default',
   },
+  {
+    id: 'loom',
+    label: 'Loom (local)',
+    aiRegistryId: 'loom',
+    credentialRef: 'secret://loom/default',
+  },
 ] as const
 
 describe('API-key onboarding provider registry', () => {
@@ -83,9 +89,9 @@ describe('API-key onboarding provider registry', () => {
   })
 
   it('maps each Pi identity one-to-one onto the AI registry credential identity', () => {
-    expect(new Set(ONBOARDING_PROVIDERS.map(({ id }) => id))).toHaveLength(12)
-    expect(new Set(ONBOARDING_PROVIDERS.map(({ aiRegistryId }) => aiRegistryId))).toHaveLength(12)
-    expect(new Set(ONBOARDING_PROVIDERS.map(({ credentialRef }) => credentialRef))).toHaveLength(12)
+    expect(new Set(ONBOARDING_PROVIDERS.map(({ id }) => id))).toHaveLength(EXPECTED_PROVIDERS.length)
+    expect(new Set(ONBOARDING_PROVIDERS.map(({ aiRegistryId }) => aiRegistryId))).toHaveLength(EXPECTED_PROVIDERS.length)
+    expect(new Set(ONBOARDING_PROVIDERS.map(({ credentialRef }) => credentialRef))).toHaveLength(EXPECTED_PROVIDERS.length)
     for (const provider of ONBOARDING_PROVIDERS) {
       expect(provider.credentialRef).toBe(`secret://${provider.aiRegistryId}/default`)
       expect(Object.keys(provider).sort()).toEqual(['aiRegistryId', 'credentialRef', 'id', 'label'])

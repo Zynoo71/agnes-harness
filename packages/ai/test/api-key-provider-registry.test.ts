@@ -32,6 +32,7 @@ const expected = [
   ['minimax', 'MiniMax'],
   ['xai', 'xAI'],
   ['agnes-ai', 'Agnes AI'],
+  ['loom', 'Loom (local)'],
 ] as const
 
 function assistant(): AssistantMessage {
@@ -70,7 +71,7 @@ const streamOptions = () => ({
 describe('API-key provider registry', () => {
   it('publishes exactly the twelve first-screen providers with stable friendly names', () => {
     expect(API_KEY_PROVIDER_REGISTRY.map(({ id, displayName }) => [id, displayName])).toEqual(expected)
-    expect(new Set(API_KEY_PROVIDER_REGISTRY.map((entry) => entry.id)).size).toBe(12)
+    expect(new Set(API_KEY_PROVIDER_REGISTRY.map((entry) => entry.id)).size).toBe(expected.length)
     expect(API_KEY_PROVIDER_REGISTRY.every((entry) => entry.availability === 'available')).toBe(true)
   })
 

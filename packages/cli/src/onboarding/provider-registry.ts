@@ -13,6 +13,7 @@ export type OnboardingProviderId =
   | 'minimax'
   | 'xai'
   | 'agnes-ai'
+  | 'loom'
 
 export type AiRegistryProviderId =
   | 'moonshot'
@@ -27,6 +28,7 @@ export type AiRegistryProviderId =
   | 'minimax'
   | 'xai'
   | 'agnes-ai'
+  | 'loom'
 
 export type OnboardingProvider = {
   /** Stable source provider identity from the pinned Pi catalogue. */
@@ -109,6 +111,12 @@ const PROVIDERS = [
     label: 'Agnes AI',
     aiRegistryId: 'agnes-ai',
     credentialRef: 'secret://agnes-ai/default',
+  },
+  {
+    id: 'loom',
+    label: 'Loom (local)',
+    aiRegistryId: 'loom',
+    credentialRef: 'secret://loom/default',
   },
 ] as const satisfies readonly OnboardingProvider[]
 

@@ -22,6 +22,7 @@ export type ApiKeyProviderId =
   | 'minimax'
   | 'xai'
   | 'agnes-ai'
+  | 'loom'
 
 export type ApiKeyProviderErrorCode =
   | 'UNKNOWN_PROVIDER'
@@ -207,6 +208,14 @@ const specs: readonly ProviderSpec[] = [
     baseUrl: 'https://api.agnes-ai.cn/v1',
     sourceProviderId: 'agnes-ai',
     load: () => load(import('./providers/agnes-ai.js'), 'agnesAiProvider'),
+  },
+  {
+    id: 'loom',
+    displayName: 'Loom (local)',
+    api: 'openai-completions',
+    baseUrl: 'http://127.0.0.1:8488/v1',
+    sourceProviderId: 'loom',
+    load: () => load(import('./providers/loom.js'), 'loomProvider'),
   },
 ] as const
 

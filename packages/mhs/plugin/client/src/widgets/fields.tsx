@@ -56,7 +56,11 @@ export function FieldView(props: {
       </span>
     )
   } else if (typeof value === 'string' && field?.enum) {
-    body = <span className="mhs-tag">{value}</span>
+    body = (
+      <span className="mhs-tag" title={value}>
+        {value}
+      </span>
+    )
   } else if (typeof value === 'string') {
     // Free text is read, not scanned like a number: smaller, cut to its box, whole on hover.
     body = (

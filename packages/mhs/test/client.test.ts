@@ -63,6 +63,13 @@ describe('what a page shows, from declarations only', () => {
     expect(lookOf(device({}), undefined)).toBeUndefined()
   })
 
+  it('leaves the field that picks the pose off the card, since the appearance draws it', () => {
+    const appearance = { format: 'svg' as const, state: 'pose', clips: { idle: { frames: ['<svg/>'] } } }
+    const fields = { pose: { type: 'string' as const }, voice: { type: 'string' as const } }
+    expect(keyFields(device(fields, { appearance })).map(([name]) => name)).toEqual(['voice'])
+    expect(keyFields(device(fields)).map(([name]) => name)).toEqual(['pose', 'voice'])
+  })
+
   it('draws every known map, and maps that positions name without a declaration', () => {
     const site = { map: 'site', name: 'Site', entities: [] }
     const rover = device({}, { id: 'rover-01', position: { trust: 'trusted', map: 'slam-3', x: 1, y: 2 } })

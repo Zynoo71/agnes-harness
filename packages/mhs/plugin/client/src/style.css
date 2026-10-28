@@ -1296,6 +1296,10 @@ body.mhs-dragging {
 }
 .mhs-root .mhs-tag {
   align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 0 8px;
   border: 1px solid var(--mhs-accent-line);
   border-radius: 6px;

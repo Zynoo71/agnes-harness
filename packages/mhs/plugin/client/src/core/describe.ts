@@ -62,7 +62,8 @@ export function visibleFields(d: Device): [string, Field][] {
  * a role or an alert; otherwise the first few.
  */
 export function keyFields(d: Device, max = 4): [string, Field][] {
-  const fields = visibleFields(d)
+  // The field that picks the appearance's pose is drawn already.
+  const fields = visibleFields(d).filter(([name]) => name !== d.appearance?.state)
   const tiles = fields.filter(([, f]) => f.ui?.tile)
   if (tiles.length > 0) return tiles.slice(0, max)
   const marked = fields.filter(([, f]) => f.role || f.alert)

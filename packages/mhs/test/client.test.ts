@@ -6,6 +6,7 @@ import {
   dmNoteOf,
   keyFields,
   keysOf,
+  lookOf,
   previewImage,
   sectionOf,
   targetsOf,
@@ -52,6 +53,14 @@ describe('what a page shows, from declarations only', () => {
     const moving = device({}, { sources: [camera], mobile: true })
     expect(previewImage(fixed)).toBeUndefined()
     expect(previewImage(moving)?.id).toBe('cam')
+  })
+
+  it('draws what a device looks like when it shows no camera', () => {
+    const camera = { id: 'cam', kind: 'image', description: 'camera' } as Source
+    const appearance = { format: 'svg' as const, clips: { idle: { frames: ['<svg/>'] } } }
+    expect(lookOf(device({}, { appearance }), undefined)).toEqual({ appearance })
+    expect(lookOf(device({}, { appearance }), camera)).toEqual({ camera })
+    expect(lookOf(device({}), undefined)).toBeUndefined()
   })
 
   it('draws every known map, and maps that positions name without a declaration', () => {

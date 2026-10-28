@@ -11,7 +11,8 @@
  *   lamp-01   writable state only: on, brightness, colour
  *   env-01    sensors only, installed in the office: a values source with alert levels (CO2 climbs
  *             past them), a door switch
- *   arm-01    an arm without camera: joint axes, a microphone that can be switched off, a log
+ *   arm-01    an arm without camera, drawn by its appearance: joint axes, a microphone that can be
+ *             switched off, a log
  * DEV_DEVICES_TO=ws://127.0.0.1:4180 connects the same devices to a running AgnesHub instead, and
  * DEV_DEVICES=robot-01 only the listed ones, for example to run mhs-check against one device.
  * Type `health robot-01 hot` or `pose robot-01 lost` on stdin to push health and position around.
@@ -429,6 +430,21 @@ setInterval(() => {
 }, 1000)
 
 // --- arm-01 ---
+/** A line drawing of the arm, its upper link at a1 and forearm at a2 degrees from upright. */
+function armFrame(a1: number, a2: number, closed: boolean): string {
+  const rad = (d: number) => (d * Math.PI) / 180
+  const [x1, y1] = [120 + 60 * Math.sin(rad(a1)), 170 - 60 * Math.cos(rad(a1))]
+  const [x2, y2] = [x1 + 50 * Math.sin(rad(a1 + a2)), y1 - 50 * Math.cos(rad(a1 + a2))]
+  const jaw = closed ? 4 : 10
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 200" fill="none" stroke="currentColor" ' +
+    'stroke-width="6" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M80 186h80" /><path d="M100 186v-14h40v14" />' +
+    `<path d="M120 170L${x1.toFixed(1)} ${y1.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}" />` +
+    `<circle cx="120" cy="170" r="7" fill="currentColor" /><circle cx="${x1.toFixed(1)}" cy="${y1.toFixed(1)}" r="6" />` +
+    `<path d="M${(x2 - jaw).toFixed(1)} ${(y2 - 12).toFixed(1)}v12h${2 * jaw}v-12" stroke-width="4" /></svg>`
+  )
+}
 const arm = new Device({
   id: 'arm-01',
   kind: 'arm',
@@ -447,9 +463,21 @@ const arm = new Device({
   state: {
     gripper: { type: 'string', enum: ['open', 'closed', 'holding'] },
     load: { type: 'number', unit: 'kg', min: 0, max: 2, alert: { warn: 1.5, bad: 1.9 } },
+    pose: { type: 'string', enum: ['idle', 'moving'], description: 'what the arm is doing' },
+  },
+  appearance: {
+    format: 'svg',
+    state: 'pose',
+    clips: {
+      idle: { frames: [armFrame(20, 40, false), armFrame(22, 38, false)], fps: 1 },
+      moving: {
+        frames: [0, 1, 2, 3, 4, 3, 2, 1].map((k) => armFrame(20 - 10 * k, 40 + 12 * k, false)),
+        fps: 8,
+      },
+    },
   },
 })
-arm.update({ gripper: 'open', load: 0 })
+arm.update({ gripper: 'open', load: 0, pose: 'idle' })
 const mic = arm.source('mic', 'audio', 'microphone at the gripper', {
   hz: 25,
   rate: 16000,
@@ -474,9 +502,14 @@ arm.tool(
     motion: true,
   },
   async (call) => {
-    for (let i = 1; i <= 4; i++) {
-      await call.sleep(400)
-      call.progress({ done: i, total: 4, text: `joint ${i} home` })
+    arm.update({ pose: 'moving' })
+    try {
+      for (let i = 1; i <= 4; i++) {
+        await call.sleep(400)
+        call.progress({ done: i, total: 4, text: `joint ${i} home` })
+      }
+    } finally {
+      arm.update({ pose: 'idle' })
     }
     log.send({ text: 'homed' })
     return 'all joints home'

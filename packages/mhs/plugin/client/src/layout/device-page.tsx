@@ -1,7 +1,7 @@
 /**
  * One device (mhs-ui-design 13.1): the header with availability, health, position, what it is doing
- * and Stop; then picture, drive, actions, state, ranging, position, telemetry, sound, text, tools,
- * source switches and activity. Sections follow `ui.group` and `ui.order` when the device gives them.
+ * and Stop; then picture (the camera, else what the device looks like), drive, actions, state,
+ * ranging, position, telemetry, sound, text, tools, source switches and activity. Sections follow `ui.group` and `ui.order` when the device gives them.
  */
 import { type ReactNode, useState } from 'react'
 import { Drive } from '../controls/drive.js'
@@ -19,6 +19,7 @@ import {
 import type { Device, Source } from '../core/types.js'
 import { ago, t, word } from '../i18n/i18n.js'
 import { useDevice, useEvents, useLocale, useNav, useNow, useStore } from '../react/hooks.js'
+import { AvatarView } from '../widgets/avatar.js'
 import { FieldView } from '../widgets/fields.js'
 import { MapView, type Pick } from '../widgets/map.js'
 import { DRAWN_ELSEWHERE, widgetFor } from '../widgets/registry.js'
@@ -157,6 +158,10 @@ export function DevicePage(props: { id: string }) {
     picture: bySection.get('picture')?.length ? (
       <Section id="picture" key="picture">
         <Pictures device={d} sources={bySection.get('picture') ?? []} />
+      </Section>
+    ) : d.appearance ? (
+      <Section id="picture" key="picture">
+        <AvatarView device={d} appearance={d.appearance} />
       </Section>
     ) : null,
     drive: d.manual ? (

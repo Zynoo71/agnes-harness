@@ -364,6 +364,7 @@ Rules:
 - [REG-5] `default`, when given, **MUST** name a clip; `state`, when given, **MUST** name a declared state field of type `string`; the JSON text of `appearance` **MUST NOT** exceed 256 KiB.
 - [REG-6] An SVG frame **MUST** be self-contained: no `<script>`, no `<foreignObject>`, no event attributes (`on…`), and no references outside the document (an `href` is either `#id` or absent).
 - The device changes pose by updating the state field, like any other state; a new pose starts its clip from the first frame. A device sets the pose that matches what it is doing, for example `walking` while a `move` call runs and `idle` again when it ends.
+- An SVG frame **SHOULD** draw with presentation attributes (`fill`, `stroke`) rather than `<style>` or `style` attributes, which a client under a content security policy may drop. `currentColor` takes the client's ink colour, so line art follows a light or dark theme.
 - Clients draw the appearance in place of a camera picture when the device has none, and **MAY** draw it beside one. A client **MUST** treat frames as untrusted: it removes anything [REG-6] forbids before drawing an SVG frame, and never loads a URL found in one.
 - Appearance is presentation only. Agents are not shown it; what a device can do and what it is doing are in its tools and state.
 

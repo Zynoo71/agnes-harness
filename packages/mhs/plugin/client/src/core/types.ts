@@ -171,7 +171,17 @@ export interface Device {
   sources: Source[]
   tools?: Tool[]
   manual?: Manual
+  appearance?: Appearance
   ui?: { icon?: string; primary?: string; order?: number }
+}
+
+/** What a device looks like (MHS 5.3). */
+export interface Appearance {
+  format: 'svg' | 'png'
+  size?: [number, number]
+  clips: Record<string, { frames: string[]; fps?: number; loop?: boolean }>
+  default?: string
+  state?: string
 }
 
 export interface Item {

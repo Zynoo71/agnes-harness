@@ -1,6 +1,7 @@
 /**
  * The overview (mhs-ui-design 13.1): one preview card per device, then what needs attention. A
- * card shows the device's own picture when it has one, otherwise its key numbers.
+ * card shows the device's own picture when it has one, else what it looks like (MHS 5.3), otherwise
+ * only its key numbers.
  */
 
 import { useRef } from 'react'
@@ -8,6 +9,7 @@ import {
   busyBy,
   displayName,
   keyFields,
+  lookOf,
   manualNow,
   previewImage,
   runningNow,
@@ -16,8 +18,8 @@ import {
 import type { Device } from '../core/types.js'
 import { t } from '../i18n/i18n.js'
 import { useDevices, useLocale, useNav } from '../react/hooks.js'
+import { LookView } from '../widgets/avatar.js'
 import { FieldView } from '../widgets/fields.js'
-import { ImageView, VideoView } from '../widgets/image.js'
 import { Doing, EndedStamp, HealthText, PositionText, StatePill, StopButton, useCallCues } from './parts.js'
 
 const PREVIEW_HZ = 5
@@ -27,7 +29,7 @@ const PREVIEW_VIDEO_HZ = 15
 export function DeviceCard(props: { device: Device }) {
   const nav = useNav()
   const d = props.device
-  const picture = previewImage(d)
+  const picture = lookOf(d, previewImage(d))
   const numbers = keyFields(d, picture ? 3 : 4)
   const card = useRef<HTMLElement | null>(null)
   const ended = useCallCues(d, card)
@@ -42,11 +44,7 @@ export function DeviceCard(props: { device: Device }) {
     >
       {picture && (
         <div className="mhs-card-preview">
-          {picture.kind === 'video' ? (
-            <VideoView device={d} source={picture} hz={PREVIEW_VIDEO_HZ} compact />
-          ) : (
-            <ImageView device={d} source={picture} hz={PREVIEW_HZ} compact />
-          )}
+          <LookView device={d} look={picture} hz={PREVIEW_HZ} videoHz={PREVIEW_VIDEO_HZ} />
         </div>
       )}
       <button type="button" className="mhs-card-open" onClick={() => nav.open(d.id)}>

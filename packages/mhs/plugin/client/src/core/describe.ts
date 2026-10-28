@@ -3,7 +3,19 @@
  * numbers, readable arguments. Only the protocol is used; no device, tool or field name is special.
  */
 import { t } from '../i18n/i18n.js'
-import type { Device, DmNote, Field, HubEvent, Json, Manual, Param, Source, Tool, World } from './types.js'
+import type {
+  Appearance,
+  Device,
+  DmNote,
+  Field,
+  HubEvent,
+  Json,
+  Manual,
+  Param,
+  Source,
+  Tool,
+  World,
+} from './types.js'
 
 type Pt = [number, number]
 
@@ -69,6 +81,17 @@ export function primaryImage(d: Device): Source | undefined {
  */
 export function previewImage(d: Device): Source | undefined {
   return d.mobile ? primaryImage(d) : undefined
+}
+
+/**
+ * What a device's card draws: its camera when it shows one, else what it looks like (MHS 5.3), so a
+ * device without a camera still has a picture.
+ */
+export type Look = { camera: Source } | { appearance: Appearance }
+
+export function lookOf(d: Device, camera: Source | undefined): Look | undefined {
+  if (camera) return { camera }
+  return d.appearance ? { appearance: d.appearance } : undefined
 }
 
 /** The maps to draw: AgnesHub's worlds, then maps that a device's position names without one. */

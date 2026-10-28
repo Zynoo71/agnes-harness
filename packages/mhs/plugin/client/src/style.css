@@ -1145,6 +1145,57 @@ body.mhs-dragging {
   aspect-ratio: auto;
   object-fit: cover;
 }
+.mhs-root .mhs-avatar {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  max-height: 360px;
+  overflow: hidden;
+  border-radius: var(--mhs-radius-sm);
+  background: var(--mhs-well);
+  color: var(--mhs-text);
+}
+.mhs-root .mhs-avatar[data-compact] {
+  aspect-ratio: 16 / 9;
+}
+.mhs-root .mhs-flow-thumb .mhs-avatar {
+  height: 100%;
+  aspect-ratio: auto;
+}
+.mhs-root .mhs-avatar-frame {
+  position: absolute;
+  inset: 8px;
+  width: calc(100% - 16px);
+  height: calc(100% - 16px);
+}
+.mhs-root .mhs-avatar-frame > svg {
+  width: 100%;
+  height: 100%;
+}
+.mhs-root canvas.mhs-avatar-frame {
+  object-fit: contain;
+}
+.mhs-root .mhs-avatar-bubble {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 82%;
+  padding: 5px 10px;
+  border: 1px solid var(--mhs-line);
+  border-radius: 12px;
+  background: var(--mhs-card);
+  color: var(--mhs-text);
+  font: 12px / 1.35 var(--mhs-font);
+  box-shadow: var(--mhs-lift);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mhs-root .mhs-avatar[data-compact] .mhs-avatar-bubble {
+  top: 6px;
+  font-size: 11px;
+}
 .mhs-root .mhs-preview-note {
   position: absolute;
   inset: 0;

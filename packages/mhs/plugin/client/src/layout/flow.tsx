@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ByIcon } from '../controls/ui.js'
 import { type Rgb, rgba, rgbOf } from '../core/color.js'
-import { busyBy, displayName, keyFields, primaryImage, runningNow, tone } from '../core/describe.js'
+import { busyBy, displayName, keyFields, lookOf, primaryImage, runningNow, tone } from '../core/describe.js'
 import type { BrainPulse, Traffic } from '../core/store.js'
 import type { By, Device, HubEvent } from '../core/types.js'
 import { num, t } from '../i18n/i18n.js'
@@ -25,8 +25,8 @@ import {
   useNav,
   useTraffic,
 } from '../react/hooks.js'
+import { LookView } from '../widgets/avatar.js'
 import { FieldView } from '../widgets/fields.js'
-import { ImageView, VideoView } from '../widgets/image.js'
 import type { Brain } from './panel.js'
 import { Doing, EndedStamp, HealthText, PositionText, StatePill, useCallCues } from './parts.js'
 
@@ -111,6 +111,11 @@ interface Geometry {
   nerveX: number
 }
 
+/** A card's picture: the device's camera, else what it looks like (MHS 5.3). */
+function pictureOf(d: Device) {
+  return lookOf(d, primaryImage(d))
+}
+
 /**
  * Devices with a picture first, in rows either side of the bus, the columns next to it filled first,
  * the cards in a row as tall as its tallest; pictures come in pairs, and an odd one out goes across
@@ -126,14 +131,14 @@ function layout(devices: Device[], width: number, heights: Map<string, number>, 
     : width - CARD_X - SIDE
   const cards = new Map<string, Slot>()
   const pictures = new Map<string, number>()
-  const pictureOf = (w: number, max: number) => Math.min(max, Math.round(((w - 16) * 9) / 16))
-  const withPicture = devices.filter((d) => primaryImage(d))
+  const heightOf = (w: number, max: number) => Math.min(max, Math.round(((w - 16) * 9) / 16))
+  const withPicture = devices.filter((d) => pictureOf(d))
   const across = two && withPicture.length % 2 === 1 ? withPicture.at(-1) : undefined
-  const ordered = [...withPicture, ...devices.filter((d) => !primaryImage(d))].filter((d) => d !== across)
+  const ordered = [...withPicture, ...devices.filter((d) => !pictureOf(d))].filter((d) => d !== across)
   let y = hub + HUB_H + 20
   if (across) {
     const w = width - 2 * SIDE
-    const h = pictureOf(w, PICTURE_ACROSS_MAX)
+    const h = heightOf(w, PICTURE_ACROSS_MAX)
     const tall = heights.get(across.id) ?? h + INFO_H
     cards.set(across.id, { top: y, left: SIDE, width: w, height: tall, side: 'across' })
     pictures.set(across.id, h)
@@ -143,7 +148,7 @@ function layout(devices: Device[], width: number, heights: Map<string, number>, 
   const step = cardWidth + COLUMN_GAP
   for (let i = 0; i < ordered.length; i += perRow) {
     const row = ordered.slice(i, i + perRow)
-    const h = (d: Device) => (primaryImage(d) ? pictureOf(cardWidth, PICTURE_MAX) : 0)
+    const h = (d: Device) => (pictureOf(d) ? heightOf(cardWidth, PICTURE_MAX) : 0)
     const tallest = Math.max(...row.map((d) => heights.get(d.id) ?? h(d) + INFO_H))
     for (const [k, d] of row.entries()) {
       // k: 0 next to the bus on the left, 1 on the right, 2 and 3 the columns beyond them.
@@ -290,7 +295,7 @@ function DeviceCard(props: {
   const nav = useNav()
   const d = props.device
   const tr = props.traffic
-  const picture = props.picture > 0 ? primaryImage(d) : undefined
+  const picture = props.picture > 0 ? pictureOf(d) : undefined
   const card = useRef<HTMLElement | null>(null)
   const { onHeight } = props
   const ended = useCallCues(d, card)
@@ -329,11 +334,7 @@ function DeviceCard(props: {
     >
       {picture && (
         <div className="mhs-flow-thumb" style={{ height: props.picture }}>
-          {picture.kind === 'video' ? (
-            <VideoView device={d} source={picture} hz={THUMB_VIDEO_HZ} compact />
-          ) : (
-            <ImageView device={d} source={picture} hz={THUMB_HZ} compact />
-          )}
+          <LookView device={d} look={picture} hz={THUMB_HZ} videoHz={THUMB_VIDEO_HZ} />
         </div>
       )}
       <div className="mhs-flow-info">

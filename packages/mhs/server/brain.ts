@@ -358,10 +358,9 @@ function deviceLine(d: DeviceEntry, full: boolean, zoneName?: string): string {
     .filter(([, f]) => (f as { writable?: boolean }).writable)
     .map(([n]) => n)
   if (settable.length) parts.push(`settable: ${settable.join(', ')}`)
-  if (full) {
-    const sources = d.sources.map((s) => `${s.id} (${s.kind})`)
-    if (sources.length) parts.push(`sources: ${sources.join(', ')}`)
-  }
+  // The snapshot names the sources too, so the brain does not guess at a camera a device lacks.
+  const sources = d.sources.map((s) => (full ? `${s.id} (${s.kind})` : s.id))
+  if (sources.length) parts.push(`sources: ${sources.join(', ')}`)
   return parts.join('; ')
 }
 

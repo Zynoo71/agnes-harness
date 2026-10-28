@@ -94,7 +94,7 @@ describe('brain tools', () => {
       '- mover-01 (Mover, robot): available; mode idle; tools: move, plan; settable: volume; sources: cam (image)',
     )
     expect(brain.context()).toMatch(
-      /\n- mover-01 \(Mover, robot\): available; mode idle; tools: move, plan; settable: volume$/,
+      /\n- mover-01 \(Mover, robot\): available; mode idle; tools: move, plan; settable: volume; sources: cam$/,
     )
   })
 
@@ -273,7 +273,7 @@ describe('brain tools', () => {
         '  - gate "Gate": landmark at (1, 3), face 180° — The way in',
         '  - yard "Yard": zone around (5, 5), 10 × 10 m',
         'Devices:',
-        '- mover-01 (Mover, robot): available; mode idle; tools: move, plan; settable: volume',
+        '- mover-01 (Mover, robot): available; mode idle; tools: move, plan; settable: volume; sources: cam',
         '- gate-01 (Gate camera, sensor): available; Installed at (2, 3) facing 90° on map site, in zone Yard (yard)',
       ].join('\n'),
     )

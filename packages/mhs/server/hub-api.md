@@ -474,7 +474,7 @@ At the start of every turn, Agnes adds a snapshot from AgnesHub's memory:
 - **Opening lines**: how to use the device tools, and that nothing wakes the brain later: when the next step has to wait for something, it says what happens next and ends its turn.
 - **Briefs from other agents** (section 15.4), when there are any, right after the opening lines.
 - **Then the maps** (section 4.4) that the online devices declare or are positioned on: each map's id, name and extent, its description of the site, and its places, a landmark as its point and facing, a zone as its centre and size, each with its description. The snapshot says how to use them: to send a device to a place, call the device's own tool with the place's coordinates. The maps take at most half of the snapshot; places that do not fit are counted.
-- **Then the devices**: for each its id, name, kind, whether it is available, its health and position summaries (with the map it is on and the zone it is in, by the zone's name and id), what it is doing, and its tools.
+- **Then the devices**: for each its id, name, kind, whether it is available, its health and position summaries (with the map it is on and the zone it is in, by the zone's name and id), what it is doing, its tools and its data sources by id.
 
 ```
 Maps (x, y in metres, yaw in degrees counter-clockwise from +x). … To send a device to a place, call its own tool with the place's coordinates …
@@ -483,7 +483,7 @@ Maps (x, y in metres, yaw in degrees counter-clockwise from +x). … To send a d
   - gate "Gate": landmark at (1, 3), face 180° — The way in
   - yard "Yard": zone around (5, 5), 10 × 10 m
 Devices:
-- gate-01 (Gate camera, sensor): available; Installed at (2, 3) facing 90° on map site, in zone Yard (yard)
+- gate-01 (Gate camera, sensor): available; Installed at (2, 3) facing 90° on map site, in zone Yard (yard); sources: cam
 ```
 
 It takes well under a millisecond and is capped at 6000 bytes, since Agnes shares 8 KB of hook context among all plugins. The hook never throws: a failing context hook would fail the model request.

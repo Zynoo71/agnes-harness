@@ -306,6 +306,7 @@ A device that declares data sources, manual control, or tools taking audio clips
 | `sources` | no | Data sources: raw sensors and on-board perception (MOS section 3) |
 | `tools` | no | Tools (section 6). A device with no tools is valid, for example a pure sensor |
 | `manual` | no | Manual control (section 9) |
+| `appearance` | no | What the device looks like, drawn by clients, and which state field picks its pose (5.3) |
 | `ui` | no | Presentation hints (Appendix B.7). Hubs and clients **MAY** ignore them |
 
 Rules:
@@ -332,6 +333,39 @@ Rules:
 
 - [REG-4] A device with `localization: fixed` **MUST** give `placement`, in meters and degrees in the frame of the map it names. Its yaw is the direction of its body x axis, so a fixed camera's placement says where it looks when it is not panned.
 - A hub treats a fixed device's placement as its position, always trusted. A person may also place a device with `localization: none` through the hub; that placement belongs to the hub, not to the device.
+
+### 5.3 Appearance
+
+`appearance` is optional. It lets a client draw the device: a picture for every pose the device can be in, and a state field that says which pose it is in now. It matters most for a device with no camera of its own, for example a simulated one, whose card would otherwise show only numbers.
+
+```json
+"appearance": {
+  "format": "svg",
+  "size": [240, 240],
+  "state": "pose",
+  "default": "idle",
+  "clips": {
+    "idle":    {"frames": ["<svg …>", "<svg …>"], "fps": 2},
+    "walking": {"frames": ["<svg …>", "<svg …>", "<svg …>", "<svg …>"], "fps": 8},
+    "talking": {"frames": ["<svg …>", "<svg …>"], "fps": 6},
+    "stopped": {"frames": ["<svg …>"], "loop": false}
+  }
+}
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| `format` | yes | `svg`: each frame is an SVG document as text. `png`: each frame is a PNG image in base64, without a `data:` prefix |
+| `size` | no | [width, height] the frames are drawn for, in pixels; without it, the size of the first frame (an SVG's `viewBox` or `width`/`height`, a PNG's pixels). Clients scale frames, keeping the aspect ratio |
+| `clips` | yes | Poses by name (identifier syntax, 3.3). A clip is `frames` (1 to 24), `fps` (default 1, from 0.1 to 30) and `loop` (default `true`; when `false` the last frame stays) |
+| `default` | no | The clip shown when the state field is absent, or its value names no clip; without it, the first clip |
+| `state` | no | A string state field (10.1) whose value names the clip to show. Without it the device always shows `default` |
+
+- [REG-5] `default`, when given, **MUST** name a clip; `state`, when given, **MUST** name a declared state field of type `string`; the JSON text of `appearance` **MUST NOT** exceed 256 KiB.
+- [REG-6] An SVG frame **MUST** be self-contained: no `<script>`, no `<foreignObject>`, no event attributes (`on…`), and no references outside the document (an `href` is either `#id` or absent).
+- The device changes pose by updating the state field, like any other state; a new pose starts its clip from the first frame. A device sets the pose that matches what it is doing, for example `walking` while a `move` call runs and `idle` again when it ends.
+- Clients draw the appearance in place of a camera picture when the device has none, and **MAY** draw it beside one. A client **MUST** treat frames as untrusted: it removes anything [REG-6] forbids before drawing an SVG frame, and never loads a URL found in one.
+- Appearance is presentation only. Agents are not shown it; what a device can do and what it is doing are in its tools and state.
 
 ---
 
@@ -710,7 +744,7 @@ A device conforms when it meets every **MUST** of the profiles that apply to it.
 
 | Profile | Applies when | Requirements |
 |---|---|---|
-| **Core** | Always | MSG-1…3, MSG-6, MSG-7, ID-1, CONN-1…3, CONN-5…9, REG-1…4, TOOL-1…2, CALL-1…5, CTL-1…4, STATE-1…4, RES-1, SAFE-1, SAFE-4, SAFE-7 |
+| **Core** | Always | MSG-1…3, MSG-6, MSG-7, ID-1, CONN-1…3, CONN-5…9, REG-1…6, TOOL-1…2, CALL-1…5, CTL-1…4, STATE-1…4, RES-1, SAFE-1, SAFE-4, SAFE-7 |
 | **Motion** | Any tool has `motion: true` | SAFE-2, SAFE-5, SAFE-6 (both **SHOULD**), `after.odometry` for mobile devices |
 | **Manual** | `manual` is present | MAN-1…5, SAFE-3 |
 | **Pause** | Any tool has `pausable: true` | CTL-5, CTL-6 |
@@ -795,7 +829,7 @@ All optional; anyone may ignore them.
 
 | Where | Keys |
 |---|---|
-| Device | `icon`, `primary` (source id of the main view), `order` |
+| Device | `icon`, `primary` (source id of the main view), `order`. What the device looks like is `appearance` (5.3), not a hint |
 | Source | `group`, `order`, `label`, `hidden`, `widget` |
 | Field | `label`, `tile` (show on summary cards), `widget`, `hidden` |
 | Tool | `group` (`"manual"` places it with the manual controls), `label`, `confirm`, `hidden`, `widget` |

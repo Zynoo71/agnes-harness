@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import json
 import math
+import re
 import sys
 import time
 from dataclasses import dataclass, field
@@ -34,7 +35,7 @@ from .schema import HUB_ONLY_REASONS, PROTOCOL, errors
 CORE = [
     "MSG-1", "MSG-2", "MSG-3", "MSG-6", "MSG-7", "ID-1",
     "CONN-1", "CONN-2", "CONN-3", "CONN-5", "CONN-6", "CONN-7", "CONN-8", "CONN-9",
-    "REG-1", "REG-2", "REG-3", "REG-4", "TOOL-1", "TOOL-2", "CALL-1", "CALL-2", "CALL-3", "CALL-4", "CALL-5",
+    "REG-1", "REG-2", "REG-3", "REG-4", "REG-5", "REG-6", "TOOL-1", "TOOL-2", "CALL-1", "CALL-2", "CALL-3", "CALL-4", "CALL-5",
     "CTL-1", "CTL-2", "CTL-3", "CTL-4", "STATE-1", "STATE-2", "STATE-3", "STATE-4",
     "RES-1", "SAFE-1", "SAFE-4", "SAFE-7",
 ]  # fmt: skip
@@ -383,6 +384,43 @@ def register_problems(params: dict[str, Any]) -> list[str]:
     return found
 
 
+APPEARANCE_MAX_BYTES = 256 * 1024
+# What an SVG frame may not hold (REG-6): scripts, foreign content, event attributes, outside references.
+SVG_FORBIDDEN = (
+    (re.compile(r"<\s*script\b", re.I), "<script>"),
+    (re.compile(r"<\s*foreignObject\b", re.I), "<foreignObject>"),
+    (re.compile(r"\son[a-z]+\s*=", re.I), "an event attribute"),
+    (re.compile(r"\bhref\s*=\s*[\"'](?!#)", re.I), "an href outside the document"),
+    (re.compile(r"url\(\s*[\"']?(?!#)", re.I), "a url() outside the document"),
+)
+
+
+def appearance_problems(params: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """REG-5 (clips and state field named, the size limit) and REG-6 (self-contained SVG frames)."""
+    a = params.get("appearance")
+    if not a:
+        return [], []
+    reg5, reg6 = [], []
+    clips = a.get("clips", {})
+    if "default" in a and a["default"] not in clips:
+        reg5.append(f"appearance.default names {a['default']}, which is not a clip")
+    if "state" in a:
+        decl = params.get("state", {}).get(a["state"])
+        if decl is None:
+            reg5.append(f"appearance.state names {a['state']}, which is not a declared state field")
+        elif decl.get("type") != "string":
+            reg5.append(f"appearance.state {a['state']} is not a string field")
+    if len(json.dumps(a, ensure_ascii=False).encode()) > APPEARANCE_MAX_BYTES:
+        reg5.append("appearance is larger than 256 KiB")
+    if a.get("format") == "svg":
+        for name, clip in clips.items():
+            for i, frame in enumerate(clip.get("frames", [])):
+                bad = next((what for pattern, what in SVG_FORBIDDEN if pattern.search(frame)), None)
+                if bad:
+                    reg6.append(f"appearance clip {name} frame {i} has {bad}")
+    return reg5, reg6
+
+
 def needs_nerve(d: dict[str, Any]) -> bool:
     clip = any("clip" in t.get("inputSchema", {}).get("properties", {}) for t in d.get("tools", []))
     return bool(d.get("resources")) or bool(d.get("sources")) or "manual" in d or clip
@@ -463,6 +501,18 @@ async def _register(hub: CheckHub, wait_device: float, log: Callable[[str], None
         hub.violation("REG-2", p)
     if not problems:
         r.add("REG-2", "pass", "ids unique and uses name declared resources")
+    if "appearance" not in params:
+        r.add("REG-5", "skip", "no appearance")
+        r.add("REG-6", "skip", "no appearance")
+    else:
+        reg5, reg6 = appearance_problems(params)
+        for rid, found in (("REG-5", reg5), ("REG-6", reg6)):
+            for p in found:
+                hub.violation(rid, p)
+        if not reg5:
+            r.add("REG-5", "pass", f"{len(params['appearance']['clips'])} clips, named and within 256 KiB")
+        if not reg6:
+            r.add("REG-6", "pass", "frames are self-contained")
     if params.get("localization") != "fixed":
         r.add("REG-4", "skip", f"localization {params.get('localization', 'none')}: not a fixed device")
     elif hub.schema("REG-4", "Placement", params.get("placement")):

@@ -390,6 +390,7 @@
         "sources": { "type": "array", "items": { "$ref": "#/$defs/Source" } },
         "tools": { "type": "array", "items": { "$ref": "#/$defs/Tool" } },
         "manual": { "$ref": "#/$defs/Manual" },
+        "appearance": { "$ref": "#/$defs/Appearance" },
         "ui": { "$ref": "#/$defs/DeviceUi" }
       }
     },
@@ -882,6 +883,32 @@
       }
     },
 
+    "Appearance": {
+      "description": "Optional. What the device looks like: a clip of frames per pose, the pose picked by a state field (5.3). REG-5 and REG-6 are checked by mhs-check and the hub.",
+      "type": "object",
+      "required": ["format", "clips"],
+      "properties": {
+        "format": { "enum": ["svg", "png"] },
+        "size": { "$ref": "#/$defs/Size" },
+        "clips": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9_]{0,31}$" },
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/$defs/AppearanceClip" }
+        },
+        "default": { "$ref": "#/$defs/Name" },
+        "state": { "$ref": "#/$defs/Name" }
+      }
+    },
+    "AppearanceClip": {
+      "type": "object",
+      "required": ["frames"],
+      "properties": {
+        "frames": { "type": "array", "items": { "type": "string" }, "minItems": 1, "maxItems": 24 },
+        "fps": { "type": "number", "minimum": 0.1, "maximum": 30 },
+        "loop": { "type": "boolean" }
+      }
+    },
     "DeviceUi": {
       "description": "Presentation hints for a device (Appendix B.7).",
       "type": "object",

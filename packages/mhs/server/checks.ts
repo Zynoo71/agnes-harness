@@ -15,9 +15,9 @@ export function problems(def: DefName, value: unknown): string[] {
 }
 
 /**
- * The rules of a device description that a schema cannot state (REG-2, REG-4, 6.3, 13.5, MAP-1):
- * unique ids, uses naming declared resources, references to declared sources, and the placement
- * of a fixed device.
+ * The rules of a device description that a schema cannot state (REG-2, REG-4, REG-5, REG-6, 6.3,
+ * 13.5, MAP-1): unique ids, uses naming declared resources, references to declared sources, the
+ * placement of a fixed device, and the appearance.
  */
 export function registerProblems(params: RegisterParams): string[] {
   const found: string[] = []
@@ -66,5 +66,39 @@ export function registerProblems(params: RegisterParams): string[] {
   const primary = params.ui?.primary
   if (primary !== undefined && !sourceIds.has(primary))
     found.push(`ui.primary names ${primary}, which is not declared`)
+  if (params.appearance) found.push(...appearanceProblems(params))
+  return found
+}
+
+const APPEARANCE_MAX_BYTES = 256 * 1024
+/** What an SVG frame may not hold (REG-6): scripts, foreign content, event attributes, outside references. */
+const SVG_FORBIDDEN: Array<[RegExp, string]> = [
+  [/<\s*script\b/i, '<script>'],
+  [/<\s*foreignObject\b/i, '<foreignObject>'],
+  [/\son[a-z]+\s*=/i, 'an event attribute'],
+  [/\bhref\s*=\s*["'](?!#)/i, 'an href outside the document'],
+  [/url\(\s*["']?(?!#)/i, 'a url() outside the document'],
+]
+
+/** REG-5 and REG-6: clips and state field named, the size limit, self-contained SVG frames. */
+export function appearanceProblems(params: RegisterParams): string[] {
+  const a = params.appearance
+  if (!a) return []
+  const found: string[] = []
+  if (a.default !== undefined && !(a.default in a.clips))
+    found.push(`appearance.default names ${a.default}, which is not a clip (REG-5)`)
+  if (a.state !== undefined) {
+    const field = params.state?.[a.state]
+    if (!field) found.push(`appearance.state names ${a.state}, which is not a declared state field (REG-5)`)
+    else if (field.type !== 'string') found.push(`appearance.state ${a.state} is not a string field (REG-5)`)
+  }
+  if (Buffer.byteLength(JSON.stringify(a)) > APPEARANCE_MAX_BYTES)
+    found.push('appearance is larger than 256 KiB (REG-5)')
+  if (a.format === 'svg')
+    for (const [name, clip] of Object.entries(a.clips))
+      clip.frames.forEach((frame, i) => {
+        const bad = SVG_FORBIDDEN.find(([re]) => re.test(frame))
+        if (bad) found.push(`appearance clip ${name} frame ${i} has ${bad[1]} (REG-6)`)
+      })
   return found
 }

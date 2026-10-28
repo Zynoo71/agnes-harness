@@ -2585,5 +2585,48 @@
         }
       ]
     }
+  },
+  {
+    "def": "RegisterParams",
+    "valid": true,
+    "note": "5.3, an appearance picked by a state field",
+    "value": {
+      "protocol": "mhs/v1",
+      "device": { "id": "robot-01", "kind": "robot" },
+      "state": { "pose": { "type": "string" } },
+      "appearance": {
+        "format": "svg",
+        "size": [240, 240],
+        "state": "pose",
+        "default": "idle",
+        "clips": {
+          "idle": {
+            "frames": ["<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 240 240\"/>"],
+            "fps": 2
+          },
+          "walking": { "frames": ["<svg/>", "<svg/>"], "fps": 8, "loop": true }
+        }
+      }
+    }
+  },
+  {
+    "def": "RegisterParams",
+    "valid": false,
+    "note": "5.3, a clip without frames",
+    "value": {
+      "protocol": "mhs/v1",
+      "device": { "id": "robot-01", "kind": "robot" },
+      "appearance": { "format": "svg", "clips": { "idle": { "frames": [] } } }
+    }
+  },
+  {
+    "def": "RegisterParams",
+    "valid": false,
+    "note": "5.3, an unknown format",
+    "value": {
+      "protocol": "mhs/v1",
+      "device": { "id": "robot-01", "kind": "robot" },
+      "appearance": { "format": "gif", "clips": { "idle": { "frames": ["R0lG"] } } }
+    }
   }
 ]

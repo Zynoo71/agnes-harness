@@ -93,7 +93,7 @@ Each scenario lists the requirement ids it checks. "Observe" means `mhs-check` w
 
 | Scenario | What it does | Checks |
 |---|---|---|
-| Registration | Validate `mhs/register` against the schemas; check ids, uniqueness, that `uses` names declared resources, and that a `fixed` device gives its `placement` | CONN-2, REG-1, REG-2, REG-4, TOOL-1, ID-1 (format) |
+| Registration | Validate `mhs/register` against the schemas; check ids, uniqueness, that `uses` names declared resources, that a `fixed` device gives its `placement`, and that an `appearance` names its clips and state field, fits its size and has self-contained SVG frames | CONN-2, REG-1, REG-2, REG-4, REG-5, REG-6, TOOL-1, ID-1 (format) |
 | Silence before reply | Delay the register reply 1 s; the device must send nothing but stop replies meanwhile | CONN-3 |
 | Unknown fields | Send calls and control messages with extra fields | MSG-6 |
 | Wrong arguments | For each tool: wrong types, missing required parameters, NaN (where JSON permits it via a string form, the device must reject); expect `rejected` / `invalid` | CALL-2, TOOL-2 |

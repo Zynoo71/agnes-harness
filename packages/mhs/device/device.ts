@@ -109,6 +109,8 @@ export interface DeviceOptions {
   }
   /** State fields (10.1): field declarations, `writable` for settings the hub may change. */
   state?: Record<string, Json>
+  /** What the device looks like (5.3): clips of frames, the pose picked by a state field. */
+  appearance?: Json
   ui?: Json
 }
 
@@ -448,6 +450,7 @@ export class Device {
     if (this.tools.size) d.tools = [...this.tools.values()].map((t) => t.decl)
     if (o.manual) d.manual = o.manual
     if (Object.keys(this.stateDecl).length) d.state = this.stateDecl
+    if (o.appearance) d.appearance = o.appearance
     if (o.ui) d.ui = o.ui
     return d
   }

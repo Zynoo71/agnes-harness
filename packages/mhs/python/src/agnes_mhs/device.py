@@ -268,6 +268,7 @@ class Device:
         resources: dict[str, str] | None = None,
         manual: dict[str, Any] | None = None,
         state: dict[str, dict[str, Any]] | None = None,
+        appearance: dict[str, Any] | None = None,
         ui: dict[str, Any] | None = None,
     ):
         device: dict[str, Any] = {"id": id, "kind": kind, "mobile": mobile}
@@ -285,6 +286,7 @@ class Device:
         self._state_decl = dict(state or {})
         # Declared fields get their first value from update() before run(); problem and faults are standard.
         self._state: dict[str, Any] = {"problem": None, "faults": []}
+        self._appearance = appearance  # what the device looks like (5.3)
         self._ui = ui
         self._tools: dict[str, _Tool] = {}
         self._sources: dict[str, Source] = {}
@@ -433,6 +435,8 @@ class Device:
             d["manual"] = self._manual
         if self._state_decl:
             d["state"] = self._state_decl
+        if self._appearance:
+            d["appearance"] = self._appearance
         if self._ui:
             d["ui"] = self._ui
         return d

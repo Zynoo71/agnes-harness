@@ -40,7 +40,7 @@ export const MhsV1 = Type.Module({
   "Notification": Type.Object({ "jsonrpc": Type.Literal('2.0'), "method": Type.String(), "params": Type.Optional(Type.Object({  })) }),
   "Response": Type.Union([Type.Object({ "jsonrpc": Type.Literal('2.0'), "id": Type.String({ minLength: 1 }), "result": Type.Object({  }) }), Type.Object({ "jsonrpc": Type.Literal('2.0'), "id": Type.Union([Type.String(), Type.Null()]), "error": Type.Ref('Error') })]),
   "Error": Type.Object({ "code": Type.Integer(), "message": Type.String(), "data": Type.Optional(Type.Unknown()) }),
-  "RegisterParams": Type.Object({ "protocol": Type.Literal('mhs/v1'), "device": Type.Ref('Device'), "profile": Type.Optional(Type.Ref('Profile')), "localization": Type.Optional(Type.Ref('Localization')), "placement": Type.Optional(Type.Ref('Placement')), "maps": Type.Optional(Type.Array(Type.Ref('MapDecl'))), "resources": Type.Optional(Type.Ref('Resources')), "state": Type.Optional(Type.Ref('StateFields')), "sources": Type.Optional(Type.Array(Type.Ref('Source'))), "tools": Type.Optional(Type.Array(Type.Ref('Tool'))), "manual": Type.Optional(Type.Ref('Manual')), "ui": Type.Optional(Type.Ref('DeviceUi')) }),
+  "RegisterParams": Type.Object({ "protocol": Type.Literal('mhs/v1'), "device": Type.Ref('Device'), "profile": Type.Optional(Type.Ref('Profile')), "localization": Type.Optional(Type.Ref('Localization')), "placement": Type.Optional(Type.Ref('Placement')), "maps": Type.Optional(Type.Array(Type.Ref('MapDecl'))), "resources": Type.Optional(Type.Ref('Resources')), "state": Type.Optional(Type.Ref('StateFields')), "sources": Type.Optional(Type.Array(Type.Ref('Source'))), "tools": Type.Optional(Type.Array(Type.Ref('Tool'))), "manual": Type.Optional(Type.Ref('Manual')), "appearance": Type.Optional(Type.Ref('Appearance')), "ui": Type.Optional(Type.Ref('DeviceUi')) }),
   "RegisterResult": Type.Object({ "session": Type.String(), "hub": Type.Object({ "name": Type.String(), "version": Type.String() }), "time": Type.Ref('Time') }),
   "CallParams": Type.Object({ "name": Type.Ref('ToolName'), "arguments": Type.Object({  }), "meta": Type.Optional(Type.Object({  })) }),
   "CallReply": Type.Union([Type.Ref('CallAccepted'), Type.Ref('CallRejectedBusy'), Type.Ref('CallRejected')]),
@@ -89,6 +89,8 @@ export const MhsV1 = Type.Module({
   "Fields": Type.Record(Type.String({ pattern: '^[a-z][a-z0-9_]{0,31}$' }), Type.Ref('Field'), { additionalProperties: false }),
   "Manual": Type.Object({ "axes": Type.Array(Type.Ref('Axis'), { minItems: 1 }), "rate_hz": Type.Number({ minimum: 0 }), "deadman_s": Type.Number({ minimum: 0 }), "speeds": Type.Optional(Type.Array(Type.Object({ "label": Type.String(), "scale": Type.Number({ minimum: 0, maximum: 1 }) }))) }),
   "Axis": Type.Object({ "id": Type.Ref('Name'), "role": Type.Ref('AxisRole'), "unit": Type.Ref('Unit'), "min": Type.Number(), "max": Type.Number(), "keys": Type.Optional(Type.Array(Type.String(), { minItems: 2, maxItems: 2 })), "joint": Type.Optional(Type.Integer({ minimum: 0 })) }),
+  "Appearance": Type.Object({ "format": Type.Union([Type.Literal('svg'), Type.Literal('png')]), "size": Type.Optional(Type.Ref('Size')), "clips": Type.Record(Type.String({ pattern: '^[a-z][a-z0-9_]{0,31}$' }), Type.Ref('AppearanceClip'), { additionalProperties: false, minProperties: 1 }), "default": Type.Optional(Type.Ref('Name')), "state": Type.Optional(Type.Ref('Name')) }),
+  "AppearanceClip": Type.Object({ "frames": Type.Array(Type.String(), { minItems: 1, maxItems: 24 }), "fps": Type.Optional(Type.Number({ minimum: 0.1, maximum: 30 })), "loop": Type.Optional(Type.Boolean()) }),
   "DeviceUi": Type.Object({ "icon": Type.Optional(Type.String()), "primary": Type.Optional(Type.Ref('Name')), "order": Type.Optional(Type.Number()) }),
   "SourceUi": Type.Object({ "group": Type.Optional(Type.String()), "order": Type.Optional(Type.Number()), "label": Type.Optional(Type.String()), "hidden": Type.Optional(Type.Boolean()), "widget": Type.Optional(Type.String()) }),
   "FieldUi": Type.Object({ "label": Type.Optional(Type.String()), "tile": Type.Optional(Type.Boolean()), "widget": Type.Optional(Type.String()), "hidden": Type.Optional(Type.Boolean()) }),
@@ -296,6 +298,10 @@ export const Manual = MhsV1.Import('Manual')
 export type Manual = Static<typeof Manual>
 export const Axis = MhsV1.Import('Axis')
 export type Axis = Static<typeof Axis>
+export const Appearance = MhsV1.Import('Appearance')
+export type Appearance = Static<typeof Appearance>
+export const AppearanceClip = MhsV1.Import('AppearanceClip')
+export type AppearanceClip = Static<typeof AppearanceClip>
 export const DeviceUi = MhsV1.Import('DeviceUi')
 export type DeviceUi = Static<typeof DeviceUi>
 export const SourceUi = MhsV1.Import('SourceUi')

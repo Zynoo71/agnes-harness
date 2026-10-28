@@ -69,6 +69,24 @@ def test_a_conforming_device_passes_core():
     assert results["SAFE-7"] == "pass" and results["STATE-4"] == "pass"  # watched through odometry
 
 
+FRAME = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="url(#g)"/></svg>'
+
+
+def test_an_appearance_picked_by_a_state_field_passes_core():
+    dev, produce = car()
+    dev._appearance = {"format": "svg", "state": "mode", "clips": {"idle": {"frames": [FRAME]}, "moving": {"frames": [FRAME, FRAME], "fps": 4}}}
+    results = statuses(run_check(dev, produce, only=["core"]))
+    assert results["REG-1"] == "pass" and results["REG-5"] == "pass" and results["REG-6"] == "pass"
+
+
+def test_an_appearance_naming_no_clip_or_with_a_script_fails():
+    dev, produce = car()
+    bad = FRAME.replace("</svg>", "<script>alert(1)</script></svg>")
+    dev._appearance = {"format": "svg", "state": "battery", "default": "sleep", "clips": {"idle": {"frames": [bad]}}}
+    results = statuses(run_check(dev, produce, only=["core"]))
+    assert results["REG-5"] == "fail" and results["REG-6"] == "fail"
+
+
 def test_a_device_that_skips_checks_and_ignores_stop_fails(monkeypatch):
     # Accept any arguments (no TOOL-2), and answer stop without interrupting anything (no CTL-3).
     monkeypatch.setattr(agnes_mhs.device, "prepare_arguments", lambda schema, args: (dict(args), []))

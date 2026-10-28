@@ -95,6 +95,31 @@ describe('registration', () => {
       CLOSE.badFirstMessage,
     ],
     [
+      'an appearance whose default is not a clip (REG-5)',
+      {
+        jsonrpc: '2.0',
+        id: '1',
+        method: 'mhs/register',
+        params: { ...ARM, appearance: { format: 'svg', default: 'sleep', clips: { idle: { frames: ['<svg/>'] } } } },
+      },
+      -32602,
+      CLOSE.badFirstMessage,
+    ],
+    [
+      'an SVG frame loading something outside itself (REG-6)',
+      {
+        jsonrpc: '2.0',
+        id: '1',
+        method: 'mhs/register',
+        params: {
+          ...ARM,
+          appearance: { format: 'svg', clips: { idle: { frames: ['<svg><image href="http://x/a.png"/></svg>'] } } },
+        },
+      },
+      -32602,
+      CLOSE.badFirstMessage,
+    ],
+    [
       'a tool using an undeclared resource',
       { jsonrpc: '2.0', id: '1', method: 'mhs/register', params: { ...ARM, resources: {} } },
       -32602,

@@ -14,6 +14,7 @@ const configurationCallback = vi.hoisted(() => ({
   saved: undefined as ((snapshot: ConfigSnapshot) => Promise<void>) | undefined,
 }))
 const traceBridge = vi.hoisted(() => ({
+  voice: undefined as import('@agnes/web-units').ComposerRegionOptions['voice'],
   options: undefined as unknown,
   transcriptOptions: undefined as unknown,
   claim: undefined as unknown,
@@ -24,6 +25,7 @@ vi.mock('../src/client-modules/boot.js', async (importOriginal) => {
   return {
     ...actual,
     startClientModules: async (options: Parameters<typeof actual.startClientModules>[0]) => {
+      traceBridge.voice = options.composer?.voice
       traceBridge.options = options.trace
       traceBridge.transcriptOptions = options.transcript
       traceBridge.claim = options.claim
@@ -2644,7 +2646,13 @@ describe('incremental opening', () => {
       await vi.waitFor(() => expect(connection.dataset.state).toBe('connected'))
       const fetcher = vi.fn<typeof fetch>(async () => new Response('', { status: 502 }))
       vi.stubGlobal('fetch', fetcher)
+      const cancelled = vi.fn()
+      const unsubscribe = traceBridge.voice?.subscribe(cancelled)
+      await vi.waitFor(() => expect(traceBridge.voice?.scope()).toBe('old'))
       emit('closed', { reason: 'closed' })
+      expect(cancelled).toHaveBeenCalled()
+      expect(traceBridge.voice?.scope()).toBeUndefined()
+      unsubscribe?.()
       // Two probes land at 0.5 s and 1.5 s; the server is still down, so the page must stay put.
       await new Promise((resolve) => setTimeout(resolve, 1700))
       expect(reload.mock.calls.length).toBe(0)

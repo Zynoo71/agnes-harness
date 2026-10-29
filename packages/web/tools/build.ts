@@ -125,7 +125,7 @@ export async function buildWeb(options: { clean?: boolean } = {}): Promise<Build
     }),
   )
   await Promise.all(
-    ['index.html', 'admin.html', 'resources.html', 'style.css', 'brand-mark.png']
+    ['index.html', 'admin.html', 'resources.html', 'style.css', 'brand-mark.png', 'asr-worklet.js']
       .map((file) => cp(join(root, 'public', file), join(out, file)))
       .concat([cp(antdCss, join(out, 'antd.css')), cp(tokensCss, join(out, 'tokens.css'))]),
   )

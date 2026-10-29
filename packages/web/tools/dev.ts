@@ -12,6 +12,7 @@ const copiedInputs = [
   join(root, 'public', 'resources.html'),
   join(root, 'public', 'style.css'),
   join(root, 'public', 'brand-mark.png'),
+  join(root, 'public', 'asr-worklet.js'),
   join(root, '..', 'web-ui', 'src', 'tokens.css'),
   join(root, '..', 'web-ui', 'src', 'conversation', 'messages.css'),
   join(root, '..', 'web-ui', 'src', 'conversation', 'tailwind.css'),

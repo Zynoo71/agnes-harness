@@ -204,6 +204,7 @@ const claimSlotCard: ClaimResolver = (entry, extId) =>
   entry.owner !== undefined && (moduleExtIds.get(entry.owner)?.includes(extId) ?? false)
 const computerUseStatus = createComputerUsePaneController(client)
 addEventListener('pagehide', () => computerUseStatus.dispose(), { once: true })
+const voiceListeners = new Set<() => void>()
 const clientModules = await startClientModules({
   agnes: client,
   claim: claimSlotCard,
@@ -290,6 +291,21 @@ const clientModules = await startClientModules({
   approvalContainer: document.getElementById('approval') ?? undefined,
   composerContainer: document.getElementById('composer-mount') ?? undefined,
   composer: {
+    voice: {
+      scope: () => (connected ? current?.id : undefined),
+      subscribe: (listener) => {
+        voiceListeners.add(listener)
+        return () => {
+          voiceListeners.delete(listener)
+        }
+      },
+      commit: (text) => {
+        const draft = composerRuntime.getDraft()
+        const next = draft ? `${draft} ${text}` : text
+        composerRuntime.setDraft(next)
+        handleComposerDraftChange(next)
+      },
+    },
     initialDraft: savedComposerDraft ?? '',
     onAttachmentsChange: renderControls,
     onCancel: handleComposerCancel,
@@ -341,6 +357,9 @@ const topbarRuntime = clientModules.topbar as NonNullable<typeof clientModules.t
 if (!topbarRuntime) throw new Error('missing topbar region')
 const approvalRuntime = clientModules.approval as NonNullable<typeof clientModules.approval>
 if (!approvalRuntime) throw new Error('missing approval region')
+clientModules.session.subscribe(() => {
+  for (const listener of voiceListeners) listener()
+})
 const composerRuntime = clientModules.composer as NonNullable<typeof clientModules.composer>
 if (!composerRuntime) throw new Error('missing composer region')
 const conversationRuntime = clientModules.conversation as NonNullable<typeof clientModules.conversation>
@@ -598,6 +617,7 @@ function clearSessionRecovery(): void {
 function setConnection(value: 'connecting' | 'connected' | 'reconnecting' | 'closed'): void {
   connected = value === 'connected'
   if (!connected) {
+    for (const listener of voiceListeners) listener()
     permissionConnectionEpoch++
     if (current) {
       permissionRefreshPending = true

@@ -6540,7 +6540,8 @@ body.admin-page {
   }
 }
 
-#composer-attach {
+#composer-attach,
+.composer-voice-button {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
@@ -6552,4 +6553,27 @@ body.admin-page {
 #composer-attach[aria-disabled="true"] {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.composer-voice-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  flex: 0 0 auto;
+}
+.composer-voice-button[aria-pressed="true"] {
+  color: var(--agnes-brand-primary);
+  background: var(--agnes-bg-hover);
+}
+.composer-voice-error {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5rem);
+  width: 16rem;
+  padding: 0.5rem;
+  background: var(--agnes-bg-hover);
+  color: var(--agnes-text-primary);
+  border-radius: 0.5rem;
+  font-size: var(--font-size-xs);
 }

@@ -46,6 +46,7 @@ import {
 } from 'react'
 import { flushSync } from 'react-dom'
 import type { Translate } from './locales/index.js'
+import { VoiceInput, type VoiceInputOptions } from './voice-input.js'
 
 export type ModelPickerOption = {
   id: string
@@ -168,6 +169,7 @@ export interface ComposerHandle {
 }
 
 export interface ComposerRegionOptions {
+  voice?: VoiceInputOptions
   initialDraft?: string
   onCancel(): void
   onAttachmentsChange?(): void
@@ -346,10 +348,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     onSendNow,
     onRemoveQueued,
     onWorkspace,
+    voice,
     slots,
   }: ComposerProps,
   ref: ForwardedRef<ComposerHandle>,
 ) {
+  const voiceDraft = useRef<string | undefined>(undefined)
+  const [recording, setRecording] = useState(false)
   const [view, setView] = useState<ComposerView>(initialView)
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
   const [pendingCount, setPendingCount] = useState(0)
@@ -642,6 +647,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         prompt.current?.focus()
       },
       getDraft() {
+        if (voiceDraft.current !== undefined) return voiceDraft.current
         return prompt.current?.value ?? ''
       },
       getImageBlocks() {
@@ -668,6 +674,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         if (prompt.current) dependencies.resize(prompt.current)
       },
       setDraft(value) {
+        if (voiceDraft.current !== undefined) voiceDraft.current = value
         if (!prompt.current || prompt.current.value === value) return
         prompt.current.value = value
         dependencies.resize(prompt.current)
@@ -807,7 +814,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         onDrop: handleDrop,
         onSubmit: (event: SubmitEvent) => {
           event.preventDefault()
-          onSubmit()
+          if (voiceDraft.current === undefined) onSubmit()
         },
       },
       slots?.overlay,
@@ -876,6 +883,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
           rows: 1,
           'aria-describedby': 'composer-hint',
           disabled: view.input.disabled,
+          readOnly: recording,
           placeholder: view.input.placeholder,
           defaultValue: initialDraft,
           onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -894,7 +902,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             form.current?.requestSubmit()
           },
           onInput: (event: FormEvent<HTMLTextAreaElement>) => onDraftChange(event.currentTarget.value),
-          onPaste: handlePaste,
+          onPaste: (event: ClipboardEvent<HTMLTextAreaElement>) => {
+            if (voiceDraft.current !== undefined) event.preventDefault()
+            else handlePaste(event)
+          },
         }),
         createElement('p', { id: 'composer-hint', 'data-kind': view.hint.kind }, view.hint.text),
         slots?.attachments,
@@ -1082,13 +1093,32 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
             }),
           ),
         ),
+        voice
+          ? createElement(VoiceInput, {
+              options: voice,
+              onPreview: (text) => {
+                const input = prompt.current
+                if (!input) return
+                if (text === undefined) {
+                  if (voiceDraft.current !== undefined) input.value = voiceDraft.current
+                  voiceDraft.current = undefined
+                  setRecording(false)
+                } else {
+                  voiceDraft.current ??= input.value
+                  input.value = voiceDraft.current + (voiceDraft.current && text ? ' ' : '') + text
+                  setRecording(true)
+                }
+                dependencies.resize(input)
+              },
+            })
+          : null,
         createElement(
           'button',
           {
             id: 'send',
             className: 'primary-button',
             type: 'submit',
-            disabled: view.send.disabled,
+            disabled: view.send.disabled || recording,
             'data-mode': view.send.mode,
             'aria-label': view.send.label,
             title: view.send.title,

@@ -13,6 +13,7 @@ const FILES = new Set([
   'resources.html',
   'theme.js',
   'theme.js.map',
+  'asr-worklet.js',
   'app.js',
   'app.js.map',
   'admin.js',
@@ -686,6 +687,8 @@ export async function createWebServer(options: WebServerOptions): Promise<WebSer
       response.writeHead(missing ? 404 : 500).end(missing ? '' : 'web assets unavailable')
     }
   })
+  const { attachAsr } = await import('./asr.js')
+  const closeAsr = attachAsr(server, expectedOrigin.origin, () => process.env.AGH_ASR_API_KEY)
   const sockets = new Set<import('node:net').Socket>()
   server.on('connection', (socket) => {
     sockets.add(socket)
@@ -708,6 +711,7 @@ export async function createWebServer(options: WebServerOptions): Promise<WebSer
     },
     close: () =>
       (closing ??= new Promise<void>((resolve, reject) => {
+        closeAsr()
         activePicker?.abort()
         stopPluginEvents?.()
         if (pluginBuildPoller !== undefined) clearInterval(pluginBuildPoller)

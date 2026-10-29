@@ -30,6 +30,7 @@ Still choosing? Try the [three examples](guide/demo.md), then use the [extension
 | Topic | What you will learn |
 | --- | --- |
 | [CLI and TUI](guide/cli.md) | Run terminal tasks, hold interactive conversations, and handle approvals |
+| [Desktop voice input](guide/voice-input.md) | Stream microphone audio into an editable draft |
 | [Web workbench](guide/web.md) | Create tasks, inspect history, and manage models and extensions |
 | [Sessions and recovery](guide/sessions.md) | Continue tasks, export records, and handle interruptions |
 | [Plugin lifecycle](guide/packages.md) | Install, trust, enable, update, and remove plugins |

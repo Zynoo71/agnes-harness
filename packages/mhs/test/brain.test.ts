@@ -91,10 +91,10 @@ afterEach(async () => {
 describe('brain tools', () => {
   it('lists devices and puts a snapshot in every turn', async () => {
     expect(brain.listDevices().text).toBe(
-      '- mover-01 (Mover, robot): available; mode idle; tools: move, plan; settable: volume; sources: cam (image)',
+      '- mover-01 (Mover, robot): available; mode idle; tools: move(x), plan(); settable: volume; sources: cam (image)',
     )
     expect(brain.context()).toMatch(
-      /\n- mover-01 \(Mover, robot\): available; mode idle; tools: move, plan; settable: volume; sources: cam$/,
+      /\n- mover-01 \(Mover, robot\): available; mode idle; tools: move\(x\), plan\(\); settable: volume; sources: cam$/,
     )
   })
 
@@ -273,7 +273,7 @@ describe('brain tools', () => {
         '  - gate "Gate": landmark at (1, 3), face 180° — The way in',
         '  - yard "Yard": zone around (5, 5), 10 × 10 m',
         'Devices:',
-        '- mover-01 (Mover, robot): available; mode idle; tools: move, plan; settable: volume; sources: cam',
+        '- mover-01 (Mover, robot): available; mode idle; tools: move(x), plan(); settable: volume; sources: cam',
         '- gate-01 (Gate camera, sensor): available; Installed at (2, 3) facing 90° on map site, in zone Yard (yard)',
       ].join('\n'),
     )

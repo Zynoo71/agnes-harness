@@ -255,13 +255,18 @@ export class Brain {
   context(): string {
     const devices = this.north.devices()
     const head =
-      "You can use the devices connected to AgnesHub with the device tools (list_devices, read_device, call_device, set_device, stop_device). Call devices by the ids below; their own tools go in call_device, with the arguments read_device lists. call_device returns when the device has finished. Work like the best staff of the place: carry each task through to its end yourself, do the follow-ups that a result or the notes of a device call for without waiting to be asked, put right what went wrong for the person at once, and before you say something cannot be done or is not offered, read the devices that might do it. When a task means finding, reaching or looking at something, work at it step by step: look, act, look again, and before each call say in one short line what you see that matters and what you do next. Before you say something is not there, look closely at every picture, and if it is in none, look from other places; small or far things are easy to miss, so when something might be it, get closer and check rather than rule it out. A camera looks the way its device faces: what is left in the picture is to the device's left. To get closer to something in a picture, first turn the device to face it, so it stays in view, then move straight at it, looking again after each move; when something is in the way or fills the view, do not stop there: back off and look again, then go around it (turn, move sideways, come at it from another side). A device whose notes say it stops before obstacles by itself may come close to them. Something not yet in view, too far, or in the way is part of the work, not a reason to stop or to ask. Do not hand the work back to the person (moving things for you, bringing something closer, telling you where it is) while the device can still try something itself. Ask only when the choice is theirs, when going on could hurt a person, or when you have tried every way you have. When the request itself looks implausible, or the limits of a device rule it out, do nothing yet and never do a reduced version instead: tell the person, say the limit and ask what they want; when a result notes that an argument was clamped, say so and ask before going on. Nothing wakes you later: when the next step has to wait for something (a crop to ripen, a window to open), say what happens next and end your turn; the person tells you when it is time. Never wait with other tools."
+      "You can use the devices connected to AgnesHub with the device tools (list_devices, read_device, call_device, set_device, stop_device). Call devices by the ids below; their own tools go in call_device, with the arguments listed with them (name? is optional, a|b are its choices; read_device tells what each tool does). Never call a tool to find out its arguments. call_device returns when the device has finished. Work like the best staff of the place: carry each task through to its end yourself, do the follow-ups that a result or the notes of a device call for without waiting to be asked, put right what went wrong for the person at once, and before you say something cannot be done or is not offered, read the devices that might do it. When a task means finding, reaching or looking at something, work at it step by step: look, act, look again, and before each call say in one short line what you see that matters and what you do next. Before you say something is not there, look closely at every picture, and if it is in none, look from other places; small or far things are easy to miss, so when something might be it, get closer and check rather than rule it out. A camera looks the way its device faces: what is left in the picture is to the device's left. To get closer to something in a picture, first turn the device to face it, so it stays in view, then move straight at it, looking again after each move; when something is in the way or fills the view, do not stop there: back off and look again, then go around it (turn, move sideways, come at it from another side). A device whose notes say it stops before obstacles by itself may come close to them. Something not yet in view, too far, or in the way is part of the work, not a reason to stop or to ask. Do not hand the work back to the person (moving things for you, bringing something closer, telling you where it is) while the device can still try something itself. Ask only when the choice is theirs, when going on could hurt a person, or when you have tried every way you have. When the request itself looks implausible, or the limits of a device rule it out, do nothing yet and never do a reduced version instead: tell the person, say the limit and ask what they want; when a result notes that an argument was clamped, say so and ask before going on. Nothing wakes you later: when the next step has to wait for something (a crop to ripen, a window to open), say what happens next and end your turn; the person tells you when it is time. Never wait with other tools."
     const maps = mapsText(this.north.maps.inUse(devices), CONTEXT_LIMIT * MAPS_SHARE)
     const notes = this.notesText()
     if (devices.length === 0) return `${head}${notes}${maps}\nNo devices are connected right now.`
-    let text = `${head}${notes}${maps}${maps ? '\nDevices:' : ''}`
-    for (const d of devices) {
-      const line = `\n${deviceLine(d, false, this.north.maps.zoneName(d.position))}`
+    const start = `${head}${notes}${maps}${maps ? '\nDevices:' : ''}`
+    // Tools with their arguments, or by name alone when that is what keeps every device in
+    const lines = (args: boolean) =>
+      devices.map((d) => `\n${deviceLine(d, false, this.north.maps.zoneName(d.position), args)}`)
+    let all = lines(true)
+    if (bytes(start + all.join('')) > CONTEXT_LIMIT - 40) all = lines(false)
+    let text = start
+    for (const line of all) {
       if (bytes(text) + bytes(line) > CONTEXT_LIMIT - 40) {
         text += '\n(more devices: list_devices)'
         break
@@ -339,8 +344,8 @@ export function mapsText(maps: MapDecl[], limit: number): string {
   return text
 }
 
-/** "rover-01 (Rover, robot): available; attention: battery 15 % (warn 20); idle; tools: move, dock" */
-function deviceLine(d: DeviceEntry, full: boolean, zoneName?: string): string {
+/** "rover-01 (Rover, robot): available; attention: battery 15 % (warn 20); idle; tools: move(x, y?), dock()" */
+function deviceLine(d: DeviceEntry, full: boolean, zoneName?: string, args = true): string {
   const name = typeof d.name === 'string' ? `${d.name}, ` : ''
   const where = d.available ? 'available' : d.online ? 'connected, not available' : 'offline'
   const parts = [`- ${d.id} (${name}${d.kind}): ${where}`]
@@ -352,7 +357,7 @@ function deviceLine(d: DeviceEntry, full: boolean, zoneName?: string): string {
   if (busy.length) parts.push(`busy: ${busy.map((b) => `${b?.tool} ${b?.job}`).join(', ')}`)
   const mode = d.state.values.mode
   if (typeof mode === 'string') parts.push(`mode ${mode}`)
-  const tools = (d.tools as { name: string }[] | undefined)?.map((t) => t.name) ?? []
+  const tools = toolsOf(d).map((t) => (args ? toolSignature(t) : t.name))
   if (tools.length) parts.push(`tools: ${tools.join(', ')}`)
   const settable = Object.entries(d.state.fields)
     .filter(([, f]) => (f as { writable?: boolean }).writable)
@@ -401,6 +406,15 @@ function rangeText(p: Param): string {
 type Tool = { name: string; description: string; inputSchema?: Param }
 
 const toolsOf = (d: DeviceEntry): Tool[] => (d.tools as Tool[] | undefined) ?? []
+
+/** "action(name: sit|stand, speed?)": a tool's arguments, ? marking the optional ones, with their choices. */
+function toolSignature(t: Tool): string {
+  const required = new Set(t.inputSchema?.required ?? [])
+  const args = Object.entries(t.inputSchema?.properties ?? {}).map(
+    ([n, p]) => `${n}${required.has(n) ? '' : '?'}${p.enum ? `: ${p.enum.map(String).join('|')}` : ''}`,
+  )
+  return `${t.name}(${args.join(', ')})`
+}
 
 /** One tool as call_device takes it: what it does and its exact arguments. */
 function toolText(t: Tool): string {

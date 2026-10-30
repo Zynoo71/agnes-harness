@@ -118,8 +118,8 @@ function pictureOf(d: Device) {
 
 /**
  * Devices with a picture first, in rows either side of the bus, the columns next to it filled first,
- * the cards in a row as tall as its tallest; pictures come in pairs, and an odd one out goes across
- * the bus at the top, its picture larger. In a narrow panel, one column to the right of a bus down
+ * the cards in a row as tall as its tallest; pictures come in pairs, and an odd one out (the first in
+ * order) goes across the bus at the top, its picture larger. In a narrow panel, one column to the right of a bus down
  * the left edge.
  */
 function layout(devices: Device[], width: number, heights: Map<string, number>, hub: number): Geometry {
@@ -133,7 +133,7 @@ function layout(devices: Device[], width: number, heights: Map<string, number>, 
   const pictures = new Map<string, number>()
   const heightOf = (w: number, max: number) => Math.min(max, Math.round(((w - 16) * 9) / 16))
   const withPicture = devices.filter((d) => pictureOf(d))
-  const across = two && withPicture.length % 2 === 1 ? withPicture.at(-1) : undefined
+  const across = two && withPicture.length % 2 === 1 ? withPicture[0] : undefined
   const ordered = [...withPicture, ...devices.filter((d) => !pictureOf(d))].filter((d) => d !== across)
   let y = hub + HUB_H + 20
   if (across) {

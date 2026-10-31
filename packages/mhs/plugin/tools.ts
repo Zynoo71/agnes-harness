@@ -138,8 +138,11 @@ export function registerBrainTools(agnes: Extension, brain: Brain): (() => void)
       description:
         "Read a device: its state, health and position, every tool with its exact arguments, and the state fields set_device can change. Read a device before calling a tool you have not used on it. Name `sources` to add their newest data; image sources come back as pictures. Read a picture only when you need to see something: one comes with each read, so name one image source at a time. Video cannot be read; read the camera's image source instead.",
       parameters: Type.Object({ device, sources: Type.Optional(Type.Array(Type.String())) }),
-      // Camera pictures reach the model only from a tool that declares them.
-      meta: { ...READS, returnsImages: true },
+      // Camera pictures reach the model only from a tool that declares them. One read at a time: an
+      // OpenAI-style provider gets a batch's pictures after all its results, unlabelled, in the
+      // order the results came, and a model reads them in the order of its calls (so two cameras
+      // read together were swapped when the second answered first).
+      meta: { ...READS, returnsImages: true, isConcurrencySafe: false },
       run: async (args) =>
         onePicture(await brain.readDevice(args as { device?: string; sources?: string[] })),
     },
